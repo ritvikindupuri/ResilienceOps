@@ -78,17 +78,58 @@ flowchart TB
     AWSInfra -.->|Hosts Virtual Network & Compute| ClusterTier
 ```
 
-<p align="center"><b>Figure 2.1: ResilienceOps System & Network Infrastructure Architecture</b></p>
+<p align="center">
+  <img src="docs/images/infraattack_platform_architecture.png" alt="Autonomous SRE Resilience Platform Architecture" width="950" />
+</p>
+<p align="center"><b>Figure 2.1: End-to-End System & Network Infrastructure Architecture</b></p>
 
-### Detailed System Component Flow
-1. **Traffic Ingress & Routing**:
-   Continuous user workload traffic originates from the Load Engine and enters the cluster through the **API Gateway** (`:8000`). The gateway inspects incoming requests, validates schemas via Pydantic, routes transactions to downstream services (`order-service` and `payment-service`), and computes request durations via Prometheus histograms.
-2. **Microservice Interactions**:
-   The `order-service` manages transactional order placement and interacts with in-memory Redis state. The `payment-service` authorizes financial transactions, emulating downstream transit latency and connection semantics.
-3. **Observability Pipeline**:
-   The **Prometheus Server** scrapes metrics endpoints across the gateway and microservices on a strict **1-second interval**. Grafana continuously polls Prometheus and streams latency percentiles (p50, p95, p99), error rates, throughput (RPS), and system health state in real time.
-4. **Cloud Isolation**:
-   The workloads run on an AWS EC2 instance (`t3.small` / `t4g.small`) hosted inside a custom multi-tier AWS VPC. All external communications to Anthropic's Claude API occur over TLS 1.3 via HTTPS port 443.
+### Detailed System Component & Execution Flow Specification
+
+The production infrastructure implements an automated, closed-loop resilience lifecycle. Every interaction across the network, container, and OS layers proceeds through the following technical flow:
+
+#### Flow 1: Client Ingress, Edge Routing, and Schema Validation
+- The asynchronous load engine generates continuous real-user transactional workloads (25 RPS) across dedicated consumer paths: `/health`, `/api/orders/orders`, and `/api/payments/payments`.
+- Traffic enters through the **AWS Internet Gateway** (`sre-enterprise-igw`) into the Public Ingress Subnet (`10.0.1.0/24`) and connects to the **API Gateway** (`:8000`).
+- The API Gateway (FastAPI/Uvicorn) terminates incoming client HTTP connections, validates request bodies using Pydantic models, handles route dispatching, and instruments request latency durations into Prometheus Histograms (`http_request_duration_seconds`).
+
+#### Flow 2: Multi-Tier Microservice Execution and Transactional State
+- **Order Service (`:8001`)**: Receives proxied order requests over the internal cluster network. It writes transient checkout cache entries directly to **Redis 7** (`redis:6379`) via dedicated client connection pools and commits finalized purchase records to **PostgreSQL 16** (`postgres:5432`).
+- **Payment Service (`:8002`)**: Handles asynchronous payment authorization requests dispatched by the Order Service, enforcing transactional validation and processing downstream credit authorizations.
+
+#### Flow 3: High-Resolution Telemetry Pipeline (1-Second Scrape Tick)
+- Every application container exposes real-time runtime statistics via standard `/metrics` HTTP endpoints instrumented with the Prometheus client library.
+- The **Prometheus Server** (`:9090`) executes active HTTP scrapes across every service on an exact **1-second polling frequency**.
+- Scraped time-series metrics feed directly into the **Grafana SRE Performance Monitor** (`:3000`), streaming real-time RED golden signals (Rate, Errors, Duration), availability SLO percentages, and resident memory consumption plotted directly against container cgroup quotas.
+
+#### Flow 4: Quarantined Offensive Fault Injection (Red Team)
+- Red Team agents operate inside the dedicated, hardened Kubernetes namespace (`sre-agent-sandbox`) with restricted RBAC privileges and tight cgroup constraints (`500m` CPU, `512Mi` RAM).
+- The **Resilience Attack Planner** queries current platform telemetry and dispatches targeted failure mechanisms:
+  - **Linux Kernel Netem Adversary**: Manipulates raw Linux kernel queuing disciplines on `eth0` via `tc` (`tc qdisc add dev eth0 root netem delay 2500ms 100ms` or packet drops), introducing true packet scheduling latency directly in the Linux network stack.
+  - **Resource Stresser**: Squeezes the Order Service via physical in-memory allocations (`bytearray` chunks) to test container cgroup limits or floods Redis with persistent client sockets to trigger connection pool starvation.
+
+#### Flow 5: Real-Time Anomaly Detection & Incident Escalation (Blue Team)
+- The **Health & Uptime Sentinel** ingests Prometheus telemetry streams every 1-second tick, evaluating availability against defined SLO thresholds.
+- When p99 latency breaches 1200ms or HTTP 5XX error rates exceed 2.0%, the Sentinel immediately declares a production incident (`SEV-1`) and activates the automated incident response pipeline.
+
+#### Flow 6: Chain-of-Thought Root Cause Analysis (Claude AI via TLS 443)
+- The **Root Cause Investigator** correlates live anomaly metrics, process resident memory usage, socket connection states, and container events.
+- It dispatches a structured diagnostic payload to **Claude 3.7 Sonnet with Extended Thinking** over secure outbound HTTPS (port 443).
+- Claude performs deductive chain-of-thought reasoning, formulates and evaluates multiple competing hypotheses, eliminates false leads, and confirms the precise root cause along with an associated confidence score.
+
+#### Flow 7: Automated Remediation Runbook Execution
+- The **Automated Recovery Fixer** maps the diagnosed root cause to pre-approved, audited operational runbooks.
+- It executes surgical remediation commands directly against the affected service:
+  - Purging Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
+  - Terminating starving client sockets and resetting the Redis connection pool.
+  - Reclaiming memory buffers or initiating an orchestrated rolling pod restart.
+
+#### Flow 8: Health Verification & Post-Mortem Archival
+- The Blue Team continuously samples health and telemetry endpoints for 10 consecutive ticks, confirming that p99 latency returns beneath 800ms and 5XX error rates drop back to 0.00%.
+- Once verified, the **Incident Post-Mortem Agent** compiles a comprehensive, timestamped Markdown incident post-mortem and writes it to [`reports/`](reports/).
+
+#### Flow 9: Synchronous CloudWatch Logging & Telemetry Streams
+- Every command executed by Red and Blue team agents, along with return exit codes, terminal output, and metric events, is dispatched synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`).
+- Dedicated CloudWatch dashboards (**Agent-Command-Log** and **System-Fault-Metrics**) provide an immutable, real-time operational trail across all resilience cycles.
 
 ---
 

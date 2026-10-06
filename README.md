@@ -53,25 +53,9 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 </p>
 <p align="center"><b>Figure 1: End-to-End System & Runtime Architecture</b></p>
 
-### Flow-by-Flow Explanation of the Architecture
+### Architecture Execution Lifecycle
 
-The platform executes a strictly sequential, closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and security auditing:
-
-```
-[1. Traffic Ingress] ──► [2. Production Tier Routing & State] ──► [3. 1-Second Telemetry Ingestion]
-                                    ▲                                            │
-                                    │ (Direct Kernel & Socket Faults)            ▼
-[5. Real-Time SLO Breach Detection] ◄── [4. Offensive Attack Planning & Execution (Red Team)]
-                │
-                ▼
-[6. Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI via HTTPS 443)]
-                │
-                ▼
-[7. Automated Remediation & State Recovery] ──► [8. Live Verification & Metrics Normalization]
-                │
-                ▼
-[9. Immutable CloudWatch Logs & Telemetry & Telemetry Dashboards]
-```
+The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and CloudWatch logging:
 
 1. **Step 1 — Client Traffic Generation & Ingress Routing**:
    The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
