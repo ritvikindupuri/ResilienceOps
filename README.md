@@ -55,22 +55,57 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 
 ### Flow-by-Flow Explanation of the Architecture
 
-1. **Baseline Traffic Generation**:
-   The Automated Traffic Generator runs concurrent asynchronous worker sessions executing real consumer workflows (browsing products, checking inventory, submitting checkout orders, and settling credit card transactions) against the API Gateway (`:8000`).
-2. **Telemetry Ingestion & Scraping**:
-   The API Gateway instrumented with the Prometheus client records request duration histograms, status counters (2xx, 4xx, 5xx), and error ratios. Prometheus scrapes the `/metrics` endpoints across all containers at an uncompromising **1-second interval**, feeding Grafana's pure infrastructure live streaming dashboard.
-3. **Offensive Campaign Planning (Red Team)**:
-   The **Resilience Attack Planner** inspects the topology and current SLO burn rate, prompting Claude Sonnet to devise a tactical failure mode. It delegates the execution to either the **Server Resource Stresser** (for cgroup OOMKill or CPU starvation) or the **Network Delay Injector** (for downstream latency and packet drops).
-4. **Failure Propagation & Kernel Stress**:
-   The targeted microservice receives the fault. Memory chunks are physically populated in RAM until the Linux kernel cgroup OOMKiller issues `SIGKILL` (Exit 137), or CPU compute loops saturate CPU limits. Upstream connection pools starve, causing the API Gateway to emit HTTP 504 timeouts.
-5. **SLO Breach Detection (Blue Team)**:
-   The **Health & Uptime Monitor** continuously evaluates the 4 Golden Signals. When p99 latency breaches 1200ms or 5xx errors exceed 2.0%, it triggers `INCIDENT_DECLARED` with an escalated severity rating (`SEV-1`).
-6. **Chain-of-Thought Root Cause Analysis (RCA)**:
-   The **Root Cause Investigator** sends telemetry metrics, error patterns, and Kubernetes events to **Claude Sonnet with Extended Thinking**. Claude generates three competing hypotheses, refutes false leads through deductive reasoning, and confirms the primary root cause with an exact confidence score.
-7. **Automated Remediation & Verification**:
-   The **Automated Recovery Fixer** retrieves the diagnosed runbook (e.g., clearing leaked buffers, issuing a rolling pod bounce, or scaling replicas). It executes the recovery commands, polls health endpoints to verify latency has normalized below 800ms, and invokes the **Incident Report Writer** to archive a formal incident post-mortem in `reports/`.
-8. **CloudWatch Command & Fault Logging**:
-   Every agent action, the exact command launched, and the raw execution output are dispatched as structured events to CloudWatch Logs (`/sre/autonomous-agent-audit`), rendered live across the `Agent-Command-Audit` and `System-Fault-Metrics` dashboards.
+The platform executes a strictly sequential, closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and security auditing:
+
+```
+[1. Traffic Ingress] ──► [2. Production Tier Routing & State] ──► [3. 1-Second Telemetry Ingestion]
+                                    ▲                                            │
+                                    │ (Direct Kernel & Socket Faults)            ▼
+[5. Real-Time SLO Breach Detection] ◄── [4. Offensive Attack Planning & Execution (Red Team)]
+                │
+                ▼
+[6. Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI via HTTPS 443)]
+                │
+                ▼
+[7. Automated Remediation & State Recovery] ──► [8. Live Verification & Metrics Normalization]
+                │
+                ▼
+[9. Immutable CloudWatch Command Audit & Telemetry Dashboards]
+```
+
+1. **Step 1 — Client Traffic Generation & Ingress Routing**:
+   The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
+
+2. **Step 2 — Microservice Request Propagation & Stateful Processing**:
+   The API Gateway forwards business requests downstream to the **Order Service** (`:8001`) and **Payment Service** (`:8002`):
+   - The **Order Service** queries and updates session state in **Redis 7** (in-memory caching & client connection pool) and commits order records to **PostgreSQL 16**.
+   - The **Payment Service** executes payment authorizations and async credit card validations across network sockets.
+
+3. **Step 3 — High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
+   All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits.
+
+4. **Step 4 — Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
+   Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes **Claude Sonnet** to devise an attack vector. The planner delegates execution:
+   - **tc netem Adversary**: Injects Linux kernel queuing discipline delays (`tc qdisc add dev eth0 root netem delay 2500ms 100ms`) or packet drops onto the Payment Service.
+   - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /chaos/redis-starvation?connections=55`).
+
+5. **Step 5 — Real-Time SLO Breach Detection (Blue Team Sentinel)**:
+   As the fault manifests in production, upstream connection pools starve and payment latency spikes. The **Health & Uptime Sentinel** ingests Prometheus anomaly signals. When p99 latency breaches 1200ms or 5XX error rates cross 2.0%, the Sentinel declares an incident (`SEV-1`) and activates the Blue Team response pipeline.
+
+6. **Step 6 — Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
+   The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying **Claude Sonnet with Extended Thinking** over secure outbound HTTPS (port 443). Claude synthesizes competing hypotheses, eliminates false leads through deductive reasoning, pinpointing the exact fault (e.g., Linux kernel tc netem delay or Redis client pool starvation) with an associated confidence score.
+
+7. **Step 7 — Automated Remediation & Stateful Recovery**:
+   The **Automated Recovery Fixer** validates the RCA findings against hardened operational runbooks. It issues surgical recovery commands directly to the affected service:
+   - Purging raw Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
+   - Flusing starving client sockets and resetting the Redis connection pool.
+   - Reclaiming allocated memory buffers or triggering an orchestrated rolling pod restart.
+
+8. **Step 8 — Health Verification & Incident Post-Mortem Archival**:
+   The Blue Team polls the health and metrics endpoints for 10 consecutive ticks, confirming that p99 latency drops back below 800ms, 5XX errors return to 0.00%, and memory returns beneath the cgroup quota. Once normalized, the **Incident Post-Mortem Agent** auto-generates a structured Markdown post-mortem detailing timeline, root cause, and recovery actions in `reports/`.
+
+9. **Step 9 — CloudWatch Audit Logging & Operational Dashboards**:
+   Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Audit** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
 
 ---
 
