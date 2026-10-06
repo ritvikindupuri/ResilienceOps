@@ -44,11 +44,11 @@ The ResilienceOps system architecture comprises four distinct tiers: the **Produ
 
 ```mermaid
 flowchart TB
-    subgraph TrafficLayer ["âš¡ TIER 1: PRODUCTION WORKLOAD ENGINE"]
+    subgraph TrafficLayer ["TIER 1: PRODUCTION WORKLOAD ENGINE"]
         TG["Concurrent User Journey Generator<br/>(k6 / Python Asyncio Worker Pool)<br/>20 RPS Continuous Traffic"]
     end
 
-    subgraph ClusterTier ["â˜¸ï¸ TIER 2: CONTAINERIZED PRODUCTION WORKLOADS"]
+    subgraph ClusterTier ["TIER 2: CONTAINERIZED PRODUCTION WORKLOADS"]
         subgraph TargetNS ["Namespace: sre-target-apps (Application Workload Tier)"]
             APIGW["Ingress API Gateway (:8000)<br/>FastAPI / Reverse Proxy / Prometheus Exporter"]
             OrderSvc["Order Service (:8001)<br/>Transaction State / cgroup Quotas (256MiB)"]
@@ -67,7 +67,7 @@ flowchart TB
         Prom -->|PromQL Telemetry Stream| Grafana
     end
 
-    subgraph CloudLayer ["â˜ï¸ TIER 4: CLOUD RUNTIME & FOUNDATION"]
+    subgraph CloudLayer ["TIER 4: CLOUD RUNTIME & FOUNDATION"]
         AWSInfra["AWS Multi-Tier VPC (10.0.0.0/16)<br/>Public Ingress, App Workload, and Data Subnets"]
         ClaudeCloud["Anthropic Messages API<br/>(api.anthropic.com:443)"]
     end
@@ -149,7 +149,7 @@ flowchart LR
         R1 -->|Dispatches Command| R3
     end
 
-    subgraph TargetWorkloads ["â˜¸ï¸ PRODUCTION WORKLOADS"]
+    subgraph TargetWorkloads ["PRODUCTION WORKLOADS"]
         TargetAppContainers["API Gateway & Microservices<br/>(Monitored by Golden Signals)"]
     end
 
@@ -366,7 +366,7 @@ Deploying autonomous agents with shell execution capabilities introduces securit
 ```mermaid
 flowchart TB
     subgraph HostOS ["ðŸ–¥ï¸ CLOUD HOST / LINUX KERNEL"]
-        subgraph K8sCore ["â˜¸ï¸ Kubernetes Control Plane"]
+        subgraph K8sCore ["Kubernetes Control Plane"]
             
             subgraph SandboxNS ["ðŸ›¡ï¸ Namespace: sre-agent-sandbox (Security Quarantined)"]
                 RedPod["ðŸ”´ Red Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
@@ -387,7 +387,7 @@ flowchart TB
 <p align="center"><b>Figure 10.1: Kubernetes Agent Sandbox Isolation & RBAC Architecture</b></p>
 
 ### 1. Resource Quotas & Blast Radius Containment
-Both agent pods are constrained to `cpu: 500m` and `memory: 512Mi`. If an offensive agent enters an unconstrained compute loop, only its local sandbox container is throttled by the Linux CFS scheduler and memory cgroupsâ€”the target workloads and underlying EC2 host remain unharmed.
+Both agent pods are constrained to `cpu: 500m` and `memory: 512Mi`. If an offensive agent enters an unconstrained compute loop, only its local sandbox container is throttled by the Linux CFS scheduler and memory cgroups—the target workloads and underlying EC2 host remain unharmed.
 
 ### 2. Audited Least-Privilege RBAC
 - **Red Team (`red-agent-sa`)**: Bound exclusively to the target application namespace via `RoleBinding/red-agent-restricted-binding`. Permissions are strictly limited to `get`, `list`, and `watch` on pods, preventing privilege escalation to cluster-level secrets, node configurations, or other namespaces.

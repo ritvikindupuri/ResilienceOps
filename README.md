@@ -57,38 +57,38 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 
 The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and CloudWatch logging:
 
-1. **Step 1 â€” Client Traffic Generation & Ingress Routing**:
+1. **Step 1 — Client Traffic Generation & Ingress Routing**:
    The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
 
-2. **Step 2 â€” Microservice Request Propagation & Stateful Processing**:
+2. **Step 2 — Microservice Request Propagation & Stateful Processing**:
    The API Gateway forwards business requests downstream to the **Order Service** (`:8001`) and **Payment Service** (`:8002`):
    - The **Order Service** queries and updates session state in **Redis 7** (in-memory caching & client connection pool) and commits order records to **PostgreSQL 16**.
    - The **Payment Service** executes payment authorizations and async credit card validations across network sockets.
 
-3. **Step 3 â€” High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
+3. **Step 3 — High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
    All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits.
 
-4. **Step 4 â€” Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
+4. **Step 4 — Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
    Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes **Claude Sonnet** to devise an attack vector. The planner delegates execution:
    - **tc netem Adversary**: Injects Linux kernel queuing discipline delays (`tc qdisc add dev eth0 root netem delay 2500ms 100ms`) or packet drops onto the Payment Service.
    - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /fault/redis-starvation?connections=55`).
 
-5. **Step 5 â€” Real-Time SLO Breach Detection (Blue Team Sentinel)**:
+5. **Step 5 — Real-Time SLO Breach Detection (Blue Team Sentinel)**:
    As the fault manifests in production, upstream connection pools starve and payment latency spikes. The **Health & Uptime Sentinel** ingests Prometheus anomaly signals. When p99 latency breaches 1200ms or 5XX error rates cross 2.0%, the Sentinel declares an incident (`SEV-1`) and activates the Blue Team response pipeline.
 
-6. **Step 6 â€” Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
+6. **Step 6 — Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
    The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying **Claude Sonnet with Extended Thinking** over secure outbound HTTPS (port 443). Claude synthesizes competing hypotheses, eliminates false leads through deductive reasoning, pinpointing the exact fault (e.g., Linux kernel tc netem delay or Redis client pool starvation) with an associated confidence score.
 
-7. **Step 7 â€” Automated Remediation & Stateful Recovery**:
+7. **Step 7 — Automated Remediation & Stateful Recovery**:
    The **Automated Recovery Fixer** validates the RCA findings against hardened operational runbooks. It issues surgical recovery commands directly to the affected service:
    - Purging raw Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
    - Flusing starving client sockets and resetting the Redis connection pool.
    - Reclaiming allocated memory buffers or triggering an orchestrated rolling pod restart.
 
-8. **Step 8 â€” Health Verification & Incident Post-Mortem Archival**:
+8. **Step 8 — Health Verification & Incident Post-Mortem Archival**:
    The Blue Team polls the health and metrics endpoints for 10 consecutive ticks, confirming that p99 latency drops back below 800ms, 5XX errors return to 0.00%, and memory returns beneath the cgroup quota. Once normalized, the **Incident Post-Mortem Agent** auto-generates a structured Markdown post-mortem detailing timeline, root cause, and recovery actions in `reports/`.
 
-9. **Step 9 â€” CloudWatch Audit Logging & Operational Dashboards**:
+9. **Step 9 — CloudWatch Audit Logging & Operational Dashboards**:
    Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Log** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
 
 ---
@@ -309,7 +309,7 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 - **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
 - **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`ðŸš¨ INCIDENT DECLARED | MTTD: 2.14s`).
 - **Phase 5**: Blue Team **Root Cause Investigator** invokes **Claude Sonnet with Extended Thinking**, outputs step-by-step reasoning, isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
-- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`âœ… Recovery Validated | MTTR: 3.42s`).
+- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`✅ Recovery Validated | MTTR: 3.42s`).
 - **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
 
 ---
