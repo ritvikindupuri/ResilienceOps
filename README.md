@@ -49,9 +49,9 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 ## System Architecture
 
 <p align="center">
-  <img src="docs/images/infraattack_platform_architecture.png" alt="InfraAttack Platform Architecture" width="950" />
+  <img src="docs/images/infraattack_platform_architecture.png" alt="Autonomous SRE Resilience Platform Architecture" width="950" />
 </p>
-<p align="center"><b>Figure 1: InfraAttack End-to-End System & Runtime Architecture</b></p>
+<p align="center"><b>Figure 1: End-to-End System & Runtime Architecture</b></p>
 
 ### Flow-by-Flow Explanation of the Architecture
 
