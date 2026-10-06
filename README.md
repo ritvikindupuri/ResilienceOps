@@ -11,7 +11,8 @@ Modern distributed systems require continuous resilience validation, yet convent
 The platform runs an authentic containerized microservices stack under live, concurrent automated user traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (Linux cgroup memory leaks, CPU CFS quota exhaustion, network transit delays, and TCP packet drops). Simultaneously, a **3-Agent Blue Team** continuously watches the SRE Golden Signals, declares incidents upon Service Level Objective (SLO) breaches, executes deep root-cause analysis (RCA) via **Claude 3.7 Sonnet with Extended Thinking**, triggers automated recovery runbooks, and authors standardized post-mortem reports.
 
 All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
-
+ 
+📊 **For deep performance metrics, high-resolution dashboard breakdowns, and an authentic SRE post-mortem, view the [SRE Results & Incident Telemetry Report (RESULTS.md)](RESULTS.md).**  
 📖 **For technical specifications, math models, and agent communication protocols, read the [Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf).**
 
 ---
@@ -234,9 +235,13 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/ba
 
 ---
 
-## How to Use the App (Step-by-Step Guide)
+## Operational Runbook & Quickstart
 
-Follow this click-by-click walkthrough to monitor live metrics, inspect security audits, trigger autonomous agent cycles against your AWS infrastructure, and review post-mortems.
+Follow this operational walkthrough to monitor live metrics, inspect security audits, trigger autonomous agent cycles against your AWS infrastructure, and review post-mortems.
+
+> [!TIP]
+> **Detailed Telemetry & Metrics Report**:  
+> For comprehensive high-resolution dashboard screenshots, detailed per-panel metric breakdowns, and an authentic SRE post-mortem report, see [**RESULTS.md**](RESULTS.md).
 
 ### Step 1: Open the Live AWS Grafana Dashboard (Pure Infra Monitoring)
 1. Open your web browser and navigate to your AWS Grafana URL:
@@ -258,10 +263,8 @@ Follow this click-by-click walkthrough to monitor live metrics, inspect security
    - **Microservice Memory Usage vs Cgroup Ceiling (MB)**: Full-width telemetry showing live resident memory against the 256MB cgroup hard ceiling.
    - **Service Traffic Ingress Share**: Real-time traffic distribution across microservices.
 
-<p align="center">
-  <img src="docs/images/grafana_sre_performance_monitor.png" alt="Grafana SRE Performance Monitor" width="950" />
-</p>
-<p align="center"><b>Figure 1.1: Live AWS Grafana Infrastructure & Reliability Performance Monitor (Streaming 1-Second Telemetry)</b></p>
+*(See [RESULTS.md#1-live-infrastructure--reliability-performance-monitoring](RESULTS.md#1-live-infrastructure--reliability-performance-monitoring) for the full-resolution screenshot and panel-by-panel metric breakdown).*
+
 ---
 
 ### Step 2: Open the AWS CloudWatch Dashboards
@@ -277,18 +280,12 @@ To inspect the exact security actions, injected attack vectors, and raw command 
    - **`System-Fault-Metrics`**: Dedicated visual telemetry dashboard tracking active and resolved resilience attack vectors:
      - *Header*: `# System Faults & Recovery` (Visual tracking of active attack vectors and remediation velocity).
      - *Graph 1*: **Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
-     - *Graph 2*: ** Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
+     - *Graph 2*: **Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
      - *Graph 3*: **Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
      - *Audit Table*: **Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
 
-<p align="center">
-  <img src="docs/images/cloudwatch_agent_command_audit.png" alt="AWS CloudWatch Agent Command Log" width="950" />
-</p>
-<p align="center"><b>Figure 2.1: AWS CloudWatch Agent-Command-Log Dashboard (Dual-Pane Red vs. Blue Team Command Logs)</b></p>
-<p align="center">
-  <img src="docs/images/cloudwatch_system_faults_recovery.png" alt="AWS CloudWatch System Faults and Recovery" width="950" />
-</p>
-<p align="center"><b>Figure 2.2: AWS CloudWatch System-Fault-Metrics Dashboard (Visual Attack Vectors & Remediation Velocity)</b></p>
+*(See [RESULTS.md#2-autonomous-agent-security-audit-stream](RESULTS.md#2-autonomous-agent-security-audit-stream) and [RESULTS.md#3-system-faults--remediation-recovery-velocity](RESULTS.md#3-system-faults--remediation-recovery-velocity) for high-resolution captures and telemetry analysis).*
+
 ---
 
 ### Step 3: Launch the Resilience Agents Inside the Quarantined Kubernetes Sandbox
