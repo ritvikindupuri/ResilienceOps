@@ -94,6 +94,36 @@ The platform executes a closed-loop resilience lifecycle from user traffic ingre
 
 ---
 
+## Kubernetes Agent Sandbox Architecture & Security Quarantine
+
+To ensure completely safe autonomous operations in production, all offensive and defensive LLM agents execute inside an isolated Kubernetes sandbox namespace (`sre-agent-sandbox`). Autonomous AI agents are never given unconstrained host access, root permissions, or broad network visibility.
+
+<p align="center">
+  <img src="docs/images/agent_sandbox_architecture.png" alt="Kubernetes Agent Sandbox Architecture & Security Boundary" width="950" />
+</p>
+<p align="center"><b>Figure 2: Kubernetes Agent Sandbox Architecture, cgroup Limits & NetworkPolicy Security Boundary</b></p>
+
+### What Purpose Does the Agent Sandbox Solve?
+
+Deploying autonomous agents directly onto production nodes presents significant security and reliability risks: runaway agent loops could exhaust host memory, flawed remediation logic could accidentally reboot the wrong host systems, and unconstrained network access could allow unintentional network scanning or AWS metadata extraction.
+
+The **Kubernetes Agent Sandbox** solves these exact risks through a 4-pillar containment architecture:
+
+| Security Pillar | Concrete Enforcement Mechanism | SRE & Platform Protection Guarantee |
+|:---|:---|:---|
+| **1. Zero Blast Radius (cgroups v2)** | Hard container limits enforced in Kubernetes manifest: `limits.cpu: 500m`, `limits.memory: 512Mi`. | If an agent experiences a runaway loop or memory leak during chaos testing, the Linux kernel cgroup OOMKiller terminates only the agent pod (`Exit 137`). **Host node stability and system daemons are 100% protected**. |
+| **2. Least-Privilege RBAC Quarantine** | Dedicated ServiceAccounts (`red-agent-sa`, `sre-defender-sa`) bound strictly to `sre-target-apps` namespace with scoped verbs (`get`, `list`, `watch`, `pods/exec`). | Agents have **zero cluster-admin privileges**. They cannot inspect `kube-system`, cannot view cluster secrets, and cannot modify node configurations. |
+| **3. Strict Network Isolation** | Declarative `NetworkPolicy` (`agent-sandbox-isolation`) with default egress deny. Explicitly allows only: (1) CoreDNS (`UDP 53`), (2) Target microservices (`sre-target-apps`), and (3) Anthropic API (`HTTPS 443`). | Agents **cannot perform lateral network scanning**, cannot access the internet beyond LLM inference, and cannot query AWS instance metadata (`169.254.169.254`). |
+| **4. Synchronous CloudWatch Audit Trail** | Every shell command, script invocation, and return code is synchronously streamed to CloudWatch Logs (`/sre/autonomous-agent-audit`). | Complete forensic auditability: every fault injection and automated remediation is recorded in an immutable ledger with zero tampering risk. |
+
+### How the Sandbox Operates During Incident Cycles
+
+1. **Offensive Agent Pod (`red-team-sandbox`)**: Houses the Red Team testing squad. The agents formulate test plans and issue surgical fault injections against microservices inside `sre-target-apps` via Kubernetes exec hooks. Even under maximum stress, the pod cannot exceed 500m CPU or 512Mi RAM.
+2. **Defensive Operator Pod (`blue-team-operator`)**: Houses the Blue Team sentinel and recovery squad. When SLO breaches occur, agents query Claude 3.7 Sonnet over outbound HTTPS (port 443) for root-cause analysis and execute approved declarative runbooks against target containers.
+3. **Target Microservices Namespace (`sre-target-apps`)**: Houses the live business workload (`api-gw`, `order-service`, `payment-service`, `redis`, `postgres`). This workload is exercised and recovered safely without ever exposing the underlying cloud node or other cluster workloads to disruption.
+
+---
+
 ## Tech Stack
 
 | Domain | Technology / Tool | Version | Purpose |
