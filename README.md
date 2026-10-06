@@ -315,14 +315,8 @@ All Red Team and Blue Team agents execute inside the hardened **Kubernetes Agent
 Run the orchestrator directly inside the quarantined Kubernetes pod over AWS Systems Manager or terminal:
 
 ```bash
-# Execute against the AWS cluster from inside the sandbox pod:
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
   python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
-```
-
-*(Alternatively, to run directly from your local terminal targeting the cluster's public IP):*
-```bash
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
 #### What you will observe in the terminal:
