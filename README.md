@@ -231,11 +231,6 @@ Save your `public_ip` (or `grafana_url`) from the output.
   <img src="docs/images/aws_vpc_resource_map.png" alt="AWS Enterprise VPC Resource Map" width="950" />
 </p>
 <p align="center"><b>Figure 4.1: Live AWS Enterprise VPC Resource Map (3-Tier Subnet Segmentation & Ingress Routing)</b></p>
-
-> **What This Shows**:
-> - **Multi-Tier Subnet Architecture**: The live AWS VPC (`10.0.0.0/16`) divided into three discrete subnets: `sre-subnet-public-ingress` (Tier 1 for API Gateway & Grafana), `sre-subnet-app-workloads` (Tier 2 for containerized microservices), and `sre-subnet-data-persistence` (Tier 3 for Redis 7 and PostgreSQL 16).
-> - **Route Table & Gateway Association**: Verified routing showing `sre-public-route-table` bound to the public ingress subnet and bridged directly to the Internet Gateway (`sre-enterprise-igw`).
-
 ---
 
 ### Step 5: Quarantined Kubernetes Agent Sandbox Pod Access & Live Logs
@@ -304,13 +299,6 @@ Follow this click-by-click walkthrough to monitor live metrics, inspect security
   <img src="docs/images/grafana_sre_performance_monitor.png" alt="Grafana SRE Performance Monitor" width="950" />
 </p>
 <p align="center"><b>Figure 1.1: Live AWS Grafana Infrastructure & Reliability Performance Monitor (Streaming 1-Second Telemetry)</b></p>
-
-> **What This Shows**:
-> - **Availability & Golden Signals**: 100.00% Availability SLO preserved, 8.2 RPS baseline throughput, 0.00% 5XX error baseline, and clear `HEALTHY` operational state indicator.
-> - **Sub-Second Latency Profiles**: Real-time p50, p95, and p99 latency percentiles showing sub-second fluctuations and recovery dips.
-> - **Memory Cgroup Saturation**: `order-service` process resident memory tracking right beneath the 256MB cgroup ceiling with immediate post-remediation normalization.
-> - **Traffic Share Distribution**: Live donut chart showing incoming user request distribution across `/api/orders/orders`, `/health`, `/api/payments/payments`, and `/metrics`.
-
 ---
 
 ### Step 2: Open the AWS CloudWatch Dashboards
@@ -334,23 +322,10 @@ To inspect the exact security actions, injected attack vectors, and raw command 
   <img src="docs/images/cloudwatch_agent_command_audit.png" alt="AWS CloudWatch Agent Command Log" width="950" />
 </p>
 <p align="center"><b>Figure 2.1: AWS CloudWatch Agent-Command-Audit Dashboard (Dual-Pane Red vs. Blue Team Command Logs)</b></p>
-
-> **What This Shows**:
-> - **Red Team Attack Log (Left)**: Verbatim command executions including `tc qdisc add dev eth0 root netem delay 2500ms 100ms` and `curl -X POST http://order-service:8001/chaos/redis-starvation?connections=55` with real kernel and container socket return statuses.
-> - **Blue Team Recovery Log (Right)**: Verbatim automated remediation actions including `tc qdisc del dev eth0 root netem && FLUSH_REDIS_CONNECTION_POOL` and diagnostic reasoning traces confirming incident resolution.
-> - **Unified Security Audit Stream (Bottom)**: Chronological, millisecond-precision JSON audit log capturing full payload details across both agent squads.
-
 <p align="center">
   <img src="docs/images/cloudwatch_system_faults_recovery.png" alt="AWS CloudWatch System Faults and Recovery" width="950" />
 </p>
 <p align="center"><b>Figure 2.2: AWS CloudWatch System-Fault-Metrics Dashboard (Visual Attack Vectors & Remediation Velocity)</b></p>
-
-> **What This Shows**:
-> - **Fault Injections by Vector (Top Left)**: Real-time time-series chart graphing frequency across `LinuxKernel_tc_netem_latency`, `Redis_Connection_Starvation`, and `Cgroup_Memory_Exhaustion`.
-> - **Incident Rate vs. Remediation Velocity (Top Right)**: Direct visual correlation between active SEV-1 incident spikes and automated recovery runbook completions.
-> - **Attack Vector Distribution Share (Bottom Left)**: Pie chart displaying proportional coverage of tested failure domains.
-> - **Active vs. Resolved Fault Lifecycle (Bottom Right)**: Filtered operational table tracking live fault transitions from active disruption to full recovery.
-
 ---
 
 ### Step 3: Launch the Autonomous SRE Agents Against AWS
