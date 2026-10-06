@@ -61,7 +61,7 @@ flowchart TB
         end
     end
 
-    subgraph ObservabilityTier ["ðŸ“Š TIER 3: REAL-TIME OBSERVABILITY ENGINE"]
+    subgraph ObservabilityTier ["TIER 3: REAL-TIME OBSERVABILITY ENGINE"]
         Prom["Prometheus Server (:9090)<br/>High-Resolution 1-Second Scraper"]
         Grafana["Grafana SRE Monitor (:3000)<br/>Locked 1s Live-Streaming Dashboard"]
         Prom -->|PromQL Telemetry Stream| Grafana
@@ -139,7 +139,7 @@ To reflect real-world SRE on-call dynamics, the autonomous agents operate in two
 
 ```mermaid
 flowchart LR
-    subgraph RedTeam ["ðŸ”´ RED TEAM: OFFENSIVE TESTING SQUAD"]
+    subgraph RedTeam ["RED TEAM: OFFENSIVE TESTING SQUAD"]
         direction TB
         R1["<b>1. Resilience Attack Planner</b><br/><i>Model: Claude Sonnet</i><br/>Formulates multi-stage attack campaigns"]
         R2["<b>2. Server Resource Stresser</b><br/><i>Model: Claude Sonnet</i><br/>Executes cgroup memory exhaustion & CPU burn"]
@@ -153,7 +153,7 @@ flowchart LR
         TargetAppContainers["API Gateway & Microservices<br/>(Monitored by Golden Signals)"]
     end
 
-    subgraph BlueTeam ["ðŸ”µ BLUE TEAM: DEFENSIVE RECOVERY SQUAD"]
+    subgraph BlueTeam ["BLUE TEAM: DEFENSIVE RECOVERY SQUAD"]
         direction TB
         B1["<b>1. Health & Uptime Monitor</b><br/><i>Model: Claude Haiku</i><br/>Sub-second telemetry watcher & SLO detector"]
         B2["<b>2. Root Cause Investigator</b><br/><i>Model: Claude Sonnet (Extended Thinking)</i><br/>Chain-of-thought hypothesis testing & RCA"]
@@ -343,10 +343,10 @@ Agent command executions and operational attack traces are streamed directly to 
   - Bottom Table: **Unified Agent Command & Security Audit Stream** (Full chronologically sorted audit ledger).
 - **`System-Fault-Metrics`** (Region: `us-east-1`): Dedicated visual telemetry dashboard tracking active and resolved resilience attack vectors:
   - Header: `# System Faults & Recovery` (Visual tracking of active attack vectors and remediation velocity).
-  - Graph 1: **ðŸ“ˆ Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
-  - Graph 2: **ðŸ›¡ï¸ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
-  - Graph 3: **ðŸ“Š Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
-  - Audit Table: **ðŸ“‹ Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
+  - Graph 1: **Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
+  - Graph 2: ** Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
+  - Graph 3: **Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
+  - Audit Table: **Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
 - **Log Group**: `/sre/autonomous-agent-audit` (Log Stream: `audit-stream`)
 - **Telemetry Dispatched**:
   - `squad`: `red-team` or `blue-team`
@@ -365,15 +365,15 @@ Deploying autonomous agents with shell execution capabilities introduces securit
 
 ```mermaid
 flowchart TB
-    subgraph HostOS ["ðŸ–¥ï¸ CLOUD HOST / LINUX KERNEL"]
+    subgraph HostOS [" CLOUD HOST / LINUX KERNEL"]
         subgraph K8sCore ["Kubernetes Control Plane"]
             
-            subgraph SandboxNS ["ðŸ›¡ï¸ Namespace: sre-agent-sandbox (Security Quarantined)"]
-                RedPod["ðŸ”´ Red Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
-                BluePod["ðŸ”µ Blue Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
+            subgraph SandboxNS [" Namespace: sre-agent-sandbox (Security Quarantined)"]
+                RedPod["Red Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
+                BluePod["Blue Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
             end
 
-            subgraph AppsNS ["ðŸ“¦ Namespace: sre-target-apps (Application Workload Tier)"]
+            subgraph AppsNS ["Namespace: sre-target-apps (Application Workload Tier)"]
                 WorkloadPods["Target Application Pods"]
             end
         end
@@ -500,7 +500,7 @@ The following empirical trace records an end-to-end resilience cycle executed on
 [PHASE 4 - BLUE TEAM] Incident Monitor Scanning Telemetry for SLO Breaches...
     [t+1.0s] Latency: 449.87ms | Gateway HTTP: 200
     [t+2.1s] Latency: 2140.50ms | Gateway HTTP: 504 Gateway Timeout
-    ðŸš¨ [INCIDENT DECLARED] MTTD: 2.14s | Severity: SEV-1
+    [INCIDENT DECLARED] MTTD: 2.14s | Severity: SEV-1
     - Violation: p99 Latency (2140.5ms) exceeded SLO limit (1200.0ms)
     - Violation: order-service returned server error HTTP 504
 

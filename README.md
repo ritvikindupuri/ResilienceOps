@@ -276,10 +276,10 @@ To inspect the exact security actions, injected attack vectors, and raw command 
      - *Bottom Table*: **Unified Agent Command & Security Audit Stream** (Full chronologically sorted audit ledger).
    - **`System-Fault-Metrics`**: Dedicated visual telemetry dashboard tracking active and resolved resilience attack vectors:
      - *Header*: `# System Faults & Recovery` (Visual tracking of active attack vectors and remediation velocity).
-     - *Graph 1*: **ðŸ“ˆ Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
-     - *Graph 2*: **ðŸ›¡ï¸ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
-     - *Graph 3*: **ðŸ“Š Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
-     - *Audit Table*: **ðŸ“‹ Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
+     - *Graph 1*: **Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
+     - *Graph 2*: ** Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
+     - *Graph 3*: **Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
+     - *Audit Table*: **Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
 
 <p align="center">
   <img src="docs/images/cloudwatch_agent_command_audit.png" alt="AWS CloudWatch Agent Command Log" width="950" />
@@ -307,7 +307,7 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 - **Phase 1**: **Health & Uptime Monitor** performs a baseline health check on AWS (`HTTP 200`, Latency `<300ms`).
 - **Phase 2**: Red Team **Resilience Attack Planner** (`Claude Sonnet`) evaluates the AWS topology and formulates an attack campaign.
 - **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
-- **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`ðŸš¨ INCIDENT DECLARED | MTTD: 2.14s`).
+- **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`INCIDENT DECLARED | MTTD: 2.14s`).
 - **Phase 5**: Blue Team **Root Cause Investigator** invokes **Claude Sonnet with Extended Thinking**, outputs step-by-step reasoning, isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
 - **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`✅ Recovery Validated | MTTR: 3.42s`).
 - **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
@@ -371,7 +371,7 @@ Every time an autonomous resilience cycle runs, the Blue Team's **Incident Repor
    Open **CloudWatch** -> **Dashboards** -> **`Agent-Command-Log`**. The middle table (*"Blue Team SRE Agents: Exact Remediation Commands & Outputs"*) streams the exact `GENERATE_POST_MORTEM` commands, MTTR calculation metrics, and report storage confirmations in real time.
 
 #### Sample Live Incident Post-Mortem Report:
-ðŸ‘‰ **[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
+**[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
 
 ```markdown
 # Incident Post-Mortem Report: UNKNOWN_FAULT
@@ -445,4 +445,4 @@ docker compose down -v
 
 For the comprehensive technical specification covering mathematical SLO formulations, cgroup kernel limits, Claude 3.7 prompt architectures, Kubernetes agent sandbox security, and AWS network topology, refer to:
 
-ðŸ‘‰ **[Complete Technical Documentation](TECHNICAL_DOCUMENTATION.md)**
+**[Complete Technical Documentation](TECHNICAL_DOCUMENTATION.md)**
