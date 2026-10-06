@@ -6,7 +6,7 @@
 
 ## Overview
 
-Modern distributed systems require continuous resilience validation, yet standard resilience testing is either purely manual or decoupled from automated remediation workflows. **ResilienceOps** closes this loop with an autonomous, production-grade multi-agent architecture.
+Modern distributed systems require continuous resilience validation, yet conventional **chaos engineering** is either purely manual or disconnected from automated remediation workflows. **ResilienceOps** closes this loop with an autonomous, production-grade multi-agent architecture.
 
 The platform runs an authentic containerized microservices stack under live, concurrent automated user traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (Linux cgroup memory leaks, CPU CFS quota exhaustion, network transit delays, and TCP packet drops). Simultaneously, a **3-Agent Blue Team** continuously watches the SRE Golden Signals, declares incidents upon Service Level Objective (SLO) breaches, executes deep root-cause analysis (RCA) via **Claude 3.7 Sonnet with Extended Thinking**, triggers automated recovery runbooks, and authors standardized post-mortem reports.
 

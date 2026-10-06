@@ -26,8 +26,8 @@
 
 ## 1. Executive Summary
 
-Distributed cloud architectures exhibit non-linear failure modes that defy traditional static threshold alerts. While resilience and fault injection testing have become standard for resilience validation, conventional implementations suffer from two critical limitations:
-1. **Disconnection from Automated Remediation**: Resilience experiments typically report failures to human engineers via dashboards or tickets, leaving Mean Time To Remediate (MTTR) bound to human on-call latency.
+Distributed cloud architectures exhibit non-linear failure modes that defy traditional static threshold alerts. While **Chaos Engineering** (pioneered by Netflix's Simian Army) has become the gold standard for resilience validation, conventional implementations suffer from two critical limitations:
+1. **Disconnection from Automated Remediation**: Chaos experiments typically report failures to human engineers via dashboards or tickets, leaving Mean Time To Remediate (MTTR) bound to human on-call latency.
 2. **Reliance on Mocks & Emulations**: Conventional testing environments frequently rely on static delay sleeps or fake metrics, hiding subtle production failure modes such as connection pool exhaustion, Linux kernel CFS throttling, and container cgroup memory pressure.
 
 **ResilienceOps** resolves these limitations by implementing a closed-loop autonomous Site Reliability Engineering (SRE) platform. The system operates on a dual-squad multi-agent architecture powered by **Anthropic Claude 3.7 Sonnet** (featuring hybrid reasoning and Extended Thinking) and **Claude 3.5 Sonnet**:
