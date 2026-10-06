@@ -1,9 +1,9 @@
-# Technical Specification & Architectural Blueprint: ResilienceOps Autonomous SRE Platform
+# Technical Specification & Architectural Blueprint: InfraAttack SRE Resilience Platform
 
 **By: Ritvik Indupuri**  
-**Date: October 5, 2026**  
+**Date: October 6, 2026**  
 **Classification: Production Engineering / Systems Architecture Specification**  
-**Repository: `sre-colosseum` / `resilience-ops`**  
+**Repository: `InfraAttack` (`https://github.com/ritvikindupuri/InfraAttack`)**  
 
 ---
 
@@ -380,17 +380,14 @@ NAME                                              POD-SELECTOR   AGE
 networkpolicy.networking.k8s.io/agent-sandbox-isolation   <none>         15s
 ```
 
-### 5. Running Resilience Cycles Inside the Quarantined Sandbox
+### 5. Native Resilience Cycle Execution Inside the Quarantined Sandbox
 
-Once the sandbox pods are initialized, agent cycles and tactical operations can be executed directly within the quarantined container runtime:
+The platform natively executes the multi-agent resilience lifecycle directly inside the quarantined Kubernetes agent container (`sre-agent-sandbox` namespace), enforcing strict containment boundaries:
 
 ```bash
-# Attach directly inside the quarantined agent sandbox pod on AWS:
-kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash
-
-# Or execute commands directly via non-interactive exec:
-kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 -c "import urllib.request; req = urllib.request.Request('http://127.0.0.1:8001/chaos/leak-memory?mb=150', data=b''); print('INJECTION RESULT:', urllib.request.urlopen(req).read().decode())"
+# Execute the native resilience cycle inside the quarantined sandbox pod on AWS:
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
 Verified live output from the sandbox pod on AWS:
