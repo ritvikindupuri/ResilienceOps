@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system utilities
+RUN apt-get update && apt-get install -y --no-install-recommends curl jq && rm -rf /var/lib/apt/lists/*
+
+# Install Python requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt python-dotenv
+
+# Copy platform source code
+COPY agents/ ./agents/
+COPY reports/ ./reports/
+COPY orchestrator.py .
+
+# Run continuous autonomous resilience cycles
+CMD ["python", "orchestrator.py", "--cycles", "5", "--delay", "10"]

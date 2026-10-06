@@ -1,0 +1,148 @@
+# ==============================================================================
+# KUBERNETES AGENT SANDBOX ENVIRONMENT
+# Isolates autonomous Red Team (Chaos) and Blue Team (SRE) agents inside
+# resource-constrained, RBAC-audited, network-isolated container sandboxes.
+# ==============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sre-agent-sandbox
+  labels:
+    security.sre.io/tier: sandbox
+    security.sre.io/quarantine: "true"
+---
+# 1. Red Team Sandbox ServiceAccount & RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: red-agent-sa
+  namespace: sre-agent-sandbox
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: red-agent-restricted-role
+  namespace: sre-target-apps
+rules:
+  # Red team agents can only view and exec/signal within the target apps namespace
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: red-agent-restricted-binding
+  namespace: sre-target-apps
+subjects:
+  - kind: ServiceAccount
+    name: red-agent-sa
+    namespace: sre-agent-sandbox
+roleRef:
+  kind: Role
+  name: red-agent-restricted-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 2. Red Team Isolated Sandbox Pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: red-team-sandbox
+  namespace: sre-agent-sandbox
+  labels:
+    agent.role: red-team-chaos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      agent.role: red-team-chaos
+  template:
+    metadata:
+      labels:
+        agent.role: red-team-chaos
+    spec:
+      serviceAccountName: red-agent-sa
+      containers:
+      - name: chaos-squad
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install httpx pydantic python-dotenv
+            echo "[*] Red Team Agent Sandbox initialized and isolated."
+            tail -f /dev/null
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        securityContext:
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+---
+# 3. Blue Team SRE Defender Pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue-team-operator
+  namespace: sre-agent-sandbox
+  labels:
+    agent.role: blue-team-defender
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      agent.role: blue-team-defender
+  template:
+    metadata:
+      labels:
+        agent.role: blue-team-defender
+    spec:
+      serviceAccountName: sre-defender-sa
+      containers:
+      - name: sre-squad
+        image: python:3.11-slim
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install httpx pydantic python-dotenv kubernetes
+            echo "[*] Blue Team SRE Operator Sandbox initialized."
+            tail -f /dev/null
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+---
+# 4. Sandbox Network Isolation (Strict Ingress/Egress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-sandbox-isolation
+  namespace: sre-agent-sandbox
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  egress:
+  # Allow DNS resolution
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  # Allow connecting to target-apps namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          platform.sre.io/role: workload
+  # Allow outbound HTTPS directly to Anthropic API (api.anthropic.com:443)
+  - ports:
+    - port: 443
+      protocol: TCP

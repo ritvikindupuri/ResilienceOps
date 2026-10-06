@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 1s        # Real-time sub-second metric collection
+  evaluation_interval: 1s
+
+scrape_configs:
+  - job_name: "api-gw"
+    static_configs:
+      - targets: ["api-gw:8000"]
+
+  - job_name: "order-service"
+    static_configs:
+      - targets: ["order-service:8001"]
+
+  - job_name: "payment-service"
+    static_configs:
+      - targets: ["payment-service:8002"]

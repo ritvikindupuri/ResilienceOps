@@ -1,0 +1,84 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "SREColosseum/Agents", "AttackCount", { "label": "🔴 Red Team Attacks", "color": "#d62728" } ],
+          [ "SREColosseum/Agents", "IncidentCount", { "label": "🚨 Incidents Declared", "color": "#ff7f0e" } ],
+          [ "SREColosseum/Agents", "RemediationCount", { "label": "🔵 Blue Team Remediations", "color": "#2ca02c" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "us-east-1",
+        "title": "⚔️ Live Arena Agent Duel Activity",
+        "period": 60,
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ApplicationELB", "TargetResponseTime", { "label": "p95 Latency (s)", "stat": "p95", "color": "#1f77b4" } ],
+          [ "AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", { "label": "5XX Server Errors", "stat": "Sum", "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "region": "us-east-1",
+        "title": "📊 SRE Golden Signals (Latency & 5XX Errors)",
+        "period": 60
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 8,
+      "properties": {
+        "query": "SOURCE '/aws/sre-arena/attacker' | fields @timestamp, agent, vector, target, duration_ms, expected_impact | sort @timestamp desc | limit 25",
+        "region": "us-east-1",
+        "title": "🔴 Red Team Chaos Attack Stream",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 8,
+      "properties": {
+        "query": "SOURCE '/aws/sre-arena/defender' | fields @timestamp, agent, action, severity, primary_root_cause, runbook, status | sort @timestamp desc | limit 25",
+        "region": "us-east-1",
+        "title": "🔵 Blue Team SRE Defender Stream",
+        "view": "table"
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 14,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "query": "SOURCE '/aws/sre-arena/incidents' | fields @timestamp, vector, target, mttd_seconds, mttr_seconds, root_cause | sort @timestamp desc | limit 10",
+        "region": "us-east-1",
+        "title": "📑 SRE Incident Post-Mortems & MTTR Scorecard",
+        "view": "table"
+      }
+    }
+  ]
+}

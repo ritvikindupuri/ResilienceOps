@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  api-gw:
+    build:
+      context: ./services/api-gw
+    ports:
+      - "8000:8000"
+    environment:
+      - ORDER_SERVICE_URL=http://order-service:8001
+      - PAYMENT_SERVICE_URL=http://payment-service:8002
+    depends_on:
+      - order-service
+      - payment-service
+
+  order-service:
+    build:
+      context: ./services/order-service
+    ports:
+      - "8001:8001"
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=sre_user
+      - POSTGRES_PASSWORD=sre_password
+      - POSTGRES_DB=orders_db
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    depends_on:
+      - redis
+      - postgres
+
+  payment-service:
+    build:
+      context: ./services/payment-service
+    ports:
+      - "8002:8002"
+    cap_add:
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--maxclients", "50"]
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=sre_user
+      - POSTGRES_PASSWORD=sre_password
+      - POSTGRES_DB=orders_db
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  traffic-generator:
+    build:
+      context: ./traffic-generator
+    environment:
+      - GATEWAY_URL=http://api-gw:8000
+      - RPS_TARGET=20
+      - CONCURRENCY=8
+    depends_on:
+      - api-gw
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./dashboards/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./dashboards/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+
+  # Autonomous Agent Sandbox Container (Runs Red Team vs Blue Team cycles in isolation)
+  agent-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent-sandbox
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - API_GATEWAY_URL=http://api-gw:8000
+      - ORDER_SERVICE_URL=http://order-service:8001
+      - PAYMENT_SERVICE_URL=http://payment-service:8002
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      - api-gw
+      - order-service
+      - payment-service
+      - grafana

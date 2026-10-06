@@ -1,0 +1,363 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 2,
+  "id": null,
+  "title": "SRE Infrastructure & Reliability Performance Monitor",
+  "tags": [
+    "sre",
+    "realtime",
+    "infrastructure"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "liveNow": true,
+  "refresh": "1s",
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "1s"
+    ],
+    "time_options": [
+      "1m",
+      "2m",
+      "5m",
+      "15m"
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Real-Time Availability SLO %",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "clamp_max(clamp_min((sum(rate(http_requests_total{status=~\"2..\"}[10s])) / sum(rate(http_requests_total[10s]))) * 100, 0), 100)",
+          "legendFormat": "Availability %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 98.0
+              },
+              {
+                "color": "green",
+                "value": 99.9
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Live Request Throughput (RPS)",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_requests_total[10s]))",
+          "legendFormat": "RPS"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 1,
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Live HTTP 5XX Error Rate %",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "clamp_max(clamp_min(((sum(rate(http_requests_total{status=~\"5..\"}[10s])) or vector(0)) / sum(rate(http_requests_total[10s]))) * 100, 0), 100)",
+          "legendFormat": "5xx %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1.0
+              },
+              {
+                "color": "red",
+                "value": 2.0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "type": "stat",
+      "title": "Real-Time System State",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[10s])) > bool 0.1) or (histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[10s])) by (le)) > bool 1.2)",
+          "legendFormat": "State"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "text": {
+            "valueSize": 22,
+            "titleSize": 14
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "HEALTHY",
+                  "color": "dark-green"
+                },
+                "1": {
+                  "text": "ACTIVE INCIDENT",
+                  "color": "dark-red"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "type": "timeseries",
+      "title": "Real-Time Latency Profiles (p50, p95, p99)",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[10s])) by (le)) * 1000",
+          "legendFormat": "p50 Latency (ms)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[10s])) by (le)) * 1000",
+          "legendFormat": "p95 Latency (ms)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[10s])) by (le)) * 1000",
+          "legendFormat": "p99 Latency (ms)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto"
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "type": "timeseries",
+      "title": "Live Ingress RPS vs 5XX Server Errors",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_requests_total[10s]))",
+          "legendFormat": "Total Throughput (RPS)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[10s]))",
+          "legendFormat": "5xx Server Errors (EPS)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 13
+      },
+      "type": "timeseries",
+      "title": "Microservice Memory Usage vs Cgroup Ceiling (MB)",
+      "description": "Real-time process resident memory (RSS). Red horizontal line marks the 256MB cgroup hard ceiling where container OOMKills.",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "process_resident_memory_bytes{job=\"order-service\"} / 1024 / 1024",
+          "legendFormat": "order-service (RAM MB)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "process_resident_memory_bytes{job=\"payment-service\"} / 1024 / 1024",
+          "legendFormat": "payment-service (RAM MB)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "process_resident_memory_bytes{job=\"api-gw\"} / 1024 / 1024",
+          "legendFormat": "api-gateway (RAM MB)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 256000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "type": "piechart",
+      "title": "Service Traffic Ingress Share",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum by (endpoint) (rate(http_requests_total[1m]))",
+          "legendFormat": "{{endpoint}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+logs/*.jsonl
+*.tar.gz
+!reports/incident_20261006_010119_unknown_fault.md
