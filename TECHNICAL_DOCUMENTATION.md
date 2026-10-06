@@ -295,7 +295,7 @@ The Grafana dashboard (`SRE Infrastructure & Reliability Performance Monitor`) i
 
 ### AWS CloudWatch Dedicated Command & Fault Dashboards
 Agent command executions and operational attack traces are streamed directly to CloudWatch:
-- **`Agent-Command-Audit`** (Region: `us-east-1`): Concise, clean real-time audit ledger tracking exact commands executed by Red and Blue team agents and raw terminal outputs:
+- **`Agent-Command-Log`** (Region: `us-east-1`): Concise, clean real-time audit ledger tracking exact commands executed by Red and Blue team agents and raw terminal outputs:
   - Header: `# Agent Command Log` (Live audit trail of test commands and recovery fixes).
   - Left Table: **Red Team: Injected Commands & Outputs** (Tracks exact kernel `tc netem`, Redis starvation, and memory allocation commands).
   - Right Table: **Blue Team: Remediation Commands & Outputs** (Tracks exact runbook actions and recovery statuses).

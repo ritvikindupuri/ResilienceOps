@@ -35,7 +35,7 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
     - *Automated Recovery Fixer & Report Writer* (`Claude Sonnet`): Executes automated recovery fixes (clearing jammed memory, restarting broken containers) and generates executive post-incident reports.
 - **Dual-Pane Observability Separation (Infrastructure vs. Security)**:
   - **Grafana (Pure Infrastructure Monitoring)**: 100% real-time streaming (1s tick interval, `liveNow: true`, rolling 2-minute window) displaying Google SRE Golden Signals, Availability SLO % (99.9% target), Latency percentiles (p50, p95, p99), Ingress RPS vs 5XX error area charts, Service traffic shares, and live Microservice Memory Usage plotted directly against the 256MB cgroup ceiling. Free of audit clutter and emojis.
-  - **AWS CloudWatch (Agent Logs & Fault Telemetry)**: Dedicated observability dashboards (`Agent-Command-Audit` and `System-Fault-Metrics`) logging every exact command executed by Red Team and Blue Team agents alongside their exact execution outputs streamed into CloudWatch Logs (`/sre/autonomous-agent-audit`).
+  - **AWS CloudWatch (Agent Logs & Fault Telemetry)**: Dedicated observability dashboards (`Agent-Command-Log` and `System-Fault-Metrics`) logging every exact command executed by Red Team and Blue Team agents alongside their exact execution outputs streamed into CloudWatch Logs (`/sre/autonomous-agent-audit`).
 - **Kubernetes Agent Sandbox & Security Quarantine**:
   - Agents run inside an isolated `sre-agent-sandbox` namespace constrained by Kubernetes resource limits (`cpu: 500m`, `memory: 512Mi`), audited RBAC roles, and egress NetworkPolicies.
   - Interactive operator shell access via `kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash` with direct cluster connectivity to microservice targets.
@@ -70,7 +70,7 @@ The platform executes a strictly sequential, closed-loop resilience lifecycle fr
 [7. Automated Remediation & State Recovery] ──► [8. Live Verification & Metrics Normalization]
                 │
                 ▼
-[9. Immutable CloudWatch Command Audit & Telemetry Dashboards]
+[9. Immutable CloudWatch Logs & Telemetry & Telemetry Dashboards]
 ```
 
 1. **Step 1 — Client Traffic Generation & Ingress Routing**:
@@ -105,7 +105,7 @@ The platform executes a strictly sequential, closed-loop resilience lifecycle fr
    The Blue Team polls the health and metrics endpoints for 10 consecutive ticks, confirming that p99 latency drops back below 800ms, 5XX errors return to 0.00%, and memory returns beneath the cgroup quota. Once normalized, the **Incident Post-Mortem Agent** auto-generates a structured Markdown post-mortem detailing timeline, root cause, and recovery actions in `reports/`.
 
 9. **Step 9 — CloudWatch Audit Logging & Operational Dashboards**:
-   Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Audit** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
+   Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Log** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
 
 ---
 
@@ -285,7 +285,7 @@ To inspect the exact security actions, injected attack vectors, and raw command 
 1. Open the **AWS Console** in your browser and switch to `us-east-1`.
 2. Navigate to **CloudWatch** -> **Dashboards**.
 3. You will find two clear, dedicated CloudWatch dashboards:
-   - **`Agent-Command-Audit`**: Real-time audit log stream capturing exact commands executed by Red Team and Blue Team agents alongside raw terminal outputs from `/sre/autonomous-agent-audit`:
+   - **`Agent-Command-Log`**: Real-time audit log stream capturing exact commands executed by Red Team and Blue Team agents alongside raw terminal outputs from `/sre/autonomous-agent-audit`:
      - *Header*: `# Agent Command Log` (Live audit trail of test commands and recovery fixes).
      - *Left Table*: **Red Team: Injected Commands & Outputs** (Tracks exact kernel `tc netem`, Redis starvation, and memory allocation commands).
      - *Right Table*: **Blue Team: Remediation Commands & Outputs** (Tracks exact runbook actions and recovery statuses).
@@ -300,7 +300,7 @@ To inspect the exact security actions, injected attack vectors, and raw command 
 <p align="center">
   <img src="docs/images/cloudwatch_agent_command_audit.png" alt="AWS CloudWatch Agent Command Log" width="950" />
 </p>
-<p align="center"><b>Figure 2.1: AWS CloudWatch Agent-Command-Audit Dashboard (Dual-Pane Red vs. Blue Team Command Logs)</b></p>
+<p align="center"><b>Figure 2.1: AWS CloudWatch Agent-Command-Log Dashboard (Dual-Pane Red vs. Blue Team Command Logs)</b></p>
 <p align="center">
   <img src="docs/images/cloudwatch_system_faults_recovery.png" alt="AWS CloudWatch System Faults and Recovery" width="950" />
 </p>
@@ -384,7 +384,7 @@ Every time an autonomous resilience cycle runs, the Blue Team's **Incident Repor
    ```
 
 2. **Live on AWS CloudWatch**:
-   Open **CloudWatch** -> **Dashboards** -> **`Agent-Command-Audit`**. The middle table (*"Blue Team SRE Agents: Exact Remediation Commands & Outputs"*) streams the exact `GENERATE_POST_MORTEM` commands, MTTR calculation metrics, and report storage confirmations in real time.
+   Open **CloudWatch** -> **Dashboards** -> **`Agent-Command-Log`**. The middle table (*"Blue Team SRE Agents: Exact Remediation Commands & Outputs"*) streams the exact `GENERATE_POST_MORTEM` commands, MTTR calculation metrics, and report storage confirmations in real time.
 
 #### Sample Live Incident Post-Mortem Report:
 👉 **[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
