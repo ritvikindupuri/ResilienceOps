@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import time
 import uuid
@@ -17,6 +17,10 @@ ORDER_LATENCY = Histogram("order_processing_duration_seconds", "Latency of order
 MEMORY_LEAK_GAUGE = Gauge("active_memory_leak_bytes", "Memory leaked via fault injection")
 REDIS_POOL_GAUGE = Gauge("redis_active_connections_count", "Active connections to Redis cache")
 
+import psycopg2
+from psycopg2 import pool
+import httpx
+
 # Redis configuration
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
@@ -26,6 +30,46 @@ try:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, socket_timeout=2.0)
 except Exception as e:
     redis_client = None
+
+# PostgreSQL configuration
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", 5432))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "sre_user")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "sre_password")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "orders_db")
+pg_pool = None
+
+try:
+    pg_pool = pool.SimpleConnectionPool(
+        minconn=1,
+        maxconn=10,
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        database=POSTGRES_DB,
+        connect_timeout=3
+    )
+    # Ensure orders table exists
+    conn = pg_pool.getconn()
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                order_id VARCHAR(64) PRIMARY KEY,
+                item_id VARCHAR(64),
+                quantity INT,
+                amount NUMERIC(10, 2),
+                user_id VARCHAR(64),
+                created_at DOUBLE PRECISION,
+                status VARCHAR(32)
+            );
+        """)
+        conn.commit()
+    pg_pool.putconn(conn)
+except Exception:
+    pg_pool = None
+
+PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://payment-service:8002")
 
 # In-memory storage & state
 ORDERS: Dict[str, dict] = {}
@@ -58,11 +102,23 @@ async def health():
         except Exception as e:
             redis_status = f"unreachable: {str(e)[:40]}"
             
+    postgres_status = "disabled"
+    if pg_pool:
+        try:
+            conn = pg_pool.getconn()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1;")
+            pg_pool.putconn(conn)
+            postgres_status = "connected"
+        except Exception as e:
+            postgres_status = f"unreachable: {str(e)[:40]}"
+
     return {
         "status": "healthy",
         "service": "order-service",
         "orders_count": len(ORDERS),
         "redis_cache": redis_status,
+        "postgres_db": postgres_status,
         "redis_starvation_active": FAULT_STATE["redis_starvation_active"]
     }
 
@@ -96,16 +152,53 @@ async def create_order(order_req: CreateOrderRequest):
         "status": "confirmed"
     }
     
-    # Persistence & Cache tier
+    # Persistence: Write directly to PostgreSQL database
+    if pg_pool:
+        try:
+            conn = pg_pool.getconn()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO orders (order_id, item_id, quantity, amount, user_id, created_at, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (order_id) DO NOTHING;
+                    """,
+                    (order_id, order_req.item_id, order_req.quantity, order_req.amount, order_req.user_id, order_data["created_at"], order_data["status"])
+                )
+                conn.commit()
+            pg_pool.putconn(conn)
+        except Exception as pge:
+            pass
+
+    # In-memory and Redis Caching Tier
     ORDERS[order_id] = order_data
     if redis_client:
         try:
-            # Try caching active order session in Redis
             redis_client.setex(f"order:{order_id}", 300, str(order_data))
         except redis.ConnectionError as ce:
-            # If Redis connection pool is starved, latency spikes and errors bubble up
             ORDER_COUNT.labels(status="redis_starvation_error").inc()
             raise HTTPException(status_code=503, detail=f"Redis cache connection pool exhausted: {str(ce)}")
+
+    # Downstream Order -> Payment Flow: Dispatch payment authorization to payment-service
+    async with httpx.AsyncClient(timeout=6.0) as http_client:
+        try:
+            pay_payload = {
+                "order_id": order_id,
+                "amount": order_req.amount,
+                "currency": "USD",
+                "payment_method": "credit_card"
+            }
+            pay_resp = await http_client.post(f"{PAYMENT_SERVICE_URL}/payments", json=pay_payload)
+            if pay_resp.status_code == 200:
+                order_data["payment"] = pay_resp.json()
+            elif pay_resp.status_code >= 500:
+                ORDER_COUNT.labels(status="downstream_payment_failure").inc()
+                order_data["status"] = "payment_failed"
+        except httpx.TimeoutException:
+            ORDER_COUNT.labels(status="downstream_payment_timeout").inc()
+            raise HTTPException(status_code=504, detail="Payment-service upstream timeout during order settlement")
+        except Exception as pe:
+            ORDER_COUNT.labels(status="downstream_payment_error").inc()
 
     duration = time.time() - start
     ORDER_COUNT.labels(status="success").inc()
