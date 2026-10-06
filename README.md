@@ -48,65 +48,6 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 
 ## System Architecture
 
-```mermaid
-flowchart TB
-    subgraph TrafficLayer ["⚡ LIVE PRODUCTION WORKLOAD TRAFFIC LAYER"]
-        TG["Automated Workload Engine (k6 / asyncio)<br/>20 RPS Continuous Browse, Order, Pay Journeys"]
-    end
-
-    subgraph InfraBoundary ["☁️ INFRASTRUCTURE BOUNDARY (Docker / Kubernetes / AWS)"]
-        
-        subgraph TargetTier ["📦 Namespace: sre-target-apps (The Production Workload)"]
-            APIGW["API Gateway (:8000)<br/>FastAPI / Reverse Proxy / Prometheus Metrics"]
-            OrderSvc["Order Service (:8001)<br/>State Management / cgroup Quotas"]
-            PaymentSvc["Payment Service (:8002)<br/>Payment Gateway / Async Latency"]
-            
-            APIGW -->|Proxy HTTP /orders| OrderSvc
-            APIGW -->|Proxy HTTP /payments| PaymentSvc
-        end
-
-        subgraph SandboxTier ["🛡️ Namespace: sre-agent-sandbox (Security Quarantine)"]
-            subgraph RedSquad ["🔴 Red Team: Offensive Testing Squad"]
-                R1["Resilience Attack Planner<br/>(Claude Sonnet)"]
-                R2["Server Resource Stresser<br/>(Claude Sonnet)"]
-                R3["Network Delay Injector<br/>(Claude Haiku)"]
-                R1 --> R2 & R3
-            end
-
-            subgraph BlueSquad ["🔵 Blue Team: Defensive Recovery Squad"]
-                B1["Health & Uptime Monitor<br/>(Claude Haiku)"]
-                B2["Root Cause Investigator<br/>(Claude Sonnet Extended Thinking)"]
-                B3["Automated Recovery Fixer<br/>(Claude Sonnet)"]
-                B1 --> B2 --> B3
-            end
-        end
-
-        subgraph ObsTier ["📊 Observability Tier (Real-Time 1s Stream)"]
-            Prom["Prometheus Server (:9090)<br/>1-Second High-Resolution Scrape Engine"]
-            Grafana["Grafana SRE Infra Monitor (:3000)<br/>Pure Infra Telemetry & cgroup Saturation"]
-            Prom --> Grafana
-        end
-    end
-
-    subgraph CloudAudit ["☁️ AWS CLOUDWATCH OBSERVABILITY TIER"]
-        CWLogs["CloudWatch Logs: /sre/autonomous-agent-audit<br/>Stream: audit-stream"]
-        CWDash["Dashboards: Agent-Command-Audit & System-Fault-Metrics<br/>Exact Commands & Execution Outputs"]
-        CWLogs --> CWDash
-    end
-
-    subgraph CloudAI ["🧠 ANTHROPIC CLOUD (API / HTTPS 443)"]
-        ClaudeAPI["Anthropic Messages API<br/>(Claude 3.7 Sonnet & Claude 3.5 Sonnet)"]
-    end
-
-    TG ==>|HTTP Requests| APIGW
-    TargetTier -.->|Scrapes /metrics every 1s| Prom
-    R2 & R3 ==>|Kernel & Network Chaos Injections| TargetTier
-    TargetTier -.->|Telemetry & Anomaly Signals| B1
-    B3 ==>|Executes Remediations & Pod Restarts| TargetTier
-    SandboxTier -.->|Streams Exact Commands & Output JSON| CWLogs
-    SandboxTier <===>|HTTPS 443 (Zero Bare-Metal Access)| ClaudeAPI
-```
-
 <p align="center">
   <img src="docs/images/infraattack_platform_architecture.png" alt="InfraAttack Platform Architecture" width="950" />
 </p>
