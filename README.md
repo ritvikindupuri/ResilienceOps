@@ -1,6 +1,6 @@
-﻿# ResilienceOps - Autonomous Multi-Agent Cloud Reliability & Self-Healing Platform
+# ResilienceOps — Autonomous Cloud Reliability & Self-Healing Platform
 
-> An enterprise-grade autonomous Site Reliability Engineering (SRE) platform where coordinated Red Team Testing Agents launch real infrastructure faults against a live microservices cluster, and Blue Team SRE Agents autonomously detect, diagnose with Claude 3.7 Extended Thinking, and remediate incidents in real timeâ€”monitored second-by-second on a live streaming Grafana dashboard.
+> An enterprise-grade autonomous Site Reliability Engineering (SRE) platform where coordinated Offensive Testing Agents safely inject real infrastructure faults into a live microservices cluster, while defensive SRE Agents autonomously detect, diagnose using Claude 3.7 Extended Thinking, and remediate incidents in real time—monitored second-by-second on a live streaming Grafana dashboard.
 
 ---
 

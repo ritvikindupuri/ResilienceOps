@@ -1,9 +1,9 @@
-﻿# Technical Specification & Architectural Blueprint: InfraAttack SRE Resilience Platform
+# Technical Specification & Architectural Blueprint: ResilienceOps Platform
 
 **By: Ritvik Indupuri**  
 **Date: October 6, 2026**  
 **Classification: Production Engineering / Systems Architecture Specification**  
-**Repository: `InfraAttack` (`https://github.com/ritvikindupuri/InfraAttack`)**  
+**Platform: `ResilienceOps`**  
 
 ---
 
