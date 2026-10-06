@@ -107,7 +107,10 @@ flowchart TB
     SandboxTier <===>|HTTPS 443 (Zero Bare-Metal Access)| ClaudeAPI
 ```
 
-<p align="center"><b>Figure 1: ResilienceOps End-to-End System & Runtime Architecture</b></p>
+<p align="center">
+  <img src="docs/images/infraattack_platform_architecture.png" alt="InfraAttack Platform Architecture" width="950" />
+</p>
+<p align="center"><b>Figure 1: InfraAttack End-to-End System & Runtime Architecture</b></p>
 
 ### Flow-by-Flow Explanation of the Architecture
 
