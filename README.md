@@ -12,7 +12,7 @@ The platform runs an authentic containerized microservices stack under live, con
 
 All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
 
- **For technical specifications, math models, and agent communication protocols, read the [Technical Documentation](TECHNICAL_DOCUMENTATION.md).**
+📖 **For technical specifications, math models, and agent communication protocols, read the [Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf).**
 
 ---
 
@@ -445,4 +445,4 @@ docker compose down -v
 
 For the comprehensive technical specification covering mathematical SLO formulations, cgroup kernel limits, Claude 3.7 prompt architectures, Kubernetes agent sandbox security, and AWS network topology, refer to:
 
-**[Complete Technical Documentation](TECHNICAL_DOCUMENTATION.md)**
+📖 **[Complete Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf)**
