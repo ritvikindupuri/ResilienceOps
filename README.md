@@ -12,7 +12,7 @@ The platform runs an authentic containerized microservices stack under live, con
 
 All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
 
-ðŸ“– **For exhaustive technical specifications, math models, and agent communication protocols, read the [Technical Documentation](TECHNICAL_DOCUMENTATION.md).**
+ **For technical specifications, math models, and agent communication protocols, read the [Technical Documentation](TECHNICAL_DOCUMENTATION.md).**
 
 ---
 
