@@ -146,8 +146,8 @@ The platform's infrastructure lives directly on **Amazon Web Services (AWS)**, p
 ### Step 1: Clone and Navigate to the Repository
 
 ```bash
-git clone https://github.com/your-username/sre-colosseum.git
-cd sre-colosseum
+git clone https://github.com/ritvikindupuri/InfraAttack.git
+cd InfraAttack
 ```
 
 ---
@@ -307,19 +307,22 @@ To inspect the exact security actions, injected attack vectors, and raw command 
 <p align="center"><b>Figure 2.2: AWS CloudWatch System-Fault-Metrics Dashboard (Visual Attack Vectors & Remediation Velocity)</b></p>
 ---
 
-### Step 3: Launch the Autonomous SRE Agents Against AWS
+### Step 3: Launch the Resilience Agents Inside the Quarantined Kubernetes Sandbox
 
-You can run the multi-agent resilience cycle either directly from your workstation or from inside the quarantined Kubernetes agent sandbox pod:
+All Red Team and Blue Team agents execute inside the hardened **Kubernetes Agent Sandbox Pod** (`sre-agent-sandbox` namespace) on AWS. This enforces strict cgroup resource isolation (`500m` CPU, `512Mi` RAM) and least-privilege RBAC controls:
 
-#### Option A: Direct Terminal Execution (Targeting AWS Public IP)
+#### 1. Execute the Resilience Cycle Inside the Sandbox Pod:
+Run the orchestrator directly inside the quarantined Kubernetes pod over AWS Systems Manager or terminal:
+
 ```bash
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario MEMORY_EXHAUSTION
+# Execute against the AWS cluster from inside the sandbox pod:
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
-#### Option B: Quarantined Execution (Inside Kubernetes Sandbox Pod on AWS)
+*(Alternatively, to run directly from your local terminal targeting the cluster's public IP):*
 ```bash
-kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
+python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
 #### What you will observe in the terminal:
@@ -344,23 +347,28 @@ Keep the AWS Grafana dashboard open while running the cycle:
 
 ### Step 5: Test Additional Enterprise Failure Scenarios
 
-Target different failure mechanisms on your AWS cluster using the `--scenario` argument:
+Target different failure mechanisms on your AWS cluster using the `--scenario` argument directly through the sandbox pod:
 
 ```bash
-# Test Linux Kernel tc netem Packet Latency on eth0:
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario KERNEL_TC_NETEM_LATENCY
+# Test Linux Kernel tc netem Packet Latency on eth0 (Inside Sandbox Pod):
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario KERNEL_TC_NETEM_LATENCY
 
 # Test Linux Kernel tc netem Packet Loss (35% frame drops on eth0):
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario KERNEL_TC_NETEM_PACKET_LOSS
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario KERNEL_TC_NETEM_PACKET_LOSS
 
 # Test Redis Connection Pool Starvation (saturating maxclients limit):
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario REDIS_CONNECTION_STARVATION
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario REDIS_CONNECTION_STARVATION
 
 # Test CPU CFS Quota Saturation & Thread Starvation:
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 1 --scenario CPU_SATURATION
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario CPU_SATURATION
 
 # Run multiple back-to-back resilience rounds:
-python orchestrator.py --target-ip <YOUR_AWS_PUBLIC_IP> --cycles 3 --delay 5
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 3 --delay 5
 ```
 
 ---
