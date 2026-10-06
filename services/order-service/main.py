@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import time
 import uuid
@@ -32,7 +32,7 @@ ORDERS: Dict[str, dict] = {}
 LEAKED_MEMORY_CHUNKS: List[bytes] = []
 STARVED_REDIS_CLIENTS: List[Any] = []
 
-CHAOS_STATE = {
+FAULT_STATE = {
     "db_delay_seconds": 0.0,
     "error_injection_rate": 0.0,
     "is_corrupted": False,
@@ -47,7 +47,7 @@ class CreateOrderRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    if CHAOS_STATE["is_corrupted"]:
+    if FAULT_STATE["is_corrupted"]:
         raise HTTPException(status_code=500, detail="Service internal state corrupted")
     
     redis_status = "disabled"
@@ -63,7 +63,7 @@ async def health():
         "service": "order-service",
         "orders_count": len(ORDERS),
         "redis_cache": redis_status,
-        "redis_starvation_active": CHAOS_STATE["redis_starvation_active"]
+        "redis_starvation_active": FAULT_STATE["redis_starvation_active"]
     }
 
 @app.get("/metrics")
@@ -75,15 +75,15 @@ async def create_order(order_req: CreateOrderRequest):
     start = time.time()
     
     # Check error injection
-    if CHAOS_STATE["error_injection_rate"] > 0:
+    if FAULT_STATE["error_injection_rate"] > 0:
         import random
-        if random.random() < CHAOS_STATE["error_injection_rate"]:
+        if random.random() < FAULT_STATE["error_injection_rate"]:
             ORDER_COUNT.labels(status="failed_fault").inc()
             raise HTTPException(status_code=500, detail="Database connection pool timeout")
             
     # Check artificial DB delay
-    if CHAOS_STATE["db_delay_seconds"] > 0:
-        await asyncio.sleep(CHAOS_STATE["db_delay_seconds"])
+    if FAULT_STATE["db_delay_seconds"] > 0:
+        await asyncio.sleep(FAULT_STATE["db_delay_seconds"])
 
     order_id = f"ord-{uuid.uuid4().hex[:8]}"
     order_data = {
@@ -114,16 +114,16 @@ async def create_order(order_req: CreateOrderRequest):
 
 @app.get("/orders")
 async def list_orders():
-    if CHAOS_STATE["db_delay_seconds"] > 0:
-        await asyncio.sleep(CHAOS_STATE["db_delay_seconds"])
+    if FAULT_STATE["db_delay_seconds"] > 0:
+        await asyncio.sleep(FAULT_STATE["db_delay_seconds"])
     return list(ORDERS.values())[-20:]
 
 # ==========================================
 # Fault Engineering Endpoints
 # ==========================================
 
-@app.post("/chaos/redis-starvation")
-async def chaos_redis_starvation(connections: int = 55):
+@app.post("/fault/redis-starvation")
+async def fault_redis_starvation(connections: int = 55):
     """Spawns concurrent unclosed TCP connections to Redis to breach maxclients limit."""
     global STARVED_REDIS_CLIENTS
     STARVED_REDIS_CLIENTS.clear()
@@ -139,7 +139,7 @@ async def chaos_redis_starvation(connections: int = 55):
         except Exception as e:
             errors.append(str(e))
             
-    CHAOS_STATE["redis_starvation_active"] = True
+    FAULT_STATE["redis_starvation_active"] = True
     REDIS_POOL_GAUGE.set(success_count)
     return {
         "status": "redis_pool_starved",
@@ -148,8 +148,8 @@ async def chaos_redis_starvation(connections: int = 55):
         "detail": "Redis maxclients ceiling reached. Subsequent requests will block or raise ConnectionError."
     }
 
-@app.post("/chaos/leak-memory")
-async def chaos_leak_memory(mb: int = 50):
+@app.post("/fault/leak-memory")
+async def fault_leak_memory(mb: int = 50):
     """Allocates raw byte chunks in RAM to induce cgroup OOMKill (Exit 137)."""
     chunk = b"X" * (mb * 1024 * 1024)
     LEAKED_MEMORY_CHUNKS.append(chunk)
@@ -162,8 +162,8 @@ async def chaos_leak_memory(mb: int = 50):
         "chunks_count": len(LEAKED_MEMORY_CHUNKS)
     }
 
-@app.post("/chaos/cpu-burn")
-async def chaos_cpu_burn(seconds: int = 15):
+@app.post("/fault/cpu-burn")
+async def fault_cpu_burn(seconds: int = 15):
     """Spins CPU in tight mathematical loop, inducing CFS throttling and latency spikes."""
     async def burn():
         end_time = time.time() + seconds
@@ -175,20 +175,20 @@ async def chaos_cpu_burn(seconds: int = 15):
     asyncio.create_task(burn())
     return {"status": "cpu_burn_started", "duration_seconds": seconds}
 
-@app.post("/chaos/db-latency")
-async def chaos_db_latency(delay: float = 2.5):
+@app.post("/fault/db-latency")
+async def fault_db_latency(delay: float = 2.5):
     """Simulates database query degradation."""
-    CHAOS_STATE["db_delay_seconds"] = delay
+    FAULT_STATE["db_delay_seconds"] = delay
     return {"status": "latency_injected", "db_delay_seconds": delay}
 
-@app.post("/chaos/error-rate")
-async def chaos_error_rate(rate: float = 0.5):
+@app.post("/fault/error-rate")
+async def fault_error_rate(rate: float = 0.5):
     """Simulates intermittent 500 error spikes."""
-    CHAOS_STATE["error_injection_rate"] = rate
+    FAULT_STATE["error_injection_rate"] = rate
     return {"status": "error_rate_injected", "rate": rate}
 
-@app.post("/chaos/crash")
-async def chaos_crash():
+@app.post("/fault/crash")
+async def fault_crash():
     """Immediately kills process with exit code 1."""
     def kill_soon():
         time.sleep(0.5)
@@ -197,8 +197,8 @@ async def chaos_crash():
     threading.Thread(target=kill_soon).start()
     return {"status": "terminating_process", "signal": "SIGKILL"}
 
-@app.post("/chaos/reset")
-async def chaos_reset():
+@app.post("/fault/reset")
+async def fault_reset():
     """Resets all injected fault states, closes starved Redis connections."""
     global LEAKED_MEMORY_CHUNKS, STARVED_REDIS_CLIENTS
     LEAKED_MEMORY_CHUNKS.clear()
@@ -213,10 +213,10 @@ async def chaos_reset():
     REDIS_POOL_GAUGE.set(0)
     
     MEMORY_LEAK_GAUGE.set(0)
-    CHAOS_STATE["db_delay_seconds"] = 0.0
-    CHAOS_STATE["error_injection_rate"] = 0.0
-    CHAOS_STATE["is_corrupted"] = False
-    CHAOS_STATE["redis_starvation_active"] = False
+    FAULT_STATE["db_delay_seconds"] = 0.0
+    FAULT_STATE["error_injection_rate"] = 0.0
+    FAULT_STATE["is_corrupted"] = False
+    FAULT_STATE["redis_starvation_active"] = False
     return {"status": "clean", "message": "All faults cleared and connection pools released"}
 
 if __name__ == "__main__":

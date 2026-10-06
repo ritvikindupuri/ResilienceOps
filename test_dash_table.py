@@ -1,4 +1,4 @@
-import urllib.request, json, base64
+﻿import urllib.request, json, base64
 
 auth = base64.b64encode(b"admin:admin").decode("ascii")
 

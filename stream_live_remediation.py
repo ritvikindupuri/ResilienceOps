@@ -1,4 +1,4 @@
-import boto3, time, sys
+﻿import boto3, time, sys
 
 ssm = boto3.client("ssm", region_name="us-east-1")
 instance_id = "i-0cf1c979f2cbd01c4"
@@ -8,7 +8,7 @@ commands = [
     "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS|VmSize'",
     "echo ''",
     "echo '=== [2] RECENT DOCKER LOGS: INJECTIONS & REMEDIATIONS ==='",
-    "docker-compose -f /opt/sre-colosseum/docker-compose.yml logs --tail=25 order-service payment-service | grep -E 'chaos|POST|reset|leak'",
+    "docker-compose -f /opt/sre-colosseum/docker-compose.yml logs --tail=25 order-service payment-service | grep -E 'fault|POST|reset|leak'",
     "echo ''",
     "echo '=== [3] KUBERNETES AGENT SANDBOX PODS (RUNNING ON K3S) ==='",
     "k3s kubectl get pods -A 2>&1 || true"

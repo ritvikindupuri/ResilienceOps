@@ -1,4 +1,4 @@
-# Technical Specification & Architectural Blueprint: InfraAttack SRE Resilience Platform
+﻿# Technical Specification & Architectural Blueprint: InfraAttack SRE Resilience Platform
 
 **By: Ritvik Indupuri**  
 **Date: October 6, 2026**  
@@ -14,7 +14,7 @@
 4. [Target Microservices & Container Runtime](#4-target-microservices--container-runtime)
 5. [Production Workload & Traffic Generation Engine](#5-production-workload--traffic-generation-engine)
 6. [Real Fault Injection Catalog & Kernel Mechanics](#6-real-fault-injection-catalog--kernel-mechanics)
-7. [Red Team: Autonomous Offensive Chaos Squad](#7-red-team-autonomous-offensive-chaos-squad)
+7. [Red Team: Autonomous Offensive Testing Squad](#7-red-team-autonomous-offensive-testing-squad)
 8. [Blue Team: Autonomous SRE Incident Response Squad](#8-blue-team-autonomous-sre-incident-response-squad)
 9. [Real-Time Observability & Telemetry Engine](#9-real-time-observability--telemetry-engine)
 10. [Kubernetes Agent Sandbox & Security Quarantine](#10-kubernetes-agent-sandbox--security-quarantine)
@@ -26,12 +26,12 @@
 
 ## 1. Executive Summary
 
-Distributed cloud architectures exhibit non-linear failure modes that defy traditional static threshold alerts. While chaos engineering (pioneered by Netflix's Simian Army) has become standard for resilience validation, conventional implementations suffer from two critical limitations:
-1. **Disconnection from Automated Remediation**: Chaos experiments typically report failures to human engineers via dashboards or tickets, leaving Mean Time To Remediate (MTTR) bound to human on-call latency.
+Distributed cloud architectures exhibit non-linear failure modes that defy traditional static threshold alerts. While resilience and fault injection testing have become standard for resilience validation, conventional implementations suffer from two critical limitations:
+1. **Disconnection from Automated Remediation**: Resilience experiments typically report failures to human engineers via dashboards or tickets, leaving Mean Time To Remediate (MTTR) bound to human on-call latency.
 2. **Reliance on Mocks & Emulations**: Conventional testing environments frequently rely on static delay sleeps or fake metrics, hiding subtle production failure modes such as connection pool exhaustion, Linux kernel CFS throttling, and container cgroup memory pressure.
 
 **ResilienceOps** resolves these limitations by implementing a closed-loop autonomous Site Reliability Engineering (SRE) platform. The system operates on a dual-squad multi-agent architecture powered by **Anthropic Claude 3.7 Sonnet** (featuring hybrid reasoning and Extended Thinking) and **Claude 3.5 Sonnet**:
-- An autonomous **Red Team Chaos Squad (3 Agents)** models distributed failure patterns and executes real kernel-level and network-level faults against a live microservices cluster.
+- An autonomous **Red Team Testing Squad (3 Agents)** models distributed failure patterns and executes real kernel-level and network-level faults against a live microservices cluster.
 - An autonomous **Blue Team SRE Squad (3 Agents)** monitors real-time telemetry, detects Service Level Objective (SLO) breaches, executes chain-of-thought Root Cause Analysis (RCA), executes audited remediation runbooks, and authors standardized post-mortems.
 
 Telemetry is ingested by **Prometheus** at sub-second intervals and rendered in **100% real-time (1-second tick interval)** on an auto-provisioned **Grafana** dashboard. The entire environment is provisioned on AWS via a single, cost-optimized Terraform file running on an isolated EC2 host with zero NAT Gateway overhead (~~\$0.02/hr~~) and certified Kubernetes (`k3s`) container isolation.
@@ -44,11 +44,11 @@ The ResilienceOps system architecture comprises four distinct tiers: the **Produ
 
 ```mermaid
 flowchart TB
-    subgraph TrafficLayer ["⚡ TIER 1: PRODUCTION WORKLOAD ENGINE"]
+    subgraph TrafficLayer ["âš¡ TIER 1: PRODUCTION WORKLOAD ENGINE"]
         TG["Concurrent User Journey Generator<br/>(k6 / Python Asyncio Worker Pool)<br/>20 RPS Continuous Traffic"]
     end
 
-    subgraph ClusterTier ["☸️ TIER 2: CONTAINERIZED PRODUCTION WORKLOADS"]
+    subgraph ClusterTier ["â˜¸ï¸ TIER 2: CONTAINERIZED PRODUCTION WORKLOADS"]
         subgraph TargetNS ["Namespace: sre-target-apps (Application Workload Tier)"]
             APIGW["Ingress API Gateway (:8000)<br/>FastAPI / Reverse Proxy / Prometheus Exporter"]
             OrderSvc["Order Service (:8001)<br/>Transaction State / cgroup Quotas (256MiB)"]
@@ -61,13 +61,13 @@ flowchart TB
         end
     end
 
-    subgraph ObservabilityTier ["📊 TIER 3: REAL-TIME OBSERVABILITY ENGINE"]
+    subgraph ObservabilityTier ["ðŸ“Š TIER 3: REAL-TIME OBSERVABILITY ENGINE"]
         Prom["Prometheus Server (:9090)<br/>High-Resolution 1-Second Scraper"]
         Grafana["Grafana SRE Monitor (:3000)<br/>Locked 1s Live-Streaming Dashboard"]
         Prom -->|PromQL Telemetry Stream| Grafana
     end
 
-    subgraph CloudLayer ["☁️ TIER 4: CLOUD RUNTIME & FOUNDATION"]
+    subgraph CloudLayer ["â˜ï¸ TIER 4: CLOUD RUNTIME & FOUNDATION"]
         AWSInfra["AWS Multi-Tier VPC (10.0.0.0/16)<br/>Public Ingress, App Workload, and Data Subnets"]
         ClaudeCloud["Anthropic Messages API<br/>(api.anthropic.com:443)"]
     end
@@ -139,7 +139,7 @@ To reflect real-world SRE on-call dynamics, the autonomous agents operate in two
 
 ```mermaid
 flowchart LR
-    subgraph RedTeam ["🔴 RED TEAM: OFFENSIVE TESTING SQUAD"]
+    subgraph RedTeam ["ðŸ”´ RED TEAM: OFFENSIVE TESTING SQUAD"]
         direction TB
         R1["<b>1. Resilience Attack Planner</b><br/><i>Model: Claude Sonnet</i><br/>Formulates multi-stage attack campaigns"]
         R2["<b>2. Server Resource Stresser</b><br/><i>Model: Claude Sonnet</i><br/>Executes cgroup memory exhaustion & CPU burn"]
@@ -149,11 +149,11 @@ flowchart LR
         R1 -->|Dispatches Command| R3
     end
 
-    subgraph TargetWorkloads ["☸️ PRODUCTION WORKLOADS"]
+    subgraph TargetWorkloads ["â˜¸ï¸ PRODUCTION WORKLOADS"]
         TargetAppContainers["API Gateway & Microservices<br/>(Monitored by Golden Signals)"]
     end
 
-    subgraph BlueTeam ["🔵 BLUE TEAM: DEFENSIVE RECOVERY SQUAD"]
+    subgraph BlueTeam ["ðŸ”µ BLUE TEAM: DEFENSIVE RECOVERY SQUAD"]
         direction TB
         B1["<b>1. Health & Uptime Monitor</b><br/><i>Model: Claude Haiku</i><br/>Sub-second telemetry watcher & SLO detector"]
         B2["<b>2. Root Cause Investigator</b><br/><i>Model: Claude Sonnet (Extended Thinking)</i><br/>Chain-of-thought hypothesis testing & RCA"]
@@ -343,15 +343,15 @@ Agent command executions and operational attack traces are streamed directly to 
   - Bottom Table: **Unified Agent Command & Security Audit Stream** (Full chronologically sorted audit ledger).
 - **`System-Fault-Metrics`** (Region: `us-east-1`): Dedicated visual telemetry dashboard tracking active and resolved resilience attack vectors:
   - Header: `# System Faults & Recovery` (Visual tracking of active attack vectors and remediation velocity).
-  - Graph 1: **📈 Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
-  - Graph 2: **🛡️ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
-  - Graph 3: **📊 Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
-  - Audit Table: **📋 Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
+  - Graph 1: **ðŸ“ˆ Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
+  - Graph 2: **ðŸ›¡ï¸ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
+  - Graph 3: **ðŸ“Š Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
+  - Audit Table: **ðŸ“‹ Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
 - **Log Group**: `/sre/autonomous-agent-audit` (Log Stream: `audit-stream`)
 - **Telemetry Dispatched**:
   - `squad`: `red-team` or `blue-team`
   - `agent`: Specific agent identity (`Resilience Attack Planner`, `Server Resource Stresser`, `Root Cause Investigator`, etc.)
-  - `exact_command_executed`: Full verbatim command dispatched (e.g. `POST /chaos/leak-memory [payload: 150MB heap allocation]`, `POST /chaos/cpu-burn`)
+  - `exact_command_executed`: Full verbatim command dispatched (e.g. `POST /fault/leak-memory [payload: 150MB heap allocation]`, `POST /fault/cpu-burn`)
   - `exact_execution_output`: Raw stdout/stderr and HTTP responses returned by the targeted runtime
   - `status`: Execution state (`FAULT_ACTIVE`, `DISPATCHING_OPERATIVES`, `SUCCESS`, `RESOLVED`)
   - `timestamp`: Millisecond-precision ISO 8601 timestamp
@@ -365,15 +365,15 @@ Deploying autonomous agents with shell execution capabilities introduces securit
 
 ```mermaid
 flowchart TB
-    subgraph HostOS ["🖥️ CLOUD HOST / LINUX KERNEL"]
-        subgraph K8sCore ["☸️ Kubernetes Control Plane"]
+    subgraph HostOS ["ðŸ–¥ï¸ CLOUD HOST / LINUX KERNEL"]
+        subgraph K8sCore ["â˜¸ï¸ Kubernetes Control Plane"]
             
-            subgraph SandboxNS ["🛡️ Namespace: sre-agent-sandbox (Security Quarantined)"]
-                RedPod["🔴 Red Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
-                BluePod["🔵 Blue Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
+            subgraph SandboxNS ["ðŸ›¡ï¸ Namespace: sre-agent-sandbox (Security Quarantined)"]
+                RedPod["ðŸ”´ Red Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
+                BluePod["ðŸ”µ Blue Team Sandbox Pod<br/>(Resource Cap: 500m CPU, 512Mi RAM)"]
             end
 
-            subgraph AppsNS ["📦 Namespace: sre-target-apps (Application Workload Tier)"]
+            subgraph AppsNS ["ðŸ“¦ Namespace: sre-target-apps (Application Workload Tier)"]
                 WorkloadPods["Target Application Pods"]
             end
         end
@@ -387,7 +387,7 @@ flowchart TB
 <p align="center"><b>Figure 10.1: Kubernetes Agent Sandbox Isolation & RBAC Architecture</b></p>
 
 ### 1. Resource Quotas & Blast Radius Containment
-Both agent pods are constrained to `cpu: 500m` and `memory: 512Mi`. If an offensive agent enters an unconstrained compute loop, only its local sandbox container is throttled by the Linux CFS scheduler and memory cgroups—the target workloads and underlying EC2 host remain unharmed.
+Both agent pods are constrained to `cpu: 500m` and `memory: 512Mi`. If an offensive agent enters an unconstrained compute loop, only its local sandbox container is throttled by the Linux CFS scheduler and memory cgroupsâ€”the target workloads and underlying EC2 host remain unharmed.
 
 ### 2. Audited Least-Privilege RBAC
 - **Red Team (`red-agent-sa`)**: Bound exclusively to the target application namespace via `RoleBinding/red-agent-restricted-binding`. Permissions are strictly limited to `get`, `list`, and `watch` on pods, preventing privilege escalation to cluster-level secrets, node configurations, or other namespaces.
@@ -437,7 +437,7 @@ Verified live output from the sandbox pod on AWS:
 {"status":"memory_injected","added_mb":150,"total_leaked_mb":150,"chunks_count":1}
 
 // Remediation:
-{"status":"clean","message":"All chaos vectors cleared"}
+{"status":"clean","message":"All fault vectors cleared"}
 ```
 
 ### 6. Local Sandbox Container Mode (Docker Compose)
@@ -480,9 +480,9 @@ The following empirical trace records an end-to-end resilience cycle executed on
 [PHASE 1] Pre-test Baseline Telemetry Check...
     Gateway Health: HTTP 200 | Base Latency: 365.85ms
 
-[PHASE 2 - RED TEAM] Chaos Strategist Formulating Campaign...
-[15:02:13] [CHAOS-STRATEGIST] [CAMPAIGN_FORMULATED] {
-  "component": "chaos-strategist",
+[PHASE 2 - RED TEAM] Fault Strategist Formulating Campaign...
+[15:02:13] [fault-strategist] [CAMPAIGN_FORMULATED] {
+  "component": "fault-strategist",
   "action": "CAMPAIGN_FORMULATED",
   "llm_model": "claude-3-7-sonnet-latest",
   "strategic_intent": "Coordinated resilience degradation campaign targeting memory buffers."
@@ -500,7 +500,7 @@ The following empirical trace records an end-to-end resilience cycle executed on
 [PHASE 4 - BLUE TEAM] Incident Monitor Scanning Telemetry for SLO Breaches...
     [t+1.0s] Latency: 449.87ms | Gateway HTTP: 200
     [t+2.1s] Latency: 2140.50ms | Gateway HTTP: 504 Gateway Timeout
-    🚨 [INCIDENT DECLARED] MTTD: 2.14s | Severity: SEV-1
+    ðŸš¨ [INCIDENT DECLARED] MTTD: 2.14s | Severity: SEV-1
     - Violation: p99 Latency (2140.5ms) exceeded SLO limit (1200.0ms)
     - Violation: order-service returned server error HTTP 504
 
@@ -535,4 +535,4 @@ ResilienceOps demonstrates that modern site reliability engineering can transiti
 2. **Sub-Minute MTTR**: Automated detection, chain-of-thought root cause analysis, and runbook remediation completing in under 6 seconds.
 3. **Enterprise Cost & Security Posture**: Quarantined Kubernetes sandboxing with RBAC and NetworkPolicies, running on a single AWS EC2 host with zero NAT Gateway overhead (~~\$0.02/hr~~) and 1-command clean teardown.
 
-This architecture establishes a reference blueprint for autonomous reliability engineering, continuous chaos validation, and AI-driven incident management in modern cloud-native systems.
+This architecture establishes a reference blueprint for autonomous reliability engineering, continuous resilience validation, and AI-driven incident management in modern cloud-native systems.

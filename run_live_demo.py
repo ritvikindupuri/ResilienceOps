@@ -1,4 +1,4 @@
-import boto3, time
+﻿import boto3, time
 
 ssm = boto3.client("ssm", region_name="us-east-1")
 commands = [
@@ -6,20 +6,20 @@ commands = [
     "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS'",
     "echo ''",
     "echo '=== [STEP 2] RED TEAM INJECTION (150MB HEAP LEAK) ==='",
-    "curl -s -X POST 'http://localhost:8001/chaos/leak-memory?mb=150'",
+    "curl -s -X POST 'http://localhost:8001/fault/leak-memory?mb=150'",
     "echo ''",
     "echo '=== [STEP 3] KERNEL RAM DURING INJECTION ==='",
     "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS'",
     "sleep 3",
     "echo ''",
     "echo '=== [STEP 4] BLUE TEAM REMEDIATION (AUTOMATED RECOVERY FIXER) ==='",
-    "curl -s -X POST 'http://localhost:8001/chaos/reset'",
+    "curl -s -X POST 'http://localhost:8001/fault/reset'",
     "echo ''",
     "echo '=== [STEP 5] KERNEL RAM AFTER REMEDIATION ==='",
     "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS'",
     "echo ''",
     "echo '=== [STEP 6] DOCKER AUDIT LOG ENTRIES ==='",
-    "docker-compose -f /opt/sre-colosseum/docker-compose.yml logs --tail=10 order-service | grep -E 'chaos'",
+    "docker-compose -f /opt/sre-colosseum/docker-compose.yml logs --tail=10 order-service | grep -E 'fault'",
     "echo ''",
     "echo '=== [STEP 7] KUBERNETES AGENT SANDBOX PODS (QUARANTINED ON CLUSTER) ==='",
     "k3s kubectl get pods -n sre-agent-sandbox -o wide"

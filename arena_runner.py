@@ -1,4 +1,4 @@
-import time
+﻿import time
 import sys
 import os
 import argparse
@@ -30,7 +30,7 @@ def run_battle_round(round_num: int, vector_override: str = None):
     print(f"    Gateway: HTTP {telemetry['gateway_status']} | Latency: {telemetry['latency_ms']}ms")
 
     # Step 2: Red Team Attacks
-    print("\n[RED TEAM] Selecting and deploying chaos attack...")
+    print("\n[RED TEAM] Selecting and deploying fault attack...")
     t_attack = time.time()
     attack_event = attacker.launch_attack(forced_vector=vector_override)
     print(f"    Vector: {attack_event['vector']} -> Target: {attack_event['target']}")
@@ -87,7 +87,7 @@ def run_battle_round(round_num: int, vector_override: str = None):
 def main():
     parser = argparse.ArgumentParser(description="SRE Colosseum Live Arena Runner")
     parser.add_argument("--rounds", type=int, default=3, help="Number of battle rounds to execute")
-    parser.add_argument("--vector", type=str, default=None, help="Force specific chaos vector (e.g. MEMORY_LEAK_OOM, CASCADING_NETWORK_LATENCY)")
+    parser.add_argument("--vector", type=str, default=None, help="Force specific fault vector (e.g. MEMORY_LEAK_OOM, CASCADING_NETWORK_LATENCY)")
     parser.add_argument("--delay", type=int, default=5, help="Seconds to wait between rounds")
     args = parser.parse_args()
 
@@ -99,7 +99,7 @@ def main():
   ____) | | \ \| |____  | |___| |__| | |___| |__| |____) |___) | |____| |__| | |  | |
  |_____/|_|  \_\______|  \_____\____/|______\____/|_____/_____/|______|\____/|_|  |_|
                                                                                       
-             [+] Autonomous AI Red-vs-Blue SRE Chaos Arena on Kubernetes [+]
+             [+] Autonomous AI Red-vs-Blue SRE fault Arena on Kubernetes [+]
     """)
 
     for r in range(1, args.rounds + 1):

@@ -1,4 +1,4 @@
-import httpx
+﻿import httpx
 from typing import Dict, Any
 from agents.config import ORDER_SERVICE_URL, PAYMENT_SERVICE_URL
 
@@ -8,7 +8,7 @@ class FaultCatalog:
     @staticmethod
     def inject_memory_exhaustion(mb: int = 150) -> Dict[str, Any]:
         """Allocates real memory chunks in RAM to induce cgroup OOMKill."""
-        url = f"{ORDER_SERVICE_URL}/chaos/leak-memory?mb={mb}"
+        url = f"{ORDER_SERVICE_URL}/fault/leak-memory?mb={mb}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -26,7 +26,7 @@ class FaultCatalog:
     @staticmethod
     def inject_cpu_saturation(seconds: int = 15) -> Dict[str, Any]:
         """Executes CPU intensive operations to trigger CFS quota throttling."""
-        url = f"{ORDER_SERVICE_URL}/chaos/cpu-burn?seconds={seconds}"
+        url = f"{ORDER_SERVICE_URL}/fault/cpu-burn?seconds={seconds}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -44,7 +44,7 @@ class FaultCatalog:
     @staticmethod
     def inject_network_latency(delay_ms: int = 2500, jitter_ms: int = 100) -> Dict[str, Any]:
         """Applies Linux kernel tc netem delay directly to payment-service eth0 interface."""
-        url = f"{PAYMENT_SERVICE_URL}/chaos/latency?delay_ms={delay_ms}&jitter_ms={jitter_ms}"
+        url = f"{PAYMENT_SERVICE_URL}/fault/latency?delay_ms={delay_ms}&jitter_ms={jitter_ms}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -63,7 +63,7 @@ class FaultCatalog:
     @staticmethod
     def inject_packet_loss(loss_percent: float = 35.0) -> Dict[str, Any]:
         """Applies Linux kernel tc netem packet drop rate directly to payment-service eth0 interface."""
-        url = f"{PAYMENT_SERVICE_URL}/chaos/drop-rate?loss_percent={loss_percent}"
+        url = f"{PAYMENT_SERVICE_URL}/fault/drop-rate?loss_percent={loss_percent}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -82,7 +82,7 @@ class FaultCatalog:
     @staticmethod
     def inject_redis_starvation(connections: int = 55) -> Dict[str, Any]:
         """Exhausts Redis maxclients connection pool, starving backend cache queries."""
-        url = f"{ORDER_SERVICE_URL}/chaos/redis-starvation?connections={connections}"
+        url = f"{ORDER_SERVICE_URL}/fault/redis-starvation?connections={connections}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -100,7 +100,7 @@ class FaultCatalog:
     @staticmethod
     def inject_process_crash() -> Dict[str, Any]:
         """Simulates immediate process crash."""
-        url = f"{ORDER_SERVICE_URL}/chaos/crash"
+        url = f"{ORDER_SERVICE_URL}/fault/crash"
         try:
             with httpx.Client(timeout=2.0) as client:
                 try:
@@ -125,7 +125,7 @@ class FaultCatalog:
         for name, base_url in [("order-service", ORDER_SERVICE_URL), ("payment-service", PAYMENT_SERVICE_URL)]:
             try:
                 with httpx.Client(timeout=3.0) as client:
-                    res = client.post(f"{base_url}/chaos/reset")
+                    res = client.post(f"{base_url}/fault/reset")
                     results[name] = res.json() if res.status_code == 200 else res.text
             except Exception as e:
                 results[name] = str(e)

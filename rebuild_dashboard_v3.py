@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 dashboard = {
   "annotations": { "list": [] },
@@ -232,7 +232,7 @@ dashboard = {
       "id": 10,
       "gridPos": { "h": 8, "w": 16, "x": 8, "y": 11 },
       "type": "piechart",
-      "title": "Autonomous Incident Response & Chaos Vector Distribution",
+      "title": "Autonomous Incident Response & fault Vector Distribution",
       "description": "Visual breakdown of offensive failure vectors injected by Red Team vs autonomous diagnostic and remediation runbooks executed by Blue Team.",
       "targets": [
         {
@@ -273,7 +273,7 @@ dashboard = {
       "id": 8,
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 },
       "type": "table",
-      "title": "Red Team Chaos Agent Operations (Live Audit Stream)",
+      "title": "Red Team fault Agent Operations (Live Audit Stream)",
       "targets": [
         {
           "datasource": "Prometheus",

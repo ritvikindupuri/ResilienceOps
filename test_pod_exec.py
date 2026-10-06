@@ -1,10 +1,10 @@
-import boto3, time
+﻿import boto3, time
 
 ssm = boto3.client("ssm", region_name="us-east-1")
 commands = [
     # Tar and copy agents directory and orchestrator.py into sandbox pod
     "cd /opt/sre-colosseum && tar -czf /tmp/agents.tar.gz agents orchestrator.py",
-    "k3s kubectl cp /tmp/agents.tar.gz sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-chaos -o jsonpath='{.items[0].metadata.name}'):/app/agents.tar.gz",
+    "k3s kubectl cp /tmp/agents.tar.gz sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/agents.tar.gz",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- tar -xzf /app/agents.tar.gz -C /app",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- ls -la /app",
     # Execute a live agent cycle from INSIDE the quarantined pod

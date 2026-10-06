@@ -1,8 +1,8 @@
-import boto3
+﻿import boto3
 import json
 
 cw = boto3.client("cloudwatch", region_name="us-east-1")
-dashboard_name = "SRE-Chaos-Vectors-Live-Telemetry"
+dashboard_name = "SRE-fault-Vectors-Live-Telemetry"
 
 body = {
     "widgets": [
@@ -13,7 +13,7 @@ body = {
             "width": 24,
             "height": 3,
             "properties": {
-                "markdown": "# SRE Chaos Engineering: Live Attack Vectors & Telemetry Impact\n### Continuous Real-Time Tracking of Autonomous Red Team Chaos Injections & Kernel Degradation\nTracks **Physical Container Memory Exhaustion (cgroup OOMKill)**, **CPU CFS Quota Starvation**, and **Network Transit Delays & Packet Loss** across all microservices."
+                "markdown": "# SRE fault Engineering: Live Attack Vectors & Telemetry Impact\n### Continuous Real-Time Tracking of Autonomous Red Team fault Injections & Kernel Degradation\nTracks **Physical Container Memory Exhaustion (cgroup OOMKill)**, **CPU CFS Quota Starvation**, and **Network Transit Delays & Packet Loss** across all microservices."
             }
         },
         {
@@ -78,7 +78,7 @@ body = {
             "properties": {
                 "query": "SOURCE '/sre/autonomous-agent-audit' | filter squad in ['red-team', 'blue-team'] | stats count(*) as Operations by squad, bin(5m)",
                 "region": "us-east-1",
-                "title": "Offensive Chaos Attacks vs SRE Remediations Over Time",
+                "title": "Offensive fault Attacks vs SRE Remediations Over Time",
                 "view": "timeSeries",
                 "stacked": False
             }
@@ -92,7 +92,7 @@ body = {
             "properties": {
                 "query": "SOURCE '/sre/autonomous-agent-audit' | filter squad = 'red-team' | sort @timestamp desc | fields @timestamp, agent as `Attacking Agent`, exact_command_executed as `Injected Attack Command`, exact_execution_output as `Raw Target Result`, status as State | limit 50",
                 "region": "us-east-1",
-                "title": "Live Chaos Attack Feed: Exact Injected Vector Commands & Target Responses",
+                "title": "Live fault Attack Feed: Exact Injected Vector Commands & Target Responses",
                 "view": "table"
             }
         }

@@ -1,6 +1,6 @@
-# ==============================================================================
+﻿# ==============================================================================
 # KUBERNETES AGENT SANDBOX ENVIRONMENT
-# Isolates autonomous Red Team (Chaos) and Blue Team (SRE) agents inside
+# Isolates autonomous Red Team (fault) and Blue Team (SRE) agents inside
 # resource-constrained, RBAC-audited, network-isolated container sandboxes.
 # ==============================================================================
 
@@ -51,20 +51,20 @@ metadata:
   name: red-team-sandbox
   namespace: sre-agent-sandbox
   labels:
-    agent.role: red-team-chaos
+    agent.role: red-team-fault
 spec:
   replicas: 1
   selector:
     matchLabels:
-      agent.role: red-team-chaos
+      agent.role: red-team-fault
   template:
     metadata:
       labels:
-        agent.role: red-team-chaos
+        agent.role: red-team-fault
     spec:
       serviceAccountName: red-agent-sa
       containers:
-      - name: chaos-squad
+      - name: fault-squad
         image: python:3.11-slim
         command: ["/bin/bash", "-c"]
         args:

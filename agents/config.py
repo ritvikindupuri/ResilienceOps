@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 # Target Microservice Endpoints
 API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://localhost:8000")
@@ -17,7 +17,7 @@ SLO_MAX_ERROR_RATE_PERCENT = float(os.getenv("SLO_MAX_ERROR_RATE_PERCENT", "2.0"
 # PURE ANTHROPIC CLAUDE MULTI-AGENT SPECIFICATION
 # ==============================================================================
 # Red Team (Offensive Squad):
-MODEL_CHAOS_STRATEGIST = os.getenv("MODEL_CHAOS_STRATEGIST", "claude-sonnet-4-6")
+MODEL_fault_STRATEGIST = os.getenv("MODEL_fault_STRATEGIST", "claude-sonnet-4-6")
 MODEL_INFRA_DISRUPTOR = os.getenv("MODEL_INFRA_DISRUPTOR", "claude-sonnet-4-6")
 MODEL_NETWORK_ADVERSARY = os.getenv("MODEL_NETWORK_ADVERSARY", "claude-haiku-4-5-20251001")
 

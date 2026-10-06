@@ -1,4 +1,4 @@
-import boto3, json
+﻿import boto3, json
 
 cw = boto3.client("cloudwatch", region_name="us-east-1")
 
@@ -15,7 +15,7 @@ cw_dashboard_body = {
                 "markdown": "# Autonomous AI Agent Security Audit & Command Execution Log\nReal-time SecOps audit trail capturing every offensive injection command and autonomous SRE remediation action with exact parameters and raw kernel outputs."
             }
         },
-        # Widget 2: Live Table of Red Team Chaos Agent Operations
+        # Widget 2: Live Table of Red Team fault Agent Operations
         {
             "type": "log",
             "x": 0,
@@ -25,7 +25,7 @@ cw_dashboard_body = {
             "properties": {
                 "query": "SOURCE '/sre/autonomous-agent-audit' | filter squad = 'red-team' | sort @timestamp desc | fields @timestamp, agent as Agent, exact_command_executed as `Exact Command Executed`, exact_execution_output as `Exact Execution Output`, status as State | limit 100",
                 "region": "us-east-1",
-                "title": "Red Team Chaos Agents: Exact Injected Commands & Outputs",
+                "title": "Red Team fault Agents: Exact Injected Commands & Outputs",
                 "view": "table"
             }
         },

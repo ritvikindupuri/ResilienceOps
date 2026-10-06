@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 dashboard = {
   "annotations": { "list": [] },
@@ -273,7 +273,7 @@ dashboard = {
       "id": 8,
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
       "type": "table",
-      "title": "Red Team Chaos Agent Operations (Live Audit Stream)",
+      "title": "Red Team fault Agent Operations (Live Audit Stream)",
       "targets": [
         {
           "datasource": "Prometheus",

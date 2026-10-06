@@ -1,4 +1,4 @@
-import boto3, base64
+﻿import boto3, base64
 
 # Package current local files to zip and push
 import os, zipfile, io
@@ -17,7 +17,7 @@ b64_zip = base64.b64encode(bio.getvalue()).decode("ascii")
 ssm = boto3.client("ssm", region_name="us-east-1")
 commands = [
     f"cat << 'EOF' | base64 -d > /tmp/agent_pkg.zip\n{b64_zip}\nEOF",
-    "k3s kubectl cp /tmp/agent_pkg.zip sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-chaos -o jsonpath='{.items[0].metadata.name}'):/app/agent_pkg.zip",
+    "k3s kubectl cp /tmp/agent_pkg.zip sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/agent_pkg.zip",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- apt-get update -y",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- apt-get install -y unzip curl procps",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- bash -c 'cd /app && unzip -o agent_pkg.zip'",

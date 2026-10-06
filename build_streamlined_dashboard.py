@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 dashboard = {
   "annotations": { "list": [] },
@@ -278,7 +278,7 @@ dashboard = {
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
       "type": "table",
       "title": "Autonomous SRE Operations & Incident Response Audit Trail",
-      "description": "Chronological audit log correlating offensive chaos injections and autonomous AI SRE diagnostic & remediation actions.",
+      "description": "Chronological audit log correlating offensive fault injections and autonomous AI SRE diagnostic & remediation actions.",
       "targets": [
         {
           "datasource": "Prometheus",

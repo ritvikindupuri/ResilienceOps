@@ -1,4 +1,4 @@
-import time
+﻿import time
 import random
 import json
 import logging
@@ -10,7 +10,7 @@ from agents.config import (
     OPENAI_API_KEY
 )
 from agents.common.cw_logger import CloudWatchLogger
-from agents.attacker.vectors import ChaosVectors
+from agents.attacker.vectors import faultVectors
 
 logger = logging.getLogger("sre-arena.red-agent")
 
@@ -18,16 +18,16 @@ class RedTeamAttackerAgent:
     def __init__(self):
         self.cw = CloudWatchLogger(CW_LOG_GROUP_ATTACKER, stream_prefix="red-attacker")
         self.vectors = [
-            ("MEMORY_LEAK_OOM", ChaosVectors.inject_memory_leak, {"mb": 150}),
-            ("CASCADING_NETWORK_LATENCY", ChaosVectors.inject_payment_latency, {"seconds": 3.0}),
-            ("CPU_STARVATION_THROTTLING", ChaosVectors.inject_cpu_burn, {"seconds": 15}),
-            ("PACKET_DROP_CORRUPTION", ChaosVectors.inject_packet_drop, {"rate": 0.45}),
-            ("PROCESS_TERMINATION", ChaosVectors.inject_crash, {})
+            ("MEMORY_LEAK_OOM", faultVectors.inject_memory_leak, {"mb": 150}),
+            ("CASCADING_NETWORK_LATENCY", faultVectors.inject_payment_latency, {"seconds": 3.0}),
+            ("CPU_STARVATION_THROTTLING", faultVectors.inject_cpu_burn, {"seconds": 15}),
+            ("PACKET_DROP_CORRUPTION", faultVectors.inject_packet_drop, {"rate": 0.45}),
+            ("PROCESS_TERMINATION", faultVectors.inject_crash, {})
         ]
         self.current_idx = 0
 
     def select_attack(self) -> Dict[str, Any]:
-        """Chooses the next offensive vector using LLM or intelligent chaos strategy."""
+        """Chooses the next offensive vector using LLM or intelligent fault strategy."""
         vector_name, func, kwargs = self.vectors[self.current_idx % len(self.vectors)]
         self.current_idx += 1
         return {
@@ -51,7 +51,7 @@ class RedTeamAttackerAgent:
 
         # 1. Log Attack Plan & Intent to CloudWatch
         plan_event = {
-            "agent": "red-team-chaos-orchestrator",
+            "agent": "red-team-fault-orchestrator",
             "phase": "PLANNING",
             "vector": vector_name,
             "target": "target-microservices-cluster",
@@ -59,14 +59,14 @@ class RedTeamAttackerAgent:
         }
         self.cw.log(plan_event)
 
-        # 2. Execute Real Chaos Injection
+        # 2. Execute Real fault Injection
         start_t = time.time()
         result = func(**kwargs)
         duration_ms = (time.time() - start_t) * 1000
 
         # 3. Log Real Execution Result to CloudWatch
         exec_event = {
-            "agent": "red-team-chaos-orchestrator",
+            "agent": "red-team-fault-orchestrator",
             "phase": "EXECUTION",
             "vector": vector_name,
             "target": result.get("target", "unknown"),

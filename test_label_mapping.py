@@ -1,4 +1,4 @@
-import json, urllib.request, base64
+﻿import json, urllib.request, base64
 
 auth = base64.b64encode(b"admin:admin").decode("ascii")
 
@@ -13,7 +13,7 @@ for p in dash["panels"]:
             {
                 "type": "value",
                 "options": {
-                    "CAMPAIGN_FORMULATED": { "text": "Chaos Attack Formulated" },
+                    "CAMPAIGN_FORMULATED": { "text": "fault Attack Formulated" },
                     "INFRA_FAULT_INJECTED": { "text": "Memory / CPU Stress Injected" },
                     "NETWORK_FAULT_INJECTED": { "text": "Network Delay Injected" },
                     "INCIDENT_DECLARED": { "text": "SLO Breach Alert Declared" },
@@ -30,7 +30,7 @@ for p in dash["panels"]:
                 "id": "organize",
                 "options": {
                     "renameByName": {
-                        "CAMPAIGN_FORMULATED": "Chaos Attack Formulated",
+                        "CAMPAIGN_FORMULATED": "fault Attack Formulated",
                         "INFRA_FAULT_INJECTED": "Memory / CPU Stress Injected",
                         "NETWORK_FAULT_INJECTED": "Network Delay Injected",
                         "INCIDENT_DECLARED": "SLO Breach Alert Declared",

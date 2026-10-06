@@ -1,13 +1,13 @@
-import httpx
+﻿import httpx
 import time
 from typing import Dict, Any
 from agents.config import ORDER_SERVICE_URL, PAYMENT_SERVICE_URL, API_GATEWAY_URL
 
-class ChaosVectors:
+class faultVectors:
     @staticmethod
     def inject_memory_leak(mb: int = 150) -> Dict[str, Any]:
         """Injects high memory allocation into order-service to trigger cgroup OOMKill (Exit 137)."""
-        url = f"{ORDER_SERVICE_URL}/chaos/leak-memory?mb={mb}"
+        url = f"{ORDER_SERVICE_URL}/fault/leak-memory?mb={mb}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -25,7 +25,7 @@ class ChaosVectors:
     @staticmethod
     def inject_cpu_burn(seconds: int = 20) -> Dict[str, Any]:
         """Injects 100% CPU burn into order-service to trigger CFS quota throttling and latency explosion."""
-        url = f"{ORDER_SERVICE_URL}/chaos/cpu-burn?seconds={seconds}"
+        url = f"{ORDER_SERVICE_URL}/fault/cpu-burn?seconds={seconds}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -43,7 +43,7 @@ class ChaosVectors:
     @staticmethod
     def inject_payment_latency(seconds: float = 3.5) -> Dict[str, Any]:
         """Injects network delay in payment-service causing API Gateway 504 timeouts."""
-        url = f"{PAYMENT_SERVICE_URL}/chaos/latency?seconds={seconds}"
+        url = f"{PAYMENT_SERVICE_URL}/fault/latency?seconds={seconds}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -61,7 +61,7 @@ class ChaosVectors:
     @staticmethod
     def inject_packet_drop(rate: float = 0.5) -> Dict[str, Any]:
         """Injects 50% packet drop rate into payment service."""
-        url = f"{PAYMENT_SERVICE_URL}/chaos/drop-rate?rate={rate}"
+        url = f"{PAYMENT_SERVICE_URL}/fault/drop-rate?rate={rate}"
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.post(url)
@@ -79,7 +79,7 @@ class ChaosVectors:
     @staticmethod
     def inject_crash() -> Dict[str, Any]:
         """Immediately terminates order-service process."""
-        url = f"{ORDER_SERVICE_URL}/chaos/crash"
+        url = f"{ORDER_SERVICE_URL}/fault/crash"
         try:
             with httpx.Client(timeout=2.0) as client:
                 try:
@@ -104,7 +104,7 @@ class ChaosVectors:
         for name, base_url in [("order-service", ORDER_SERVICE_URL), ("payment-service", PAYMENT_SERVICE_URL)]:
             try:
                 with httpx.Client(timeout=3.0) as client:
-                    res = client.post(f"{base_url}/chaos/reset")
+                    res = client.post(f"{base_url}/fault/reset")
                     results[name] = res.json() if res.status_code == 200 else res.text
             except Exception as e:
                 results[name] = str(e)

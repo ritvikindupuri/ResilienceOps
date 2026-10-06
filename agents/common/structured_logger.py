@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 import time
 import json
@@ -42,7 +42,7 @@ class StructuredLogger:
             import urllib.request
             gateway_url = os.getenv("API_GATEWAY_URL", os.getenv("GATEWAY_URL", "http://localhost:8000"))
             c_lower = self.component_name.lower()
-            if any(k in c_lower for k in ["red", "chaos", "disrupt", "adversary", "fault", "stresser", "injector"]):
+            if any(k in c_lower for k in ["red", "fault", "disrupt", "adversary", "fault", "stresser", "injector"]):
                 squad = "red-team"
             else:
                 squad = "blue-team"

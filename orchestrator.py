@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 import time
 import argparse
@@ -23,7 +23,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # Red Team (Offensive Squad)
-from agents.fault_injector.strategist import ChaosStrategistAgent
+from agents.fault_injector.strategist import faultStrategistAgent
 from agents.fault_injector.infra_disruptor import InfraDisruptorAgent
 from agents.fault_injector.network_adversary import NetworkAdversaryAgent
 
@@ -39,7 +39,7 @@ def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
     print("="*80)
 
     # Initialize 3 Red Team Agents
-    red_strategist = ChaosStrategistAgent()
+    red_strategist = faultStrategistAgent()
     red_infra = InfraDisruptorAgent()
     red_network = NetworkAdversaryAgent()
 

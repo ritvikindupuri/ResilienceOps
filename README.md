@@ -1,18 +1,18 @@
-# ResilienceOps - Autonomous Multi-Agent SRE & Chaos Engineering Platform
+﻿# ResilienceOps - Autonomous Multi-Agent Cloud Reliability & Self-Healing Platform
 
-> An enterprise-grade autonomous Site Reliability Engineering (SRE) platform where coordinated Red Team Chaos Agents launch real infrastructure faults against a live microservices cluster, and Blue Team SRE Agents autonomously detect, diagnose with Claude 3.7 Extended Thinking, and remediate incidents in real time—monitored second-by-second on a live streaming Grafana dashboard.
+> An enterprise-grade autonomous Site Reliability Engineering (SRE) platform where coordinated Red Team Testing Agents launch real infrastructure faults against a live microservices cluster, and Blue Team SRE Agents autonomously detect, diagnose with Claude 3.7 Extended Thinking, and remediate incidents in real timeâ€”monitored second-by-second on a live streaming Grafana dashboard.
 
 ---
 
 ## Overview
 
-Modern distributed systems require continuous resilience validation, yet standard chaos testing is either purely manual or decoupled from automated remediation workflows. **ResilienceOps** closes this loop with an autonomous, production-grade multi-agent architecture.
+Modern distributed systems require continuous resilience validation, yet standard resilience testing is either purely manual or decoupled from automated remediation workflows. **ResilienceOps** closes this loop with an autonomous, production-grade multi-agent architecture.
 
 The platform runs an authentic containerized microservices stack under live, concurrent automated user traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (Linux cgroup memory leaks, CPU CFS quota exhaustion, network transit delays, and TCP packet drops). Simultaneously, a **3-Agent Blue Team** continuously watches the SRE Golden Signals, declares incidents upon Service Level Objective (SLO) breaches, executes deep root-cause analysis (RCA) via **Claude 3.7 Sonnet with Extended Thinking**, triggers automated recovery runbooks, and authors standardized post-mortem reports.
 
 All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
 
-📖 **For exhaustive technical specifications, math models, and agent communication protocols, read the [Technical Documentation](TECHNICAL_DOCUMENTATION.md).**
+ðŸ“– **For exhaustive technical specifications, math models, and agent communication protocols, read the [Technical Documentation](TECHNICAL_DOCUMENTATION.md).**
 
 ---
 
@@ -57,38 +57,38 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 
 The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and CloudWatch logging:
 
-1. **Step 1 — Client Traffic Generation & Ingress Routing**:
+1. **Step 1 â€” Client Traffic Generation & Ingress Routing**:
    The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
 
-2. **Step 2 — Microservice Request Propagation & Stateful Processing**:
+2. **Step 2 â€” Microservice Request Propagation & Stateful Processing**:
    The API Gateway forwards business requests downstream to the **Order Service** (`:8001`) and **Payment Service** (`:8002`):
    - The **Order Service** queries and updates session state in **Redis 7** (in-memory caching & client connection pool) and commits order records to **PostgreSQL 16**.
    - The **Payment Service** executes payment authorizations and async credit card validations across network sockets.
 
-3. **Step 3 — High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
+3. **Step 3 â€” High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
    All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits.
 
-4. **Step 4 — Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
+4. **Step 4 â€” Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
    Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes **Claude Sonnet** to devise an attack vector. The planner delegates execution:
    - **tc netem Adversary**: Injects Linux kernel queuing discipline delays (`tc qdisc add dev eth0 root netem delay 2500ms 100ms`) or packet drops onto the Payment Service.
-   - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /chaos/redis-starvation?connections=55`).
+   - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /fault/redis-starvation?connections=55`).
 
-5. **Step 5 — Real-Time SLO Breach Detection (Blue Team Sentinel)**:
+5. **Step 5 â€” Real-Time SLO Breach Detection (Blue Team Sentinel)**:
    As the fault manifests in production, upstream connection pools starve and payment latency spikes. The **Health & Uptime Sentinel** ingests Prometheus anomaly signals. When p99 latency breaches 1200ms or 5XX error rates cross 2.0%, the Sentinel declares an incident (`SEV-1`) and activates the Blue Team response pipeline.
 
-6. **Step 6 — Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
+6. **Step 6 â€” Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
    The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying **Claude Sonnet with Extended Thinking** over secure outbound HTTPS (port 443). Claude synthesizes competing hypotheses, eliminates false leads through deductive reasoning, pinpointing the exact fault (e.g., Linux kernel tc netem delay or Redis client pool starvation) with an associated confidence score.
 
-7. **Step 7 — Automated Remediation & Stateful Recovery**:
+7. **Step 7 â€” Automated Remediation & Stateful Recovery**:
    The **Automated Recovery Fixer** validates the RCA findings against hardened operational runbooks. It issues surgical recovery commands directly to the affected service:
    - Purging raw Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
    - Flusing starving client sockets and resetting the Redis connection pool.
    - Reclaiming allocated memory buffers or triggering an orchestrated rolling pod restart.
 
-8. **Step 8 — Health Verification & Incident Post-Mortem Archival**:
+8. **Step 8 â€” Health Verification & Incident Post-Mortem Archival**:
    The Blue Team polls the health and metrics endpoints for 10 consecutive ticks, confirming that p99 latency drops back below 800ms, 5XX errors return to 0.00%, and memory returns beneath the cgroup quota. Once normalized, the **Incident Post-Mortem Agent** auto-generates a structured Markdown post-mortem detailing timeline, root cause, and recovery actions in `reports/`.
 
-9. **Step 9 — CloudWatch Audit Logging & Operational Dashboards**:
+9. **Step 9 â€” CloudWatch Audit Logging & Operational Dashboards**:
    Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Log** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
 
 ---
@@ -97,7 +97,7 @@ The platform executes a closed-loop resilience lifecycle from user traffic ingre
 
 | Domain | Technology / Tool | Version | Purpose |
 |---|---|---|---|
-| **AI Frontier Models** | Anthropic Claude 3.7 Sonnet | `claude-3-7-sonnet-latest` | Chaos Strategy, Extended Thinking RCA, Auto-Remediation |
+| **AI Frontier Models** | Anthropic Claude 3.7 Sonnet | `claude-3-7-sonnet-latest` | Test Strategy, Extended Thinking RCA, Auto-Remediation |
 | | Anthropic Claude 3.5 Sonnet | `claude-3-5-sonnet-latest` | Sub-second Incident Monitoring & Network Adversary actions |
 | **Backend / Services** | Python / FastAPI / Uvicorn | `3.11` / `0.111.0` | High-throughput asynchronous target microservices & API Gateway |
 | | HTTPX | `0.27.0` | Asynchronous inter-service HTTP client and proxy router |
@@ -276,10 +276,10 @@ To inspect the exact security actions, injected attack vectors, and raw command 
      - *Bottom Table*: **Unified Agent Command & Security Audit Stream** (Full chronologically sorted audit ledger).
    - **`System-Fault-Metrics`**: Dedicated visual telemetry dashboard tracking active and resolved resilience attack vectors:
      - *Header*: `# System Faults & Recovery` (Visual tracking of active attack vectors and remediation velocity).
-     - *Graph 1*: **📈 Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
-     - *Graph 2*: **🛡️ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
-     - *Graph 3*: **📊 Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
-     - *Audit Table*: **📋 Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
+     - *Graph 1*: **ðŸ“ˆ Fault Injections by Vector** (Time-series line charts tracking kernel `tc netem` latency, Redis starvation, and memory leaks).
+     - *Graph 2*: **ðŸ›¡ï¸ Incident Rate vs Remediation Recovery Velocity** (Direct time-series comparison between active SEV-1 incidents and resolved remediations).
+     - *Graph 3*: **ðŸ“Š Attack Vector Distribution Share** (Interactive pie chart showing the percentage breakdown across all tested fault vectors).
+     - *Audit Table*: **ðŸ“‹ Active vs Resolved Fault Lifecycle Audit** (Live status log showing faults transitioning from `FAULT_ACTIVE` to `RESOLVED`).
 
 <p align="center">
   <img src="docs/images/cloudwatch_agent_command_audit.png" alt="AWS CloudWatch Agent Command Log" width="950" />
@@ -307,9 +307,9 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 - **Phase 1**: **Health & Uptime Monitor** performs a baseline health check on AWS (`HTTP 200`, Latency `<300ms`).
 - **Phase 2**: Red Team **Resilience Attack Planner** (`Claude Sonnet`) evaluates the AWS topology and formulates an attack campaign.
 - **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
-- **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`🚨 INCIDENT DECLARED | MTTD: 2.14s`).
+- **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`ðŸš¨ INCIDENT DECLARED | MTTD: 2.14s`).
 - **Phase 5**: Blue Team **Root Cause Investigator** invokes **Claude Sonnet with Extended Thinking**, outputs step-by-step reasoning, isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
-- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`✅ Recovery Validated | MTTR: 3.42s`).
+- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`âœ… Recovery Validated | MTTR: 3.42s`).
 - **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
 
 ---
@@ -371,7 +371,7 @@ Every time an autonomous resilience cycle runs, the Blue Team's **Incident Repor
    Open **CloudWatch** -> **Dashboards** -> **`Agent-Command-Log`**. The middle table (*"Blue Team SRE Agents: Exact Remediation Commands & Outputs"*) streams the exact `GENERATE_POST_MORTEM` commands, MTTR calculation metrics, and report storage confirmations in real time.
 
 #### Sample Live Incident Post-Mortem Report:
-👉 **[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
+ðŸ‘‰ **[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
 
 ```markdown
 # Incident Post-Mortem Report: UNKNOWN_FAULT
@@ -445,4 +445,4 @@ docker compose down -v
 
 For the comprehensive technical specification covering mathematical SLO formulations, cgroup kernel limits, Claude 3.7 prompt architectures, Kubernetes agent sandbox security, and AWS network topology, refer to:
 
-👉 **[Complete Technical Documentation](TECHNICAL_DOCUMENTATION.md)**
+ðŸ‘‰ **[Complete Technical Documentation](TECHNICAL_DOCUMENTATION.md)**

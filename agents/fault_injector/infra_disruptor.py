@@ -1,4 +1,4 @@
-import time
+﻿import time
 from typing import Dict, Any
 from agents.common.structured_logger import StructuredLogger
 from agents.common.llm_engine import EnterpriseLLMEngine
@@ -33,13 +33,13 @@ class InfraDisruptorAgent:
         duration_ms = (time.time() - start) * 1000
 
         if "CPU" in fault_type:
-            cmd_str = f"POST {result.get('endpoint', '/chaos/cpu-burn')} [payload: 15s compute saturation]"
+            cmd_str = f"POST {result.get('endpoint', '/fault/cpu-burn')} [payload: 15s compute saturation]"
             res_str = f"HTTP {result.get('status_code', 200)} | CPU CFS quota saturated -> Worker thread starvation"
         elif "CRASH" in fault_type:
-            cmd_str = f"POST {result.get('endpoint', '/chaos/process-crash')}"
+            cmd_str = f"POST {result.get('endpoint', '/fault/process-crash')}"
             res_str = f"HTTP {result.get('status_code', 200)} | Worker process killed -> CrashLoopBackOff"
         else:
-            cmd_str = f"POST {result.get('endpoint', '/chaos/leak-memory')} [payload: 150MB heap allocation]"
+            cmd_str = f"POST {result.get('endpoint', '/fault/leak-memory')} [payload: 150MB heap allocation]"
             res_str = f"HTTP {result.get('status_code', 200)} | Memory allocated -> cgroup ceiling breached -> Container OOMKill restart"
 
         event = {

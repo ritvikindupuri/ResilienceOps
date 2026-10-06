@@ -1,4 +1,4 @@
-import time
+﻿import time
 import uuid
 import subprocess
 import os
@@ -11,7 +11,7 @@ app = FastAPI(title="ResilienceOps-Payment-Service", version="1.0.0")
 PAYMENT_COUNT = Counter("payments_processed_total", "Total Payments Processed", ["status", "gateway"])
 PAYMENT_LATENCY = Histogram("payment_processing_duration_seconds", "Latency of payment gateway", buckets=[0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0])
 
-CHAOS_STATE = {
+FAULT_STATE = {
     "tc_netem_active": False,
     "tc_rule": None,
     "gateway_outage": False
@@ -37,13 +37,13 @@ class PaymentRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    if CHAOS_STATE["gateway_outage"]:
+    if FAULT_STATE["gateway_outage"]:
         raise HTTPException(status_code=503, detail="Payment upstream gateway unavailable")
     return {
         "status": "healthy",
         "service": "payment-service",
-        "tc_netem_active": CHAOS_STATE["tc_netem_active"],
-        "tc_rule": CHAOS_STATE["tc_rule"]
+        "tc_netem_active": FAULT_STATE["tc_netem_active"],
+        "tc_rule": FAULT_STATE["tc_rule"]
     }
 
 @app.get("/metrics")
@@ -54,7 +54,7 @@ async def metrics():
 async def process_payment(req: PaymentRequest):
     start = time.time()
     
-    if CHAOS_STATE["gateway_outage"]:
+    if FAULT_STATE["gateway_outage"]:
         PAYMENT_COUNT.labels(status="503_outage", gateway="stripe-sim").inc()
         raise HTTPException(status_code=503, detail="External Payment Gateway Connection Refused")
     
@@ -76,7 +76,7 @@ async def process_payment(req: PaymentRequest):
 # Fault Engineering Endpoints (Linux tc netem)
 # ==========================================
 
-@app.post("/chaos/latency")
+@app.post("/fault/latency")
 async def set_latency(delay_ms: int = 2500, jitter_ms: int = 100):
     """Applies Linux kernel tc netem delay directly to eth0 network interface."""
     # Delete existing root qdisc if any
@@ -87,15 +87,15 @@ async def set_latency(delay_ms: int = 2500, jitter_ms: int = 100):
         "qdisc", "add", "dev", "eth0", "root", "netem",
         "delay", f"{delay_ms}ms", f"{jitter_ms}ms"
     ])
-    CHAOS_STATE["tc_netem_active"] = (result["returncode"] == 0)
-    CHAOS_STATE["tc_rule"] = f"delay {delay_ms}ms {jitter_ms}ms"
+    FAULT_STATE["tc_netem_active"] = (result["returncode"] == 0)
+    FAULT_STATE["tc_rule"] = f"delay {delay_ms}ms {jitter_ms}ms"
     return {
         "status": "tc_netem_applied" if result["returncode"] == 0 else "tc_failed",
-        "rule": CHAOS_STATE["tc_rule"],
+        "rule": FAULT_STATE["tc_rule"],
         "tc_output": result
     }
 
-@app.post("/chaos/drop-rate")
+@app.post("/fault/drop-rate")
 async def set_drop_rate(loss_percent: float = 30.0):
     """Applies Linux kernel tc netem packet drop rate to eth0."""
     run_tc_command(["qdisc", "del", "dev", "eth0", "root"])
@@ -104,26 +104,26 @@ async def set_drop_rate(loss_percent: float = 30.0):
         "qdisc", "add", "dev", "eth0", "root", "netem",
         "loss", f"{loss_percent}%"
     ])
-    CHAOS_STATE["tc_netem_active"] = (result["returncode"] == 0)
-    CHAOS_STATE["tc_rule"] = f"loss {loss_percent}%"
+    FAULT_STATE["tc_netem_active"] = (result["returncode"] == 0)
+    FAULT_STATE["tc_rule"] = f"loss {loss_percent}%"
     return {
         "status": "tc_netem_applied" if result["returncode"] == 0 else "tc_failed",
-        "rule": CHAOS_STATE["tc_rule"],
+        "rule": FAULT_STATE["tc_rule"],
         "tc_output": result
     }
 
-@app.post("/chaos/outage")
+@app.post("/fault/outage")
 async def set_outage(enabled: bool = True):
-    CHAOS_STATE["gateway_outage"] = enabled
+    FAULT_STATE["gateway_outage"] = enabled
     return {"status": "fault_applied", "gateway_outage": enabled}
 
-@app.post("/chaos/reset")
-async def reset_chaos():
+@app.post("/fault/reset")
+async def reset_fault():
     """Removes Linux tc netem qdisc and resets state."""
     result = run_tc_command(["qdisc", "del", "dev", "eth0", "root"])
-    CHAOS_STATE["tc_netem_active"] = False
-    CHAOS_STATE["tc_rule"] = None
-    CHAOS_STATE["gateway_outage"] = False
+    FAULT_STATE["tc_netem_active"] = False
+    FAULT_STATE["tc_rule"] = None
+    FAULT_STATE["gateway_outage"] = False
     return {
         "status": "clean",
         "message": "Linux tc netem qdisc purged and service state normalized",

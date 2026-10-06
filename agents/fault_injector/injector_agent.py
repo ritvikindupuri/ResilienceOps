@@ -1,4 +1,4 @@
-import time
+﻿import time
 from typing import Dict, Any, Optional
 from agents.common.structured_logger import StructuredLogger
 from agents.common.llm_engine import EnterpriseLLMEngine
@@ -30,7 +30,7 @@ class FaultInjectorAgent:
             name, func, kwargs = self.scenarios[self.cursor % len(self.scenarios)]
             self.cursor += 1
 
-        # Query Claude / LLM for offensive chaos hypothesis
+        # Query Claude / LLM for offensive fault hypothesis
         prompt = (
             f"Target: Microservices cluster (api-gw, order-service, payment-service). "
             f"Scenario: {name}. Describe how this fault degrades upstream connection pools and breaches p99 latency SLOs."
@@ -45,7 +45,7 @@ class FaultInjectorAgent:
             "target": "target-microservices",
             "llm_provider": self.llm.provider,
             "llm_model": self.llm.model,
-            "chaos_strategy": llm_strategy if llm_strategy else f"Controlled injection of {name}",
+            "fault_strategy": llm_strategy if llm_strategy else f"Controlled injection of {name}",
             "intent": f"Inject {name} to evaluate automated SRE detection and auto-remediation."
         }
         self.logger.log(intent_event)

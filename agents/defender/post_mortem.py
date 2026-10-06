@@ -1,4 +1,4 @@
-import time
+﻿import time
 from datetime import datetime
 from typing import Dict, Any
 from agents.config import CW_LOG_GROUP_INCIDENTS
@@ -49,7 +49,7 @@ On {now_str}, an automated reliability breach was detected impacting `{target}`.
 ## 3. Root Cause Analysis (RCA)
 - **Failure Mode**: {attack.get('expected_impact', 'Induced system fault')}
 - **Underlying Mechanism**: {diagnosis.get('hypotheses_evaluated', [{}])[0].get('hypothesis', 'System degradation')}
-- **Trigger**: Red Team Chaos injection simulating real-world node/network degradation.
+- **Trigger**: Red Team fault injection simulating real-world node/network degradation.
 
 ---
 

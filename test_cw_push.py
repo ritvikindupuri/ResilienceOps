@@ -1,4 +1,4 @@
-import boto3, json, time
+﻿import boto3, json, time
 from datetime import datetime
 
 logs = boto3.client("logs", region_name="us-east-1")

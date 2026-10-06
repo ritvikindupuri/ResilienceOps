@@ -1,11 +1,11 @@
-import boto3
+﻿import boto3
 
 ssm = boto3.client("ssm", region_name="us-east-1")
 commands = [
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- mkdir -p /app",
-    "k3s kubectl cp /opt/sre-colosseum/agents sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-chaos -o jsonpath='{.items[0].metadata.name}'):/app/agents",
-    "k3s kubectl cp /opt/sre-colosseum/orchestrator.py sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-chaos -o jsonpath='{.items[0].metadata.name}'):/app/orchestrator.py",
-    "k3s kubectl cp /opt/sre-colosseum/.env sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-chaos -o jsonpath='{.items[0].metadata.name}'):/app/.env",
+    "k3s kubectl cp /opt/sre-colosseum/agents sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/agents",
+    "k3s kubectl cp /opt/sre-colosseum/orchestrator.py sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/orchestrator.py",
+    "k3s kubectl cp /opt/sre-colosseum/.env sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/.env",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- pip install httpx anthropic prometheus-client python-dotenv",
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- ls -la /app"
 ]

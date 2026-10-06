@@ -1,4 +1,4 @@
-import os
+﻿import os
 import httpx
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agents.config import (
-    MODEL_CHAOS_STRATEGIST,
+    MODEL_fault_STRATEGIST,
     MODEL_INFRA_DISRUPTOR,
     MODEL_NETWORK_ADVERSARY,
     MODEL_INCIDENT_MONITOR,
@@ -26,9 +26,9 @@ class EnterpriseLLMEngine:
 
     ROLE_MODELS = {
         # --- Red Team (Offensive Testing Squad) ---
-        "chaos_attack_planner": MODEL_CHAOS_STRATEGIST,
-        "chaos_strategist": MODEL_CHAOS_STRATEGIST,
-        "planner": MODEL_CHAOS_STRATEGIST,
+        "fault_attack_planner": MODEL_fault_STRATEGIST,
+        "fault_strategist": MODEL_fault_STRATEGIST,
+        "planner": MODEL_fault_STRATEGIST,
         "server_resource_stresser": MODEL_INFRA_DISRUPTOR,
         "infra_disruptor": MODEL_INFRA_DISRUPTOR,
         "resource_stresser": MODEL_INFRA_DISRUPTOR,

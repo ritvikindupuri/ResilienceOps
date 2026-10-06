@@ -1,10 +1,10 @@
-import time
+﻿import time
 import httpx
 from typing import Dict, Any
 from agents.config import CW_LOG_GROUP_DEFENDER, API_GATEWAY_URL
 from agents.common.cw_logger import CloudWatchLogger
 from agents.common.k8s_tools import K8sToolKit
-from agents.attacker.vectors import ChaosVectors
+from agents.attacker.vectors import faultVectors
 
 class BlueTeamOperator:
     """Executes SRE runbooks, remediates broken infrastructure, and verifies recovery."""
@@ -22,15 +22,15 @@ class BlueTeamOperator:
 
         # 1. Execute Runbook Action
         if "PAYMENT" in action_name or "LATENCY" in root_cause:
-            # Clear artificial latency and reset payment chaos
-            ChaosVectors.reset_all()
+            # Clear artificial latency and reset payment fault
+            faultVectors.reset_all()
             if self.k8s.k8s_available:
                 self.k8s.restart_deployment("payment-service")
             execution_log.append("Reset payment service latency parameters to baseline 80ms.")
             
         elif "OOM" in action_name or "MEMORY" in root_cause:
             # Clear memory leak buffer and restart pod
-            ChaosVectors.reset_all()
+            faultVectors.reset_all()
             if self.k8s.k8s_available:
                 self.k8s.restart_deployment("order-service")
             execution_log.append("Purged leaked heap buffers and triggered rolling container bounce.")
@@ -39,11 +39,11 @@ class BlueTeamOperator:
             # Scale deployment to absorb CPU spike
             if self.k8s.k8s_available:
                 self.k8s.scale_deployment("order-service", replicas=3)
-            ChaosVectors.reset_all()
+            faultVectors.reset_all()
             execution_log.append("Scaled order-service replicas from 2 -> 3 to mitigate CFS throttling.")
 
         else:
-            ChaosVectors.reset_all()
+            faultVectors.reset_all()
             if self.k8s.k8s_available:
                 self.k8s.restart_deployment("order-service")
             execution_log.append("Executed general service recovery reset.")
