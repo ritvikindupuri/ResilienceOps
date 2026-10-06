@@ -139,7 +139,7 @@ The platform's infrastructure lives directly on **Amazon Web Services (AWS)**, p
 - **Terraform 1.5+** installed.
 - **Python 3.10+** installed.
 - **Anthropic API Key** (for Claude 3.7 Sonnet & 3.5 Sonnet).
-- *(Optional)* **Docker Desktop** (only if you want to run an offline local sandbox before cloud deployment).
+- **Docker** (installed locally or via host).
 
 ---
 
@@ -441,8 +441,8 @@ terraform destroy -auto-approve
 
 ---
 
-### Optional: Local Offline Sandbox Mode
-If you want to run an offline local sandbox on your laptop without touching AWS:
+### Offline Development Mode (Local Docker Sandbox)
+To run an offline sandbox on your workstation without cloud infrastructure:
 
 ```bash
 # Start local containers and offline agent sandbox
