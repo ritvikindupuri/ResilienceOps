@@ -9,7 +9,7 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "http://api-gw:8000")
 RPS_TARGET = int(os.getenv("RPS_TARGET", "25"))
 CONCURRENCY = int(os.getenv("CONCURRENCY", "10"))
 
-print(f"[*] Starting Realtime Synthetic Traffic Generator against {GATEWAY_URL} target RPS: {RPS_TARGET}")
+print(f"[*] Starting Realtime Production Workload Traffic Generator against {GATEWAY_URL} target RPS: {RPS_TARGET}")
 
 ITEMS = [
     {"item_id": "prod-macbook-pro", "amount": 1999.00},

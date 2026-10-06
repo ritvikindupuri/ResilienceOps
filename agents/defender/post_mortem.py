@@ -28,7 +28,7 @@ class PostMortemGenerator:
 ---
 
 ## 1. Executive Summary
-On {now_str}, an automated reliability breach was detected impacting `{target}`. Synthetic user traffic experienced elevated error rates and latency degradation exceeding our SLO budget. Autonomous Blue Team SRE agents diagnosed `{root_cause}` with **{confidence:.1f}% confidence** and executed runbook `{runbook}`, successfully restoring service.
+On {now_str}, an automated reliability breach was detected impacting `{target}`. Production user traffic experienced elevated error rates and latency degradation exceeding our SLO budget. Blue Team SRE incident responders diagnosed `{root_cause}` with **{confidence:.1f}% confidence** and executed runbook `{runbook}`, successfully restoring service.
 
 - **MTTD (Mean Time To Detect)**: `{mttd_sec:.2f} seconds`
 - **MTTR (Mean Time To Remediate)**: `{mttr_sec:.2f} seconds`
