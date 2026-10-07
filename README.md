@@ -337,7 +337,7 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 - **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
 - **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`INCIDENT DECLARED | MTTD: 2.14s`).
 - **Phase 5**: Blue Team **Root Cause Investigator** invokes **Claude Sonnet with Extended Thinking**, outputs step-by-step reasoning, isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
-- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`✅ Recovery Validated | MTTR: 3.42s`).
+- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`Recovery Validated | MTTR: 3.42s`).
 - **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
 
 ---
@@ -473,4 +473,4 @@ docker compose down -v
 
 For the comprehensive technical specification covering mathematical SLO formulations, cgroup kernel limits, Claude 3.7 prompt architectures, Kubernetes agent sandbox security, and AWS network topology, refer to:
 
-📖 **[Complete Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf)**
+**[Complete Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf)**
