@@ -161,8 +161,8 @@ The platform's infrastructure lives directly on **Amazon Web Services (AWS)**, p
 ### Step 1: Clone and Navigate to the Repository
 
 ```bash
-git clone https://github.com/ritvikindupuri/InfraAttack.git
-cd InfraAttack
+git clone https://github.com/ritvikindupuri/ResilienceOps.git
+cd ResilienceOps
 ```
 
 ---
@@ -224,7 +224,7 @@ Save your `public_ip` (or `grafana_url`) from the output.
 <p align="center">
   <img src="docs/images/aws_vpc_resource_map.png" alt="AWS Enterprise VPC Resource Map" width="950" />
 </p>
-<p align="center"><b>Figure 4.1: Live AWS Enterprise VPC Resource Map (3-Tier Subnet Segmentation & Ingress Routing)</b></p>
+<p align="center"><b>Figure 3: Live AWS Enterprise VPC Resource Map (3-Tier Subnet Segmentation & Ingress Routing)</b></p>
 ---
 
 ### Step 5: Quarantined Kubernetes Agent Sandbox Pod Access & Live Logs
