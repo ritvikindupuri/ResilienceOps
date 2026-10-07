@@ -12,8 +12,8 @@ The platform runs an authentic containerized microservices stack under live, con
 
 All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
  
-📊 **For deep performance metrics, high-resolution dashboard breakdowns, and an authentic SRE post-mortem, view the [SRE Results & Incident Telemetry Report (RESULTS.md)](RESULTS.md).**  
-📖 **For technical specifications, math models, and agent communication protocols, read the [Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf).**
+ **For deep performance metrics, high-resolution dashboard breakdowns, and an authentic SRE post-mortem, view the [SRE Results & Incident Telemetry Report (RESULTS.md)](RESULTS.md).**  
+ **For system architecture, agent workflows, sandbox controls, and implementation details, read the technical documentation. [Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf).**
 
 ---
 
