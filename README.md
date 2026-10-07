@@ -96,31 +96,32 @@ The platform executes a closed-loop resilience lifecycle from user traffic ingre
 
 ## Kubernetes Agent Sandbox Architecture & Security Quarantine
 
-To ensure completely safe autonomous operations in production, all offensive and defensive LLM agents execute inside an isolated Kubernetes sandbox namespace (`sre-agent-sandbox`). Autonomous AI agents are never given unconstrained host access, root permissions, or broad network visibility.
+To ensure completely safe autonomous operations in production, all offensive testing and defensive recovery agents execute inside a dedicated, isolated Kubernetes sandbox container (`sre-agent-sandbox` namespace). Operators trigger resilience campaigns remotely, while the sandbox enforces strict hardware limits, least-privilege API permissions, and granular network filtering.
 
 <p align="center">
   <img src="docs/images/agent_sandbox_architecture.png" alt="Kubernetes Agent Sandbox Architecture & Security Boundary" width="950" />
 </p>
-<p align="center"><b>Figure 2: Kubernetes Agent Sandbox Architecture, cgroup Limits & NetworkPolicy Security Boundary</b></p>
+<p align="center"><b>Figure 2: Kubernetes Agent Sandbox Pod Architecture, Resource Limits & Egress Network Rules</b></p>
 
 ### What Purpose Does the Agent Sandbox Solve?
 
-Deploying autonomous agents directly onto production nodes presents significant security and reliability risks: runaway agent loops could exhaust host memory, flawed remediation logic could accidentally reboot the wrong host systems, and unconstrained network access could allow unintentional network scanning or AWS metadata extraction.
+Deploying autonomous AI agents directly onto host systems creates severe reliability and security risks: runaway script loops could exhaust server compute, faulty remediation logic could disrupt system daemons, and unmonitored network sockets could probe unintended services.
 
-The **Kubernetes Agent Sandbox** solves these exact risks through a 4-pillar containment architecture:
+The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment boundary with 3 core security pillars:
 
 | Security Pillar | Concrete Enforcement Mechanism | SRE & Platform Protection Guarantee |
 |:---|:---|:---|
-| **1. Zero Blast Radius (cgroups v2)** | Hard container limits enforced in Kubernetes manifest: `limits.cpu: 500m`, `limits.memory: 512Mi`. | If an agent experiences a runaway loop or memory leak during chaos testing, the Linux kernel cgroup OOMKiller terminates only the agent pod (`Exit 137`). **Host node stability and system daemons are 100% protected**. |
-| **2. Least-Privilege RBAC Quarantine** | Dedicated ServiceAccounts (`red-agent-sa`, `sre-defender-sa`) bound strictly to `sre-target-apps` namespace with scoped verbs (`get`, `list`, `watch`, `pods/exec`). | Agents have **zero cluster-admin privileges**. They cannot inspect `kube-system`, cannot view cluster secrets, and cannot modify node configurations. |
-| **3. Strict Network Isolation** | Declarative `NetworkPolicy` (`agent-sandbox-isolation`) with default egress deny. Explicitly allows only: (1) CoreDNS (`UDP 53`), (2) Target microservices (`sre-target-apps`), and (3) Anthropic API (`HTTPS 443`). | Agents **cannot perform lateral network scanning**, cannot access the internet beyond LLM inference, and cannot query AWS instance metadata (`169.254.169.254`). |
-| **4. Synchronous CloudWatch Audit Trail** | Every shell command, script invocation, and return code is synchronously streamed to CloudWatch Logs (`/sre/autonomous-agent-audit`). | Complete forensic auditability: every fault injection and automated remediation is recorded in an immutable ledger with zero tampering risk. |
+| **1. Agent Resource Limits (CPU / RAM)** | Hard cgroup limits enforced per pod: `0.5 CPU (500m)` and `512 MiB RAM`. | If an agent experiences a runaway loop or memory leak, the Linux kernel cgroup OOMKiller immediately terminates the sandbox container (`Exit 137`). **Host node stability and system daemons are 100% protected**. Importantly, sandbox resource constraints cap agent compute—they do not limit or dampen the authentic fault impact injected into target microservices. |
+| **2. API Permissions (ServiceAccount + RBAC)** | Scoped Kubernetes ServiceAccount and RoleBinding restricted to target namespaces with minimal verbs (`get`, `list`, `watch`, `pods/exec`). | Agents have **zero cluster-admin privileges**. They cannot inspect `kube-system`, cannot view cluster secrets, and cannot alter cluster or node configurations. |
+| **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Workload selectors enforce secure communication channels: CoreDNS for in-cluster name resolution (`UDP 53`), direct API calls to target microservices (`sre-target-apps`), and outbound HTTPS (`Port 443`) for Claude AI reasoning and external telemetry endpoints. |
 
 ### How the Sandbox Operates During Incident Cycles
 
-1. **Offensive Agent Pod (`red-team-sandbox`)**: Houses the Red Team testing squad. The agents formulate test plans and issue surgical fault injections against microservices inside `sre-target-apps` via Kubernetes exec hooks. Even under maximum stress, the pod cannot exceed 500m CPU or 512Mi RAM.
-2. **Defensive Operator Pod (`blue-team-operator`)**: Houses the Blue Team sentinel and recovery squad. When SLO breaches occur, agents query Claude 3.7 Sonnet over outbound HTTPS (port 443) for root-cause analysis and execute approved declarative runbooks against target containers.
-3. **Target Microservices Namespace (`sre-target-apps`)**: Houses the live business workload (`api-gw`, `order-service`, `payment-service`, `redis`, `postgres`). This workload is exercised and recovered safely without ever exposing the underlying cloud node or other cluster workloads to disruption.
+1. **Operator Trigger**: An SRE engineer launches a resilience test cycle remotely via `kubectl exec` into the sandbox pod (`python3 orchestrator.py`).
+2. **Sandbox Pod Execution**:
+   - **Red Team Agents**: Select and trigger surgical faults against target services (e.g., cgroup memory leaks on `order-service`, Linux kernel `tc netem` latency on `payment-service`).
+   - **Blue Team Agents**: Continuously monitor golden signals, check service health, invoke Claude 3.7 Sonnet over outbound HTTPS (port 443) for root-cause analysis, and execute automated runbook resets.
+3. **Target Services Tier**: The live microservices cluster (`Order`, `Payment`, `API Gateway`) receives the injected faults and resets while keeping underlying host OS and cluster system pods completely isolated.
 
 ---
 
