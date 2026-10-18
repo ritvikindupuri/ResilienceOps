@@ -1,4 +1,6 @@
 .env
+*.env
+!.env.example
 __pycache__/
 *.pyc
 *.tfstate
@@ -8,3 +10,11 @@ __pycache__/
 logs/*.jsonl
 *.tar.gz
 !reports/incident_20261006_010119_unknown_fault.md
+
+# Local env files (.env.example stays tracked via the exception above)
+.env.*
+!.env.example
+
+# Build / deploy payload archives — generate at deploy time, never commit
+deploy_payload.zip
+*payload*.zip

@@ -1,8 +1,12 @@
 import boto3, time, sys
+from agents.config import AWS_REGION, require_ec2_instance_id
 
-ssm = boto3.client("ssm", region_name="us-east-1")
+INSTANCE_ID = require_ec2_instance_id()
+
+
+ssm = boto3.client("ssm", region_name=AWS_REGION)
 cmd_id = "4bdfe1a6-aaea-4314-afb3-1776fb76890d"
-instance_id = "i-0cf1c979f2cbd01c4"
+instance_id = INSTANCE_ID
 
 for i in range(24):
     try:

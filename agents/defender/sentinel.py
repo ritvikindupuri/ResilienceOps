@@ -23,6 +23,7 @@ class BlueTeamSentinel:
             "order_status": 200,
             "payment_status": 200,
             "latency_ms": 0.0,
+            "probe_latency_ms": 0.0,
             "error_rate_percent": 0.0,
             "active_anomalies": []
         }
@@ -72,6 +73,9 @@ class BlueTeamSentinel:
             telemetry["payment_status"] = 502
             telemetry["active_anomalies"].append(f"Payment-service unreachable: {str(e)}")
 
+        telemetry["probe_latency_ms"] = telemetry["latency_ms"]
+        statuses = [telemetry.get(f"{svc}_status", 200) for svc in ("gateway", "order", "payment")]
+        telemetry["error_rate_percent"] = 100.0 * sum(1 for code in statuses if code >= 500) / max(len(statuses), 1)
         return telemetry
 
     def evaluate_slos(self, telemetry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -79,9 +83,19 @@ class BlueTeamSentinel:
         breaches = []
         severity = "SEV-2"
 
-        # Check Latency SLO
-        if telemetry["latency_ms"] > SLO_MAX_P99_LATENCY_MS:
-            breaches.append(f"P99 Latency ({telemetry['latency_ms']}ms) exceeded SLO ({SLO_MAX_P99_LATENCY_MS}ms)")
+        # Single health-probe latency is not p99. Label it honestly.
+        probe_latency = telemetry.get("probe_latency_ms", telemetry.get("latency_ms", 0.0))
+        if probe_latency > SLO_MAX_P99_LATENCY_MS:
+            breaches.append(
+                f"probe latency ({probe_latency}ms) exceeded SLO ({SLO_MAX_P99_LATENCY_MS}ms)"
+            )
+            severity = "SEV-1"
+
+        error_rate = telemetry.get("error_rate_percent", 0.0)
+        if error_rate > SLO_MAX_ERROR_RATE_PERCENT:
+            breaches.append(
+                f"error rate ({error_rate:.2f}%) exceeded SLO ({SLO_MAX_ERROR_RATE_PERCENT}%)"
+            )
             severity = "SEV-1"
 
         # Check Service Status

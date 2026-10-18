@@ -2,6 +2,10 @@
 
 # Package current local files to zip and push
 import os, zipfile, io
+from agents.config import AWS_REGION, require_ec2_instance_id
+
+INSTANCE_ID = require_ec2_instance_id()
+
 bio = io.BytesIO()
 with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
     for root, dirs, files in os.walk("agents"):
@@ -9,12 +13,11 @@ with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as zf:
             full = os.path.join(root, f)
             zf.write(full, os.path.relpath(full, "."))
     zf.write("orchestrator.py", "orchestrator.py")
-    if os.path.exists(".env"):
-        zf.write(".env", ".env")
+    # Never bundle .env. Provide ANTHROPIC_API_KEY via the host env / SSM / Secrets Manager.
 
 b64_zip = base64.b64encode(bio.getvalue()).decode("ascii")
 
-ssm = boto3.client("ssm", region_name="us-east-1")
+ssm = boto3.client("ssm", region_name=AWS_REGION)
 commands = [
     f"cat << 'EOF' | base64 -d > /tmp/agent_pkg.zip\n{b64_zip}\nEOF",
     "k3s kubectl cp /tmp/agent_pkg.zip sre-agent-sandbox/$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}'):/app/agent_pkg.zip",
@@ -25,7 +28,7 @@ commands = [
     "k3s kubectl exec deployment/red-team-sandbox -n sre-agent-sandbox -- bash -c 'cd /app && python orchestrator.py --target-ip 10.0.1.69 --cycles 1 --scenario MEMORY_EXHAUSTION'"
 ]
 resp = ssm.send_command(
-    InstanceIds=["i-0cf1c979f2cbd01c4"],
+    InstanceIds=[INSTANCE_ID],
     DocumentName="AWS-RunShellScript",
     Parameters={"commands": commands}
 )

@@ -5,10 +5,31 @@ from agents.config import (
     API_GATEWAY_URL,
     ORDER_SERVICE_URL,
     PAYMENT_SERVICE_URL,
+    PROMETHEUS_URL,
     SLO_MAX_P99_LATENCY_MS,
     SLO_MAX_ERROR_RATE_PERCENT
 )
 from agents.common.structured_logger import StructuredLogger
+
+
+def query_prometheus_scalar(query: str) -> Optional[float]:
+    """Best-effort Prometheus instant query. Returns None if Prometheus is unreachable."""
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            res = client.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+            result = res.json().get("data", {}).get("result", [])
+            if result:
+                return float(result[0]["value"][1])
+    except Exception:
+        return None
+    return None
+
+
+def probe_error_rate_percent(snapshot: Dict[str, Any]) -> float:
+    statuses = [snapshot.get(f"{svc}_status", 200) for svc in ("gateway", "order", "payment")]
+    if not statuses:
+        return 0.0
+    return 100.0 * sum(1 for code in statuses if code >= 500) / len(statuses)
 
 class IncidentMonitor:
     """Continuously monitors service telemetry and declares incidents on SLO violations."""
@@ -23,6 +44,8 @@ class IncidentMonitor:
             "order_status": 200,
             "payment_status": 200,
             "latency_ms": 0.0,
+            "probe_latency_ms": 0.0,
+            "error_rate_percent": 0.0,
             "anomalies": []
         }
 
@@ -71,6 +94,20 @@ class IncidentMonitor:
             snapshot["payment_status"] = 502
             snapshot["anomalies"].append(f"Payment service unreachable: {str(e)}")
 
+        snapshot["probe_latency_ms"] = snapshot["latency_ms"]
+        p99_seconds = query_prometheus_scalar(
+            "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))"
+        )
+        if p99_seconds is not None:
+            snapshot["p99_latency_ms"] = round(p99_seconds * 1000.0, 2)
+
+        prom_error_rate = query_prometheus_scalar(
+            '100 * (sum(rate(http_requests_total{status=~"5.."}[1m])) or vector(0)) '
+            "/ clamp_min(sum(rate(http_requests_total[1m])), 1e-9)"
+        )
+        snapshot["error_rate_percent"] = (
+            round(prom_error_rate, 3) if prom_error_rate is not None else probe_error_rate_percent(snapshot)
+        )
         return snapshot
 
     def evaluate_slos(self, snapshot: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -78,8 +115,27 @@ class IncidentMonitor:
         violations = []
         severity = "SEV-2"
 
-        if snapshot["latency_ms"] > SLO_MAX_P99_LATENCY_MS:
-            violations.append(f"p99 Latency ({snapshot['latency_ms']}ms) exceeded SLO limit ({SLO_MAX_P99_LATENCY_MS}ms)")
+        # Single health-probe latency is not p99. Use Prometheus p99 when present.
+        if "p99_latency_ms" in snapshot:
+            latency_ms = snapshot["p99_latency_ms"]
+            latency_label = "p99 latency"
+        else:
+            latency_ms = snapshot.get("probe_latency_ms", snapshot.get("latency_ms", 0.0))
+            latency_label = "probe latency"
+        if latency_ms > SLO_MAX_P99_LATENCY_MS:
+            violations.append(
+                f"{latency_label} ({latency_ms}ms) exceeded SLO limit ({SLO_MAX_P99_LATENCY_MS}ms)"
+            )
+            severity = "SEV-1"
+
+        error_rate = snapshot.get("error_rate_percent")
+        if error_rate is None:
+            error_rate = probe_error_rate_percent(snapshot)
+            snapshot["error_rate_percent"] = error_rate
+        if error_rate > SLO_MAX_ERROR_RATE_PERCENT:
+            violations.append(
+                f"error rate ({error_rate:.2f}%) exceeded SLO limit ({SLO_MAX_ERROR_RATE_PERCENT}%)"
+            )
             severity = "SEV-1"
 
         for svc in ["gateway", "order", "payment"]:

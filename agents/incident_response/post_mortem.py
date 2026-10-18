@@ -3,6 +3,17 @@ from datetime import datetime
 from typing import Dict, Any
 from agents.common.structured_logger import StructuredLogger
 
+
+def resolve_fault_title(fault: Dict[str, Any]) -> str:
+    """Injectors emit fault_type (and sometimes scenario). Prefer either over UNKNOWN_FAULT."""
+    return (
+        fault.get("scenario")
+        or fault.get("fault_type")
+        or fault.get("vector")
+        or "UNKNOWN_FAULT"
+    )
+
+
 class PostMortemGenerator:
     """Generates standard enterprise SRE Incident Post-Mortem reports."""
 
@@ -11,7 +22,7 @@ class PostMortemGenerator:
 
     def generate(self, fault: Dict[str, Any], incident: Dict[str, Any], diagnosis: Dict[str, Any], remediation: Dict[str, Any], mttd_s: float, mttr_s: float) -> str:
         now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        scenario = fault.get("scenario", "UNKNOWN_FAULT")
+        scenario = resolve_fault_title(fault)
         target = fault.get("target_service", "microservices")
         severity = incident.get("severity", "SEV-1")
         root_cause = diagnosis.get("primary_root_cause", "UNKNOWN")

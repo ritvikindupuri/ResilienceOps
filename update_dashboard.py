@@ -1,17 +1,18 @@
 import json, urllib.request, base64
 
-auth = base64.b64encode(b"admin:admin").decode("ascii")
+from agents.config import require_grafana_basic_auth_header
+auth = require_grafana_basic_auth_header()
 
 # 1. Fetch current dashboard
 req = urllib.request.Request("http://18.232.78.253:3000/api/dashboards/uid/cg0cyg4je7o5cb")
-req.add_header("Authorization", f"Basic {auth}")
+req.add_header("Authorization", auth)
 res = urllib.request.urlopen(req)
 raw = json.loads(res.read())
 dash = raw["dashboard"]
 
 # Get Prometheus DS UID
 req_ds = urllib.request.Request("http://18.232.78.253:3000/api/datasources/name/Prometheus")
-req_ds.add_header("Authorization", f"Basic {auth}")
+req_ds.add_header("Authorization", auth)
 ds_info = json.loads(urllib.request.urlopen(req_ds).read())
 prom_uid = ds_info["uid"]
 
@@ -187,7 +188,7 @@ save_payload = {
     "dashboard": dash,
     "overwrite": True
 }
-save_req = urllib.request.Request("http://18.232.78.253:3000/api/dashboards/db", data=json.dumps(save_payload).encode(), headers={"Content-Type": "application/json", "Authorization": f"Basic {auth}"})
+save_req = urllib.request.Request("http://18.232.78.253:3000/api/dashboards/db", data=json.dumps(save_payload).encode(), headers={"Content-Type": "application/json", "Authorization": auth})
 save_res = urllib.request.urlopen(save_req)
 print("Dashboard update result:", save_res.read().decode())
 

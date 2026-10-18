@@ -7,7 +7,7 @@ from datetime import datetime
 # Parse arguments first so environment variables are applied before submodules import config
 parser = argparse.ArgumentParser(description="Autonomous SRE Resilience & Incident Response Platform")
 parser.add_argument("--cycles", type=int, default=2, help="Number of resilience cycles to execute")
-parser.add_argument("--scenario", type=str, default=None, help="Specific scenario: MEMORY_EXHAUSTION, NETWORK_LATENCY, CPU_SATURATION, PACKET_LOSS")
+parser.add_argument("--scenario", type=str, default=None, help="Specific scenario: MEMORY_EXHAUSTION, NETWORK_LATENCY, CPU_SATURATION, PACKET_LOSS, REDIS_CONNECTION_STARVATION")
 parser.add_argument("--delay", type=int, default=4, help="Cooldown delay between cycles in seconds")
 parser.add_argument("--target-ip", type=str, default=None, help="AWS EC2 Public IP address where the infrastructure is deployed")
 cli_args, _ = parser.parse_known_args()
@@ -118,7 +118,7 @@ def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
 def main():
     parser = argparse.ArgumentParser(description="Autonomous SRE Resilience & Incident Response Platform")
     parser.add_argument("--cycles", type=int, default=2, help="Number of resilience cycles to execute")
-    parser.add_argument("--scenario", type=str, default=None, help="Specific scenario: MEMORY_EXHAUSTION, NETWORK_LATENCY, CPU_SATURATION, PACKET_LOSS")
+    parser.add_argument("--scenario", type=str, default=None, help="Specific scenario: MEMORY_EXHAUSTION, NETWORK_LATENCY, CPU_SATURATION, PACKET_LOSS, REDIS_CONNECTION_STARVATION")
     parser.add_argument("--delay", type=int, default=4, help="Cooldown delay between cycles in seconds")
     parser.add_argument("--target-ip", type=str, default=None, help="AWS EC2 Public IP address where the infrastructure is deployed")
     args = parser.parse_args()

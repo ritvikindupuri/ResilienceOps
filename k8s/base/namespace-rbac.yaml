@@ -13,35 +13,53 @@ metadata:
     arena.sre.io/role: control-plane
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: sre-agent-sandbox
+  labels:
+    security.sre.io/tier: sandbox
+    security.sre.io/quarantine: "true"
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: sre-defender-sa
-  namespace: sre-arena-control
+  namespace: sre-agent-sandbox
 ---
+# Namespaced Role on the victim workloads only. ClusterRole was overly broad
+# (cluster-wide pods/configmaps/networkpolicies plus invalid "describe" verbs).
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: sre-defender-cluster-role
+  name: sre-defender-target-role
+  namespace: sre-target-apps
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "services", "endpoints", "events", "configmaps"]
-    verbs: ["get", "list", "watch", "describe", "delete", "patch", "update"]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list"]
   - apiGroups: ["apps"]
-    resources: ["deployments", "deployments/scale", "deployments/rollback", "replicasets"]
-    verbs: ["get", "list", "watch", "describe", "patch", "update"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: sre-defender-binding
+  name: sre-defender-target-binding
+  namespace: sre-target-apps
 subjects:
   - kind: ServiceAccount
     name: sre-defender-sa
-    namespace: sre-arena-control
+    namespace: sre-agent-sandbox
 roleRef:
-  kind: ClusterRole
-  name: sre-defender-cluster-role
+  kind: Role
+  name: sre-defender-target-role
   apiGroup: rbac.authorization.k8s.io
