@@ -89,6 +89,8 @@ def test_readme_referenced_scripts_exist():
         "docs/architecture.mmd",
         "docs/images/infraattack_platform_architecture.png",
         "docs/ResilienceOps_Technical_Documentation.pdf",
+        "scripts/generate_example_post_mortem.py",
+        "reports/example_incident_memory_exhaustion.md",
     ]
     for rel in required:
         assert (ROOT / rel).is_file(), rel
@@ -116,6 +118,24 @@ def test_readme_flow_names_match_code_stages():
         "PACKET_LOSS",
     ):
         assert f"--scenario {scenario}" in readme or scenario in readme, scenario
+
+
+def test_readme_sample_post_mortem_is_current_generator():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    sample = (ROOT / "reports" / "example_incident_memory_exhaustion.md").read_text(encoding="utf-8")
+    assert "Operating the lab on AWS" in readme
+    assert "[Installation and quick start](#installation-and-quick-start)" in readme
+    assert "[Operating the lab on AWS](#operating-the-lab-on-aws)" in readme
+    assert "reports/example_incident_memory_exhaustion.md" in readme
+    assert "pre-fix historical" in readme
+    assert "# Incident Post-Mortem Report: UNKNOWN_FAULT" not in readme
+    assert "Example report" in sample
+    assert "Incident Post-Mortem Report: MEMORY_EXHAUSTION" in sample
+    assert "POST /fault/reset" in readme
+    assert "K8sToolKit.k8s_available" in readme
+    assert "bounces the container" not in readme
+    assert "MTTD: 2.14s" not in readme
+    assert "MTTR: 3.42s" not in readme
 
 
 def test_architecture_png_is_nontrivial():

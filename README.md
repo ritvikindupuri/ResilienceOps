@@ -142,7 +142,7 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 
 ## Installation and quick start
 
-Follow these steps in order: local lab first (compose + Grok Bot), then AWS + k3s if you want the cloud host.
+Follow these steps in order: **local lab first** (clone, `.env`, Docker Compose, Grok Bot), then AWS + k3s if you want the cloud host (steps 8–10). After Terraform and the sandbox are up, use [Operating the lab on AWS](#operating-the-lab-on-aws) for Grafana, CloudWatch, `orchestrator.py` cycles, and teardown. Skip that section if you are only running Compose on your laptop.
 
 ### 1. Prerequisites
 
@@ -266,6 +266,8 @@ docker compose up --build -d
 ```
 
 Wait until `docker compose ps` shows `incident-bridge` as running (first build compiles the FastAPI images plus Redis, Postgres, Prometheus, Alertmanager, Grafana, and traffic-generator). A warning `Docker Compose is configured to build using Bake, but buildx isn't installed` is harmless — Compose falls back to the classic builder.
+
+On AWS after install steps 8–10, Grafana and sandbox cycles are in [Operating the lab on AWS](#operating-the-lab-on-aws).
 
 `agent-sandbox` is **opt-in**. Its image `CMD` is `python orchestrator.py --cycles 5 --delay 10`, which injects real faults. It does **not** start on a plain `docker compose up`. To include it (needs `ANTHROPIC_API_KEY`):
 
@@ -400,13 +402,13 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 ---
 
 
-## Operational Runbook & Quickstart
+## Operating the lab on AWS
 
-Follow this operational walkthrough to monitor live metrics, inspect security audits, trigger autonomous agent cycles against your AWS infrastructure, and review post-mortems.
+Do [Installation and quick start](#installation-and-quick-start) first. Local Compose (including Alertmanager, incident-bridge, and Grafana on `:3000`) is steps 3–7 of that section. This walkthrough assumes the AWS host and `sre-agent-sandbox` are already deployed and you want to watch Grafana, CloudWatch, and in-cluster cycles.
 
 > [!TIP]
-> **Detailed Telemetry & Metrics Report**:  
-> For comprehensive high-resolution dashboard screenshots, detailed per-panel metric breakdowns, and an authentic SRE post-mortem report, see [**RESULTS.md**](RESULTS.md).
+> **Dashboard screenshots**:  
+> For high-resolution Grafana/CloudWatch captures and a **dated** telemetry snapshot, see [**RESULTS.md**](RESULTS.md). Some reports quoted there still use the pre-fix `UNKNOWN_FAULT` title; the current generator is [`reports/example_incident_memory_exhaustion.md`](reports/example_incident_memory_exhaustion.md).
 
 ### Step 1: Open the Live AWS Grafana Dashboard (Pure Infra Monitoring)
 1. Open your web browser and navigate to your AWS Grafana URL:
@@ -462,23 +464,26 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
   python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
-#### What you will observe in the terminal:
-- **Phase 1**: **Health & Uptime Monitor** performs a baseline health check on AWS (`HTTP 200`, Latency `<300ms`).
-- **Phase 2**: Red Team **Resilience Attack Planner** (`claude-sonnet-4-6`) evaluates the AWS topology and formulates an attack campaign.
-- **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
-- **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`INCIDENT DECLARED | MTTD: 2.14s`).
-- **Phase 5**: Blue Team **Root Cause Investigator** invokes `MODEL_DIAGNOSTIC_RCA` (default `claude-sonnet-4-6`), isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
-- **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`Recovery Validated | MTTR: 3.42s`).
-- **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
+#### What you will observe in the terminal (illustrative; timings are not guaranteed):
+
+Printed MTTD/MTTR vary with load, scrape lag, and whether Prometheus is reachable. They are measured per cycle, not fixed.
+
+- **Phase 1**: **Health & Uptime Monitor** probes `GET /health` on api-gw, order-service, and payment-service. A healthy baseline is usually HTTP 200 with probe latency well under the 1200ms SLO.
+- **Phase 2**: Red Team **Resilience Attack Planner** (`claude-sonnet-4-6`) evaluates topology and formulates a campaign.
+- **Phase 3**: Red Team **Server Resource Stresser** POSTs `order-service /fault/leak-memory` (this `--scenario MEMORY_EXHAUSTION` path).
+- **Phase 4**: Blue Team **Health & Uptime Monitor** loops up to 9 ticks of 1s. It declares an incident when p99/probe latency > 1200ms, error rate > 2%, or a probe returns HTTP >= 500 (`INCIDENT DECLARED | MTTD: …` — MTTD is that loop duration).
+- **Phase 5**: Blue Team **Root Cause Investigator** (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) plus rule-based heuristics. `MEMORY_EXHAUSTION_OOM` is used when order-service is 5xx **and** recent k8s events mention oom; otherwise you may see `ORDER_PROCESS_FAILURE` or another cause. The OOM runbook is `EVICT_CONTAINER_AND_PURGE_LEAK`.
+- **Phase 6**: Blue Team **Automated Recovery Fixer** (`RemediatorAgent.execute_runbook`) **always** calls `FaultCatalog.reset_environment()` — `POST /fault/reset` on order-service and payment-service. It restarts `order-service` (or scales it to 3 replicas on CPU runbooks) **only if** `K8sToolKit.k8s_available`. It does not unconditionally bounce the container. `verify_recovery` GETs api-gw `/health` up to 5 times; success is HTTP 200 and probe latency < 800ms. Printed MTTR is measured there.
+- **Phase 7**: Blue Team **Incident Report Writer** writes `reports/incident_*.md` (title from `resolve_fault_title()`, e.g. `MEMORY_EXHAUSTION`).
 
 ---
 
 ### Step 4: Watch the Live AWS Grafana Dashboard React in Real Time
-Keep the AWS Grafana dashboard open while running the cycle:
-1. **At T+2s**: Watch the **Real-Time System State** gauge flip from `HEALTHY` to `ACTIVE INCIDENT`.
-2. **At T+3s**: Watch the **Latency Profiles** chart spike into the red (>2000ms).
-3. **At T+5s**: Observe the **5XX Error Rate** climb as upstream connection timeouts accumulate.
-4. **At T+8s**: As Blue Team remediation executes on AWS, watch the latency line plummet immediately back to baseline and the status gauge turn green.
+Keep the AWS Grafana dashboard open while running the cycle. The following times are **typical of a fast memory-leak lab run**, not a promise:
+1. Shortly after injection, the **Real-Time System State** gauge often flips from `HEALTHY` to `ACTIVE INCIDENT`.
+2. **Latency Profiles** may spike (sometimes above 2000ms) while the leak or reset is in flight.
+3. **5XX Error Rate** can climb if upstream timeouts accumulate.
+4. After `POST /fault/reset` (and a k8s restart **if** the toolkit is available), latency usually returns toward baseline and the gauge turns green. How many seconds that takes depends on the fault and whether k8s restart ran.
 
 ---
 
@@ -531,33 +536,29 @@ Every time an autonomous resilience cycle runs, the Blue Team's **Incident Repor
 2. **Live on AWS CloudWatch**:
    Open **CloudWatch** -> **Dashboards** -> **`Agent-Command-Log`**. The middle table (*"Blue Team SRE Agents: Exact Remediation Commands & Outputs"*) streams the exact `GENERATE_POST_MORTEM` commands, MTTR calculation metrics, and report storage confirmations in real time.
 
-#### Sample Live Incident Post-Mortem Report:
-**[View Sample Incident Report: `reports/incident_20261006_010119_unknown_fault.md`](reports/incident_20261006_010119_unknown_fault.md)**
+#### Example post-mortem (current generator)
+
+The file below is **not a live incident**. It was produced by `python3 scripts/generate_example_post_mortem.py`, which calls `PostMortemGenerator` with representative `MEMORY_EXHAUSTION` inputs (title via `resolve_fault_title()`, fixed in PR #1). MTTD/MTTR in it are example values.
+
+**[View example: `reports/example_incident_memory_exhaustion.md`](reports/example_incident_memory_exhaustion.md)**
 
 ```markdown
-# Incident Post-Mortem Report: UNKNOWN_FAULT
-**Incident Timestamp**: 2026-10-06 01:01:19 UTC  
-**Classification**: Production Incident (`SEV-1`)  
-**Impacted Service**: `order-service`  
-**Incident State**: `RESOLVED`  
-**Handling Agents**: Health & Uptime Monitor, Root Cause Investigator, Automated Recovery Fixer, Incident Report Writer  
+# Incident Post-Mortem Report: MEMORY_EXHAUSTION
+**Incident Timestamp**: 2026-10-18 23:17:46 UTC
+**Classification**: Production Incident (`SEV-1`)
+**Impacted Service**: `order-service`
+**Incident State**: `RESOLVED`
 
 ## 1. Executive Summary
-At 2026-10-06 01:01:19 UTC, an automated reliability breach was detected impacting `order-service`. Telemetry monitoring identified SLO violations across request latency and error rates. The autonomous diagnostic system identified `DOWNSTREAM_PAYMENT_LATENCY` with 95.0% confidence and triggered remediation runbook `RESET_PAYMENT_PARAMETERS`, restoring normal operations.
+... identified `MEMORY_EXHAUSTION_OOM` with **98.0% confidence** and triggered
+remediation runbook `EVICT_CONTAINER_AND_PURGE_LEAK` ...
 
 ### Key Metrics
-- Mean Time To Detect (MTTD): 52.98 seconds
-- Mean Time To Remediate (MTTR): 57.55 seconds
-- Total Incident Duration: 110.53 seconds
-- Service Level Objective (SLO): Preserved
-
-## 2. Chronological Timeline
-- T0 (+0.0s): Fault injected into order-service.
-- T1 (+53.0s): SLO breach detected by Incident Monitor. Severity classified as SEV-1.
-- T2 (+53.8s): Root Cause Analysis completed (DOWNSTREAM_PAYMENT_LATENCY).
-- T3 (+54.8s): Runbook RESET_PAYMENT_PARAMETERS executed by Auto-Remediator.
-- T4 (+110.5s): Latency and error rates verified within baseline thresholds. Incident resolved.
+- Mean Time To Detect (MTTD): `3.81 seconds` (example)
+- Mean Time To Remediate (MTTR): `5.26 seconds` (example)
 ```
+
+Files named `reports/incident_*_unknown_fault.md` are **pre-fix historical samples** from before PR #1. Do not treat `UNKNOWN_FAULT` as current output.
 
 ---
 
@@ -586,7 +587,7 @@ terraform destroy -auto-approve
 
 ---
 
-Local Docker Compose (including Alertmanager and incident-bridge) is documented in [Installation step 6](#6-start-the-local-docker-compose-lab).
+Back to the local lab: Docker Compose (including Alertmanager and incident-bridge) is [Installation step 6](#6-start-the-local-docker-compose-lab).
 
 ---
 
