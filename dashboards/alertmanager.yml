@@ -14,7 +14,6 @@ receivers:
       - url: http://incident-bridge:8080/webhook
         send_resolved: true
         max_alerts: 0
-        timeout: 15s
 
 inhibit_rules:
   - source_matchers:
