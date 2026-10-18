@@ -1,7 +1,10 @@
+from agents.config import AWS_REGION, require_ec2_instance_id
+
+INSTANCE_ID = require_ec2_instance_id()
 ﻿import boto3, time, sys
 
-ssm = boto3.client("ssm", region_name="us-east-1")
-instance_id = "i-0cf1c979f2cbd01c4"
+ssm = boto3.client("ssm", region_name=AWS_REGION)
+instance_id = INSTANCE_ID
 
 commands = [
     "echo '=== [1] LIVE PROCESS RESIDENT MEMORY (RAM) BEFORE FAULT ==='",

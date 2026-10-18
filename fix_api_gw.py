@@ -1,6 +1,10 @@
 import boto3, time
+from agents.config import AWS_REGION, require_ec2_instance_id
 
-ssm = boto3.client("ssm", region_name="us-east-1")
+INSTANCE_ID = require_ec2_instance_id()
+
+
+ssm = boto3.client("ssm", region_name=AWS_REGION)
 cmd_script = [
     "cd /opt/sre-colosseum",
     "python3 -c \"content = open('services/api-gw/main.py').read().replace('from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST', 'from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST'); open('services/api-gw/main.py', 'w').write(content)\"",
@@ -10,13 +14,13 @@ cmd_script = [
     "docker ps"
 ]
 resp = ssm.send_command(
-    InstanceIds=["i-0cf1c979f2cbd01c4"],
+    InstanceIds=[INSTANCE_ID],
     DocumentName="AWS-RunShellScript",
     Parameters={"commands": cmd_script}
 )
 cmd_id = resp["Command"]["CommandId"]
 print("Rebuild Command ID:", cmd_id)
 time.sleep(18)
-res = ssm.get_command_invocation(CommandId=cmd_id, InstanceId="i-0cf1c979f2cbd01c4")
+res = ssm.get_command_invocation(CommandId=cmd_id, InstanceId=INSTANCE_ID)
 print("Status:", res["Status"])
 print(res.get("StandardOutputContent", "")[-800:])

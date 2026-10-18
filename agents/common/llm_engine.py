@@ -13,7 +13,8 @@ from agents.config import (
     MODEL_INCIDENT_MONITOR,
     MODEL_DIAGNOSTIC_RCA,
     MODEL_AUTO_REMEDIATOR,
-    MODEL_POST_MORTEM
+    MODEL_POST_MORTEM,
+    DEFAULT_MODEL,
 )
 
 class EnterpriseLLMEngine:
@@ -56,14 +57,22 @@ class EnterpriseLLMEngine:
         self.api_url = "https://api.anthropic.com/v1/messages"
         self.api_version = "2023-06-01"
         self.active_provider = "Anthropic"
-        self.active_model = "claude-sonnet-4-6"
+        self.active_model = DEFAULT_MODEL
+
+    @property
+    def provider(self) -> str:
+        return self.active_provider
+
+    @property
+    def model(self) -> str:
+        return self.active_model
 
     def get_model_for_role(self, role: str) -> str:
         """Returns the specific Claude model assigned to this agent role."""
         for key, model in self.ROLE_MODELS.items():
             if key in role.lower():
                 return model
-        return "claude-sonnet-4-6"
+        return DEFAULT_MODEL
 
     def query(self, prompt: str, system_prompt: str = "", role: str = "root_cause_investigator", enable_extended_thinking: bool = False) -> Optional[str]:
         """Sends inference request directly to Anthropic Messages API."""
@@ -71,6 +80,7 @@ class EnterpriseLLMEngine:
             return None
 
         model_name = self.get_model_for_role(role)
+        self.active_model = model_name
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": self.api_version,

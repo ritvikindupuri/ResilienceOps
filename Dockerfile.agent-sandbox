@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system utilities
+# Install system utilities. kubectl is not required: agents/common/k8s_tools.py
+# uses the Python kubernetes client from requirements.txt.
 RUN apt-get update && apt-get install -y --no-install-recommends curl jq && rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements

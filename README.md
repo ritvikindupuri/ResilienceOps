@@ -180,13 +180,16 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Open `.env` in any text editor and insert your Anthropic API key:
+Open `.env` in any text editor and insert your Anthropic API key and Grafana admin credentials (no default Grafana password):
 
 ```ini
-ANTHROPIC_API_KEY=sk-ant-api03-YOUR_ACTUAL_KEY_HERE
+ANTHROPIC_API_KEY=
+GRAFANA_ADMIN_USER=
+GRAFANA_ADMIN_PASSWORD=
+EC2_INSTANCE_ID=
 ```
 
-*(Note: `.env` is already included in `.gitignore` to prevent committing secrets).*
+**Never commit `.env`, `*.env` (except `.env.example`), or `deploy_payload.zip`.** Those paths are gitignored. Deploy archives are built at deploy time from the working tree and **must not** include secrets — inject `ANTHROPIC_API_KEY` and Grafana credentials from the environment, SSM Parameter Store, or Secrets Manager. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -206,9 +209,12 @@ Deploy the multi-tier VPC, subnets, security groups, IAM instance profile, and c
 
 ```bash
 cd terraform
+cp terraform.tfvars.example terraform.tfvars   # set allowed_cidr to YOUR /32 or office CIDR
 terraform init
-terraform apply -auto-approve
+terraform apply
 ```
+
+`allowed_cidr` has **no** `0.0.0.0/0` default; Terraform rejects a world-open CIDR. Grafana (`3000`) and the API gateway (`8000`) are limited to that CIDR. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`).
 
 Terraform automatically provisions the entire cloud topology in ~60 seconds and outputs your live AWS public endpoints:
 
@@ -216,7 +222,7 @@ Terraform automatically provisions the entire cloud topology in ~60 seconds and 
 Outputs:
 api_gateway_url = "http://54.xxx.xxx.xxx:8000"
 grafana_url     = "http://54.xxx.xxx.xxx:3000"
-prometheus_url  = "http://54.xxx.xxx.xxx:9090"
+prometheus_url  = "http://127.0.0.1:9090 (host-local; AWS SSM port forwarding)"
 public_ip       = "54.xxx.xxx.xxx"
 ```
 
@@ -266,6 +272,20 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/ba
 
 ---
 
+### Remote deploy (no committed zip)
+
+`deploy_remote.py` builds a payload zip from the current tree (compose services, dashboards, agents) **without** `.env`, then sends it with AWS SSM.
+
+```bash
+export EC2_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
+export AWS_REGION=us-east-1
+# On the host, set ANTHROPIC_API_KEY, GRAFANA_ADMIN_USER, GRAFANA_ADMIN_PASSWORD
+# via SSM Parameter Store, Secrets Manager, or the instance environment.
+python deploy_remote.py
+```
+
+---
+
 ## Operational Runbook & Quickstart
 
 Follow this operational walkthrough to monitor live metrics, inspect security audits, trigger autonomous agent cycles against your AWS infrastructure, and review post-mortems.
@@ -279,10 +299,7 @@ Follow this operational walkthrough to monitor live metrics, inspect security au
    ```text
    http://<YOUR_AWS_PUBLIC_IP>:3000
    ```
-2. Enter the default credentials:
-   - **Username**: `admin`
-   - **Password**: `admin`
-3. Click **Log In**. (Click **Skip** when prompted to change password).
+2. Sign in with the Grafana admin user and password you set in `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`. There is no default `admin`/`admin` password.
 4. In the left navigation menu, click **Dashboards** -> **SRE & Reliability** -> click **SRE Infrastructure & Reliability Performance Monitor**.
 5. Observe the 8 focused operational panels streaming every **1 second**:
    - **Real-Time Availability SLO %**: High-precision gauge (Target: 99.9%).
@@ -457,6 +474,10 @@ terraform destroy -auto-approve
 To run an offline sandbox on your workstation without cloud infrastructure:
 
 ```bash
+# Grafana refuses to start without admin credentials (no default password)
+export GRAFANA_ADMIN_USER=your-admin
+export GRAFANA_ADMIN_PASSWORD=your-strong-password
+
 # Start local containers and offline agent sandbox
 docker compose up --build -d
 

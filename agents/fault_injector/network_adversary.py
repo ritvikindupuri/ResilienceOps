@@ -34,6 +34,7 @@ class NetworkAdversaryAgent:
             "component": "Network Delay Injector",
             "action": "KERNEL_NETEM_FAULT_INJECTED",
             "fault_type": fault_type,
+            "scenario": result.get("scenario", fault_type),
             "target_service": result.get("target_service", "payment-service"),
             "command": f"tc qdisc add dev eth0 root netem [rule: {fault_type}]",
             "result": f"HTTP {result.get('status_code', 200)} | Linux tc netem active on eth0 -> Kernel queue packet delay/loss",

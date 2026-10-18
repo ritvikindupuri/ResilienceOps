@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars and set your operator CIDR. 0.0.0.0/0 is rejected.
+allowed_cidr = "x.x.x.x/32"
+aws_region   = "us-east-1"

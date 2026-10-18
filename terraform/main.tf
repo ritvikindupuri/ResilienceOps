@@ -57,6 +57,16 @@ variable "vpc_cidr" {
   description = "Primary CIDR block for enterprise VPC"
 }
 
+variable "allowed_cidr" {
+  type        = string
+  description = "CIDR allowed to reach Grafana (3000) and the API Gateway (8000). Must not be 0.0.0.0/0. SSH/22 is not opened; use AWS SSM for host access."
+
+  validation {
+    condition     = var.allowed_cidr != "0.0.0.0/0" && can(cidrhost(var.allowed_cidr, 0))
+    error_message = "allowed_cidr must be a specific CIDR block; 0.0.0.0/0 is not permitted."
+  }
+}
+
 # ==============================================================================
 # 1. ENTERPRISE NETWORK TOPOLOGY (VPC & MULTI-TIER SEGMENTATION)
 # ==============================================================================
@@ -146,41 +156,26 @@ resource "aws_security_group" "ingress_sg" {
   description = "Allows public traffic to API Gateway and Grafana Observability Dashboard"
   vpc_id      = aws_vpc.sre_vpc.id
 
-  # Grafana Dashboard UI
+  # Grafana Dashboard UI — restricted to the operator CIDR
   ingress {
-    description = "Grafana SRE Dashboard (Auto-provisioned)"
+    description = "Grafana SRE Dashboard (restricted CIDR)"
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.allowed_cidr]
   }
 
-  # Ingress API Gateway
+  # Ingress API Gateway — restricted to the operator CIDR
   ingress {
-    description = "Microservices API Gateway Public Endpoint"
+    description = "Microservices API Gateway (restricted CIDR)"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.allowed_cidr]
   }
 
-  # Prometheus Telemetry Server
-  ingress {
-    description = "Prometheus Golden Signals Scrape UI"
-    from_port   = 9090
-    to_port     = 9090
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # SSH Access
-  ingress {
-    description = "Administrative SSH Access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Prometheus is not published. Scrape stays on the host / compose network.
+  # SSH/22 is not opened. Use AWS Systems Manager Session Manager for access.
 
   # Outbound egress (package downloads, container image registries)
   egress {
@@ -345,8 +340,8 @@ output "api_gateway_url" {
 }
 
 output "prometheus_url" {
-  description = "URL to access Prometheus Golden Signals Metrics UI"
-  value       = "http://${aws_instance.sre_host.public_ip}:9090"
+  description = "Prometheus is host-local only. Use SSM port forwarding; it is not in the ingress security group."
+  value       = "http://127.0.0.1:9090 (host-local; AWS SSM port forwarding)"
 }
 
 output "deployment_instructions" {

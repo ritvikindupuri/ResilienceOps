@@ -1,6 +1,9 @@
+from agents.config import AWS_REGION, require_ec2_instance_id
+
+INSTANCE_ID = require_ec2_instance_id()
 ﻿import boto3, time
 
-ssm = boto3.client("ssm", region_name="us-east-1")
+ssm = boto3.client("ssm", region_name=AWS_REGION)
 commands = [
     "echo '=== [STEP 1] BASELINE MEMORY BEFORE ATTACK ==='",
     "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS'",
@@ -26,11 +29,11 @@ commands = [
 ]
 
 resp = ssm.send_command(
-    InstanceIds=["i-0cf1c979f2cbd01c4"],
+    InstanceIds=[INSTANCE_ID],
     DocumentName="AWS-RunShellScript",
     Parameters={"commands": commands}
 )
 cmd_id = resp["Command"]["CommandId"]
 time.sleep(12)
-res = ssm.get_command_invocation(CommandId=cmd_id, InstanceId="i-0cf1c979f2cbd01c4")
+res = ssm.get_command_invocation(CommandId=cmd_id, InstanceId=INSTANCE_ID)
 print(res.get("StandardOutputContent", ""))

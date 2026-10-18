@@ -67,7 +67,8 @@ class StructuredLogger:
         # Stream directly to AWS CloudWatch Logs in real time
         try:
             import boto3
-            cw_logs = boto3.client("logs", region_name="us-east-1")
+            from agents.config import AWS_REGION
+            cw_logs = boto3.client("logs", region_name=AWS_REGION)
             cw_event = {
                 "timestamp": int(time.time() * 1000),
                 "message": json.dumps({

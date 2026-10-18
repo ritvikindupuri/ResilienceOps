@@ -1,0 +1,10 @@
+title = "ResilienceOps"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Tracked placeholders and documentation only"
+paths = [
+  '''(^|/)\.env\.example$''',
+]

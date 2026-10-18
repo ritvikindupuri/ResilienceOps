@@ -1,6 +1,4 @@
-﻿import json, urllib.request, base64
-
-auth = base64.b64encode(b"admin:admin").decode("ascii")
+﻿import json
 
 # Load current dashboard
 with open("dashboards/provisioning/dashboards/sre-dashboard.json", "r", encoding="utf-8") as f:
