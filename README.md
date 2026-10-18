@@ -1,19 +1,20 @@
 # ResilienceOps — Autonomous Cloud Reliability & Self-Healing Platform
 
-> An enterprise-grade autonomous Site Reliability Engineering (SRE) platform where coordinated Offensive Testing Agents safely inject real infrastructure faults into a live microservices cluster, while defensive SRE Agents autonomously detect, diagnose using Claude 3.7 Extended Thinking, and remediate incidents in real time—monitored second-by-second on a live streaming Grafana dashboard.
+> An SRE lab where Red Team agents inject real infrastructure faults into a live microservices stack, Blue Team agents detect and remediate SLO breaches, and Prometheus alerts are diagnosed by an importable **Grok Bot** template that opens GitHub issues — monitored second-by-second on Grafana.
 
 ---
 
 ## Overview
 
-Modern distributed systems require continuous resilience validation, yet conventional **chaos engineering** is either purely manual or disconnected from automated remediation workflows. **ResilienceOps** closes this loop with an autonomous, production-grade multi-agent architecture.
+Modern distributed systems require continuous resilience validation, yet conventional **chaos engineering** is either purely manual or disconnected from automated remediation workflows. **ResilienceOps** closes this loop with a containerized microservices lab, in-cluster agents, and an external AI incident-diagnosis bot.
 
-The platform runs an authentic containerized microservices stack under live, concurrent automated user traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (Linux cgroup memory leaks, CPU CFS quota exhaustion, network transit delays, and TCP packet drops). Simultaneously, a **3-Agent Blue Team** continuously watches the SRE Golden Signals, declares incidents upon Service Level Objective (SLO) breaches, executes deep root-cause analysis (RCA) via **Claude 3.7 Sonnet with Extended Thinking**, triggers automated recovery runbooks, and authors standardized post-mortem reports.
+The platform runs an authentic containerized stack under live traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (cgroup memory leaks, CPU CFS quota exhaustion, network delays, TCP drops). A **3-Agent Blue Team** watches Golden Signals, declares SLO breaches, runs RCA, executes recovery runbooks, and writes post-mortems. In-cluster model IDs are set in [`agents/config.py`](agents/config.py) (defaults: `claude-sonnet-4-6` and `claude-haiku-4-5-20251001`; override with env vars).
 
-All telemetry is streamed in **100% real-time (1-second tick interval)** to an auto-provisioned Grafana dashboard.
- 
- **For deep performance metrics, high-resolution dashboard breakdowns, and an authentic SRE post-mortem, view the [SRE Results & Incident Telemetry Report (RESULTS.md)](RESULTS.md).**  
- **For system architecture, agent workflows, sandbox controls, and implementation details, read the technical documentation. [Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf).**
+In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). That path is **read-only**: the bot never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item.
+
+All telemetry is streamed in **real time (1-second scrape)** to Grafana.
+
+**This README is the current source of truth** for setup, model IDs, alerting, and the Grok Bot. The [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf) is a historical brief — prefer the README when they disagree. For a dated telemetry snapshot, see [RESULTS.md](RESULTS.md).
 
 ---
 
@@ -25,15 +26,18 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
   - Real connection pool starvation faults exhausting Redis `maxclients` limits, creating authentic connection timeouts.
   - Binary chunks are allocated directly in container heap memory to physically trigger the Linux kernel **cgroup OOMKiller (Exit 137)**.
   - CPU starvation executes real mathematical compute loops triggering **CFS quota throttling**.
-- **Balanced 3-vs-3 Multi-Agent Architecture**:
+- **Balanced 3-vs-3 Multi-Agent Architecture** (model IDs from `agents/config.py`):
   - **Red Team (Offensive Testing Squad)**:
-    - *Resilience Attack Planner* (`Claude Sonnet`): Decides which system components to test and designs the overall attack plan.
-    - *Server Resource Stresser* (`Claude Sonnet`): Tests server limits by filling memory (RAM), exhausting Redis connection pools, and maxing out CPU compute cores.
-    - *Network Delay Injector* (`Claude Haiku`): Tests network resilience by programming Linux kernel `tc netem` rules to delay or drop packets on `eth0`.
+    - *Resilience Attack Planner* (`claude-sonnet-4-6`): Decides which system components to test and designs the overall attack plan.
+    - *Server Resource Stresser* (`claude-sonnet-4-6`): Tests server limits by filling memory (RAM), exhausting Redis connection pools, and maxing out CPU compute cores.
+    - *Network Delay Injector* (`claude-haiku-4-5-20251001`): Tests network resilience by programming Linux kernel `tc netem` rules to delay or drop packets on `eth0`.
   - **Blue Team (Defensive Recovery Squad)**:
-    - *Health & Uptime Monitor* (`Claude Haiku`): Continuously watches website response times and flags whenever services slow down or fail.
-    - *Root Cause Investigator* (`Claude Sonnet with Extended Thinking`): Uses deep step-by-step thinking to investigate errors and pinpoint why things broke.
-    - *Automated Recovery Fixer & Report Writer* (`Claude Sonnet`): Executes automated recovery fixes (clearing jammed memory, restarting broken containers) and generates executive post-incident reports.
+    - *Health & Uptime Monitor* (`claude-haiku-4-5-20251001`): Continuously watches website response times and flags whenever services slow down or fail.
+    - *Root Cause Investigator* (`claude-sonnet-4-6`): Investigates errors and pinpoints why things broke.
+    - *Automated Recovery Fixer & Report Writer* (`claude-sonnet-4-6`): Executes automated recovery runbooks and generates post-incident reports.
+- **AI Incident Diagnosis (Grok Bot template)**:
+  - Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. Alerts flow services → Prometheus rules → Alertmanager → incident-bridge → Grok Bot webhook → GitHub `incident` issue and (for firing critical alerts) an owner chat ping.
+  - The bot is read-only. Duplicate fingerprints comment on the open issue; resolved alerts comment when the alert clears.
 - **Dual-Pane Observability Separation (Infrastructure vs. Security)**:
   - **Grafana (Pure Infrastructure Monitoring)**: 100% real-time streaming (1s tick interval, `liveNow: true`, rolling 2-minute window) displaying Google SRE Golden Signals, Availability SLO % (99.9% target), Latency percentiles (p50, p95, p99), Ingress RPS vs 5XX error area charts, Service traffic shares, and live Microservice Memory Usage plotted directly against the 256MB cgroup ceiling. Free of audit clutter and emojis.
   - **AWS CloudWatch (Agent Logs & Fault Telemetry)**: Dedicated observability dashboards (`Agent-Command-Log` and `System-Fault-Metrics`) logging every exact command executed by Red Team and Blue Team agents alongside their exact execution outputs streamed into CloudWatch Logs (`/sre/autonomous-agent-audit`).
@@ -56,7 +60,7 @@ All telemetry is streamed in **100% real-time (1-second tick interval)** to an a
 
 ### Architecture Execution Lifecycle
 
-The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, LLM reasoning, automated recovery, and CloudWatch logging:
+The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, in-cluster LLM reasoning, automated recovery, CloudWatch logging, and external AI incident diagnosis:
 
 1. **Step 1 — Client Traffic Generation & Ingress Routing**:
    The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
@@ -67,23 +71,36 @@ The platform executes a closed-loop resilience lifecycle from user traffic ingre
    - The **Payment Service** executes payment authorizations and async credit card validations across network sockets.
 
 3. **Step 3 — High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
-   All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits.
+   All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval, evaluates `dashboards/alerts.yml`, and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits. Prometheus (`9090`) and Alertmanager (`9093`) bind to localhost only.
 
 4. **Step 4 — Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
-   Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes **Claude Sonnet** to devise an attack vector. The planner delegates execution:
+   Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes the configured strategist model (`claude-sonnet-4-6` by default) to devise an attack vector. The planner delegates execution:
    - **tc netem Adversary**: Injects Linux kernel queuing discipline delays (`tc qdisc add dev eth0 root netem delay 2500ms 100ms`) or packet drops onto the Payment Service.
    - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /fault/redis-starvation?connections=55`).
 
 5. **Step 5 — Real-Time SLO Breach Detection (Blue Team Sentinel)**:
    As the fault manifests in production, upstream connection pools starve and payment latency spikes. The **Health & Uptime Sentinel** ingests Prometheus anomaly signals. When p99 latency breaches 1200ms or 5XX error rates cross 2.0%, the Sentinel declares an incident (`SEV-1`) and activates the Blue Team response pipeline.
 
-6. **Step 6 — Chain-of-Thought Root Cause Analysis (Blue Team + Claude AI)**:
-   The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying **Claude Sonnet with Extended Thinking** over secure outbound HTTPS (port 443). Claude synthesizes competing hypotheses, eliminates false leads through deductive reasoning, pinpointing the exact fault (e.g., Linux kernel tc netem delay or Redis client pool starvation) with an associated confidence score.
+6. **Step 6 — Root Cause Analysis (Blue Team + configured Claude model)**:
+   The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying the diagnostic model (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) over outbound HTTPS (port 443). The model synthesizes competing hypotheses and pinpoints the fault (for example Linux `tc netem` delay or Redis client-pool starvation) with a confidence score.
+
+   Independently, firing Prometheus alerts are grouped by **Alertmanager** and POSTed to **incident-bridge**, which attaches a compact evidence bundle and forwards JSON to the Grok Bot **AI Incident Diagnosis** webhook. That bot opens or comments on a GitHub `incident` issue. It does **not** mutate the cluster.
+
+```mermaid
+flowchart LR
+  services[Microservices] --> prom[Prometheus]
+  prom --> rules[Alert rules]
+  rules --> am[Alertmanager]
+  am --> bridge[incident-bridge]
+  bridge --> grok[Grok Bot webhook]
+  grok --> gh[GitHub incident issue]
+  grok --> chat[Owner chat ping]
+```
 
 7. **Step 7 — Automated Remediation & Stateful Recovery**:
    The **Automated Recovery Fixer** validates the RCA findings against hardened operational runbooks. It issues surgical recovery commands directly to the affected service:
    - Purging raw Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
-   - Flusing starving client sockets and resetting the Redis connection pool.
+   - Flushing starving client sockets and resetting the Redis connection pool.
    - Reclaiming allocated memory buffers or triggering an orchestrated rolling pod restart.
 
 8. **Step 8 — Health Verification & Incident Post-Mortem Archival**:
@@ -113,14 +130,14 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 |:---|:---|:---|
 | **1. Agent Resource Limits (CPU / RAM)** | Hard cgroup limits enforced per pod: `0.5 CPU (500m)` and `512 MiB RAM`. | If an agent experiences a runaway loop or memory leak, the Linux kernel cgroup OOMKiller immediately terminates the sandbox container (`Exit 137`). **Host node stability and system daemons are 100% protected**. Importantly, sandbox resource constraints cap agent compute—they do not limit or dampen the authentic fault impact injected into target microservices. |
 | **2. API Permissions (ServiceAccount + RBAC)** | Scoped Kubernetes ServiceAccount and RoleBinding restricted to target namespaces with minimal verbs (`get`, `list`, `watch`, `pods/exec`). | Agents have **zero cluster-admin privileges**. They cannot inspect `kube-system`, cannot view cluster secrets, and cannot alter cluster or node configurations. |
-| **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Workload selectors enforce secure communication channels: CoreDNS for in-cluster name resolution (`UDP 53`), direct API calls to target microservices (`sre-target-apps`), and outbound HTTPS (`Port 443`) for Claude AI reasoning and external telemetry endpoints. |
+| **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Workload selectors enforce secure communication channels: CoreDNS for in-cluster name resolution (`UDP 53`), direct API calls to target microservices (`sre-target-apps`), and outbound HTTPS (`Port 443`) for model APIs and the Grok Bot webhook. |
 
 ### How the Sandbox Operates During Incident Cycles
 
 1. **Operator Trigger**: An SRE engineer launches a resilience test cycle remotely via `kubectl exec` into the sandbox pod (`python3 orchestrator.py`).
 2. **Sandbox Pod Execution**:
    - **Red Team Agents**: Select and trigger surgical faults against target services (e.g., cgroup memory leaks on `order-service`, Linux kernel `tc netem` latency on `payment-service`).
-   - **Blue Team Agents**: Continuously monitor golden signals, check service health, invoke Claude 3.7 Sonnet over outbound HTTPS (port 443) for root-cause analysis, and execute automated runbook resets.
+   - **Blue Team Agents**: Continuously monitor golden signals, check service health, invoke the configured diagnostic model over outbound HTTPS (port 443) for root-cause analysis, and execute automated runbook resets.
 3. **Target Services Tier**: The live microservices cluster (`Order`, `Payment`, `API Gateway`) receives the injected faults and resets while keeping underlying host OS and cluster system pods completely isolated.
 
 ---
@@ -129,8 +146,9 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 
 | Domain | Technology / Tool | Version | Purpose |
 |---|---|---|---|
-| **AI Frontier Models** | Anthropic Claude 3.7 Sonnet | `claude-3-7-sonnet-latest` | Test Strategy, Extended Thinking RCA, Auto-Remediation |
-| | Anthropic Claude 3.5 Sonnet | `claude-3-5-sonnet-latest` | Sub-second Incident Monitoring & Network Adversary actions |
+| **AI Frontier Models** | Anthropic Claude Sonnet 4.6 | `claude-sonnet-4-6` (from `agents/config.py`) | Attack planning, RCA, auto-remediation, post-mortems |
+| | Anthropic Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Incident monitoring and network-adversary actions |
+| | Grok Bot template | [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Read-only alert diagnosis, GitHub `incident` issues, critical chat pings |
 | **Backend / Services** | Python / FastAPI / Uvicorn | `3.11` / `0.111.0` | High-throughput asynchronous target microservices & API Gateway |
 | | HTTPX | `0.27.0` | Asynchronous inter-service HTTP client and proxy router |
 | | Pydantic | `2.8.2` | Data validation and JSON schema enforcement |
@@ -147,32 +165,25 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 
 ---
 
-## Detailed Setup Instructions
+## Installation and quick start
 
-The platform's infrastructure lives directly on **Amazon Web Services (AWS)**, provisioned cleanly via Terraform. Follow these copy-and-paste commands to deploy and run the system.
+Follow these steps in order: local lab first (compose + Grok Bot), then AWS + k3s if you want the cloud host.
 
-### Prerequisites
+### 1. Prerequisites
 
-- **AWS CLI** installed and configured with valid credentials (`aws sts get-caller-identity`).
-- **Terraform 1.5+** installed.
-- **Python 3.10+** installed.
-- **Anthropic API Key** (for Claude 3.7 Sonnet & 3.5 Sonnet).
-- **Docker** (installed locally or via host).
+- **Git**, **Python 3.10+**, and **Docker** with Docker Compose v2.
+- **Anthropic API key** for the in-cluster Red/Blue agents (models listed in `agents/config.py`).
+- **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template (GitHub must be connected to the bot).
+- For AWS: **AWS CLI** (`aws sts get-caller-identity`) and **Terraform 1.5+**.
 
----
-
-### Step 1: Clone and Navigate to the Repository
+### 2. Clone the repository
 
 ```bash
 git clone https://github.com/ritvikindupuri/ResilienceOps.git
 cd ResilienceOps
 ```
 
----
-
-### Step 2: Configure Your Anthropic API Key
-
-Create your local `.env` configuration file from the provided template:
+### 3. Create `.env` from `.env.example`
 
 ```bash
 # On Linux / macOS / Git Bash:
@@ -182,32 +193,77 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Open `.env` in any text editor and insert your Anthropic API key and Grafana admin credentials (no default Grafana password):
+Edit `.env`. There is **no** default Grafana password. Do not commit `.env` (see [SECURITY.md](SECURITY.md)).
 
-```ini
-ANTHROPIC_API_KEY=
-GRAFANA_ADMIN_USER=
-GRAFANA_ADMIN_PASSWORD=
-EC2_INSTANCE_ID=
-```
+| Variable | Where it is used | Notes |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Agent sandbox / orchestrator | Required for in-cluster Claude calls |
+| `GRAFANA_ADMIN_USER` | `docker compose` Grafana | Required; compose fails closed if unset |
+| `GRAFANA_ADMIN_PASSWORD` | `docker compose` Grafana | Required; no `admin`/`admin` default |
+| `POSTGRES_PASSWORD` | Postgres + order-service | Compose falls back to `sre_password` if unset; set a real value for anything beyond a throwaway lab |
+| `EC2_INSTANCE_ID` | `deploy_remote.py` / SSM | Required before remote deploy; no default |
+| `AWS_REGION` | Deploy helpers | Default `us-east-1` |
+| `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally |
+| `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the bot routine panel |
+| `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
+| `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`; set empty to send the raw key |
 
-**Never commit `.env`, `*.env` (except `.env.example`), or `deploy_payload.zip`.** Those paths are gitignored. Deploy archives are built at deploy time from the working tree and **must not** include secrets — inject `ANTHROPIC_API_KEY` and Grafana credentials from the environment, SSM Parameter Store, or Secrets Manager. See [SECURITY.md](SECURITY.md).
+Terraform ingress is **not** an env var. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set `allowed_cidr` to your `/32` or office CIDR. `0.0.0.0/0` is rejected.
 
----
-
-### Step 3: Install Agent Dependencies
-
-Install the core Python libraries required by the multi-agent engine:
+### 4. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### 5. Import the Grok Bot template and copy webhook credentials
 
-### Step 4: Deploy the Production Infrastructure to AWS (Terraform)
+1. Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**.
+2. The bot's first conversation asks for the **GitHub repo** to file incidents in (GitHub must already be connected), the **alert source**, and the **ping preference**.
+3. Open the bot's **routine panel**. Copy the **webhook URL**, the **webhook key**, and the **authorization header format**.
+4. Paste them into `.env` as `GROK_WEBHOOK_URL`, `GROK_WEBHOOK_KEY`, `GROK_WEBHOOK_AUTH_HEADER`, and `GROK_WEBHOOK_AUTH_SCHEME`, matching the header format the panel shows (scheme may be empty).
 
-Deploy the multi-tier VPC, subnets, security groups, IAM instance profile, and cloud host to AWS:
+Details: [AI incident diagnosis](#ai-incident-diagnosis).
+
+### 6. Start the local Docker Compose lab
+
+Grafana, Alertmanager, and the incident-bridge are part of this stack. Alertmanager (`127.0.0.1:9093`) and the bridge (`127.0.0.1:8088`) are localhost-only.
+
+```bash
+docker compose up --build -d
+```
+
+Confirm the bridge is up:
+
+```bash
+curl -sS http://127.0.0.1:8088/healthz
+```
+
+Optional local agent cycle (needs `ANTHROPIC_API_KEY`):
+
+```bash
+python orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
+```
+
+### 7. Fire a synthetic alert and confirm a GitHub issue
+
+```bash
+python scripts/send_test_alert.py --target alertmanager
+```
+
+You should see a new GitHub issue labeled `incident` in the repo you configured with the bot. If an issue for that fingerprint is already open, the bot comments there instead.
+
+Equivalent curl:
+
+```bash
+curl -sS -H 'Content-Type: application/json' \
+  -d '[{"labels":{"alertname":"SyntheticTestAlert","severity":"warning","service":"api-gw"},"annotations":{"summary":"Synthetic test alert"},"startsAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}]' \
+  http://127.0.0.1:9093/api/v2/alerts
+```
+
+Stop the lab with `docker compose down -v`.
+
+### 8. Deploy AWS infrastructure (Terraform)
 
 ```bash
 cd terraform
@@ -216,77 +272,65 @@ terraform init
 terraform apply
 ```
 
-`allowed_cidr` has **no** `0.0.0.0/0` default; Terraform rejects a world-open CIDR. Grafana (`3000`) and the API gateway (`8000`) are limited to that CIDR. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`).
+Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`).
 
-Terraform automatically provisions the entire cloud topology in ~60 seconds and outputs your live AWS public endpoints:
+Typical outputs:
 
 ```text
-Outputs:
 api_gateway_url = "http://54.xxx.xxx.xxx:8000"
 grafana_url     = "http://54.xxx.xxx.xxx:3000"
 prometheus_url  = "http://127.0.0.1:9090 (host-local; AWS SSM port forwarding)"
 public_ip       = "54.xxx.xxx.xxx"
 ```
 
-Save your `public_ip` (or `grafana_url`) from the output.
+Save `public_ip` / `grafana_url`. Put the instance id in `.env` as `EC2_INSTANCE_ID`.
 
 <p align="center">
   <img src="docs/images/aws_vpc_resource_map.png" alt="AWS Enterprise VPC Resource Map" width="950" />
 </p>
 <p align="center"><b>Figure 3: Live AWS Enterprise VPC Resource Map (3-Tier Subnet Segmentation & Ingress Routing)</b></p>
----
 
-### Step 5: Quarantined Kubernetes Agent Sandbox Pod Access & Live Logs
+### 9. Push the app to the host (`deploy_remote.py`)
 
-The Red Team and Blue Team agents run inside a hardened Kubernetes sandbox environment (`sre-agent-sandbox` namespace) on the AWS cluster, configured with cgroup limits (`500m` CPU, `512Mi` RAM) and strict egress policies.
-
-#### 1. Connect to the AWS Host (Zero-SSH via AWS Systems Manager):
-No SSH keys or open port 22 are needed. You can connect securely from your browser:
-- Open **AWS Systems Manager** -> **Fleet Manager** -> Select instance `sre-enterprise-platform-host` -> Click **Start terminal session**.
-- Or run in your terminal:
-  ```bash
-  aws ssm start-session --target <YOUR_EC2_INSTANCE_ID>
-  ```
-
-#### 2. Verify Sandbox Pod Status & Quarantine:
-Inside the host shell:
-```bash
-k3s kubectl get pods,roles,rolebindings,networkpolicies -n sre-agent-sandbox
-```
-
-Output:
-```text
-NAME                                  READY   STATUS    RESTARTS   AGE
-pod/red-team-sandbox-978bfdddd-phvv4  1/1     Running   0          2m
-```
-
-#### 3. View Live Agent Sandbox Pod Logs:
-To stream real-time logs generated inside the quarantined container:
-```bash
-k3s kubectl logs -f deployment/red-team-sandbox -n sre-agent-sandbox
-```
-
-#### 4. Attach an Interactive Shell Inside the Sandbox Pod:
-You can attach directly inside the isolated sandbox container to inspect environment variables, run tests, or execute curl calls:
-```bash
-k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash
-```
-
----
-
-### Remote deploy (no committed zip)
-
-`deploy_remote.py` builds a payload zip from the current tree (compose services, dashboards, agents) **without** `.env`, then sends it with AWS SSM.
+`deploy_remote.py` builds a payload zip from the current tree (compose services, dashboards, agents, incident-bridge) **without** `.env`, then sends it with AWS SSM.
 
 ```bash
 export EC2_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
 export AWS_REGION=us-east-1
-# On the host, set ANTHROPIC_API_KEY, GRAFANA_ADMIN_USER, GRAFANA_ADMIN_PASSWORD
-# via SSM Parameter Store, Secrets Manager, or the instance environment.
+# On the host, set ANTHROPIC_API_KEY, GRAFANA_ADMIN_*, POSTGRES_PASSWORD,
+# and GROK_WEBHOOK_* via SSM Parameter Store, Secrets Manager, or instance env.
 python deploy_remote.py
 ```
 
+### 10. k3s agent sandbox
+
+Red and Blue agents run in `sre-agent-sandbox` on the AWS host (`500m` CPU, `512Mi` RAM, egress NetworkPolicy).
+
+Connect with SSM (no SSH / port 22):
+
+```bash
+aws ssm start-session --target "$EC2_INSTANCE_ID"
+```
+
+Or: AWS Systems Manager → Fleet Manager → instance `sre-enterprise-platform-host` → Start terminal session.
+
+On the host:
+
+```bash
+k3s kubectl get pods,roles,rolebindings,networkpolicies -n sre-agent-sandbox
+k3s kubectl logs -f deployment/red-team-sandbox -n sre-agent-sandbox
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash
+```
+
+Example cycle:
+
+```bash
+k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
+```
+
 ---
+
 
 ## Operational Runbook & Quickstart
 
@@ -302,8 +346,8 @@ Follow this operational walkthrough to monitor live metrics, inspect security au
    http://<YOUR_AWS_PUBLIC_IP>:3000
    ```
 2. Sign in with the Grafana admin user and password you set in `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`. There is no default `admin`/`admin` password.
-4. In the left navigation menu, click **Dashboards** -> **SRE & Reliability** -> click **SRE Infrastructure & Reliability Performance Monitor**.
-5. Observe the 8 focused operational panels streaming every **1 second**:
+3. In the left navigation menu, click **Dashboards** -> **SRE & Reliability** -> click **SRE Infrastructure & Reliability Performance Monitor**.
+4. Observe the 8 focused operational panels streaming every **1 second**:
    - **Real-Time Availability SLO %**: High-precision gauge (Target: 99.9%).
    - **Live Request Throughput (RPS)**: Real-time traffic volume (~20-80 RPS).
    - **Live HTTP 5XX Error Rate %**: Tracks server degradation with color-coded thresholds.
@@ -352,10 +396,10 @@ k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
 
 #### What you will observe in the terminal:
 - **Phase 1**: **Health & Uptime Monitor** performs a baseline health check on AWS (`HTTP 200`, Latency `<300ms`).
-- **Phase 2**: Red Team **Resilience Attack Planner** (`Claude Sonnet`) evaluates the AWS topology and formulates an attack campaign.
+- **Phase 2**: Red Team **Resilience Attack Planner** (`claude-sonnet-4-6`) evaluates the AWS topology and formulates an attack campaign.
 - **Phase 3**: Red Team **Server Resource Stresser** executes physical memory allocation in container RAM on your AWS host.
 - **Phase 4**: Blue Team **Health & Uptime Monitor** detects the SLO breach as latency exceeds 1200ms (`INCIDENT DECLARED | MTTD: 2.14s`).
-- **Phase 5**: Blue Team **Root Cause Investigator** invokes **Claude Sonnet with Extended Thinking**, outputs step-by-step reasoning, isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
+- **Phase 5**: Blue Team **Root Cause Investigator** invokes `MODEL_DIAGNOSTIC_RCA` (default `claude-sonnet-4-6`), isolates `MEMORY_EXHAUSTION_OOM`, and prescribes `EVICT_CONTAINER_AND_PURGE_LEAK`.
 - **Phase 6**: Blue Team **Automated Recovery Fixer** purges leaked memory buffers, bounces the container on AWS, and verifies recovery within `<800ms` (`Recovery Validated | MTTR: 3.42s`).
 - **Phase 7**: Blue Team **Incident Report Writer** compiles and archives a formal post-mortem report to `reports/`.
 
@@ -366,7 +410,7 @@ Keep the AWS Grafana dashboard open while running the cycle:
 1. **At T+2s**: Watch the **Real-Time System State** gauge flip from `HEALTHY` to `ACTIVE INCIDENT`.
 2. **At T+3s**: Watch the **Latency Profiles** chart spike into the red (>2000ms).
 3. **At T+5s**: Observe the **5XX Error Rate** climb as upstream connection timeouts accumulate.
-4. **At T+8s**: As Claude's remediation executes on AWS, watch the latency line plummet immediately back to baseline and the status gauge turn green.
+4. **At T+8s**: As Blue Team remediation executes on AWS, watch the latency line plummet immediately back to baseline and the status gauge turn green.
 
 ---
 
@@ -472,36 +516,41 @@ terraform destroy -auto-approve
 
 ---
 
-### Offline Development Mode (Local Docker Sandbox)
-To run an offline sandbox on your workstation without cloud infrastructure:
-
-```bash
-# Grafana refuses to start without admin credentials (no default password)
-export GRAFANA_ADMIN_USER=your-admin
-export GRAFANA_ADMIN_PASSWORD=your-strong-password
-
-# Start local containers and offline agent sandbox
-docker compose up --build -d
-
-# Run local agent resilience cycle
-python orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
-
-# Teardown local containers and clean volumes
-docker compose down -v
-```
+Local Docker Compose (including Alertmanager and incident-bridge) is documented in [Installation step 6](#6-start-the-local-docker-compose-lab).
 
 ---
 
 ## AI incident diagnosis
 
-ResilienceOps can forward firing (and resolved) Prometheus alerts to an external Grok Bot webhook. The bot is expected to diagnose the incident and open a GitHub issue. The local stack never stores the webhook key, and the bridge will not log it.
+Incident diagnosis for Prometheus alerts is delivered by the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. ResilienceOps does not embed the bot; you import the template, point the incident-bridge at its webhook, and the bot files GitHub issues.
+
+### What the bot does
+
+- Receives enriched alerts at its webhook (`source: resilienceops`).
+- Diagnoses likely root cause from the evidence bundle (Prometheus metric summaries, recent `logs/agent_activity.jsonl` lines, optional Kubernetes events) **plus recent commits** in the watched GitHub repo.
+- Opens a GitHub issue labeled `incident`. If an issue for the **same fingerprint** is already open, it **comments on that issue** instead of opening a duplicate.
+- When the alert **resolves**, it comments on the issue (`send_resolved: true` on Alertmanager).
+- Messages the owner in chat for **firing critical** alerts (per the ping preference set at import).
+- Is **read-only**: it never restarts, scales, rolls back, or pushes code.
+
+**Roadmap (v2):** bot-driven self-healing. Not in this template.
 
 ### Alert flow
 
+```mermaid
+flowchart LR
+  services[Microservices] --> prom[Prometheus]
+  prom --> rules[Alert rules]
+  rules --> am[Alertmanager]
+  am --> bridge[incident-bridge]
+  bridge --> grok[Grok Bot webhook]
+  grok --> gh[GitHub incident issue]
+  grok --> chat[Owner chat ping]
+```
+
 1. **Prometheus** (`dashboards/prometheus.yml`) scrapes api-gw, order-service, and payment-service every 1s and evaluates `dashboards/alerts.yml`.
-2. Firing rules are sent to **Alertmanager** (`dashboards/alertmanager.yml`, published only on `127.0.0.1:9093`).
-3. Alertmanager groups alerts (`group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`) and POSTs them to the **incident-bridge** webhook with `send_resolved: true`.
-4. The bridge gathers a compact **evidence bundle** (last ~10 minutes of PromQL snapshots summarized as min/max/avg/last, recent `logs/agent_activity.jsonl` lines, optional Kubernetes events), then POSTs:
+2. Firing rules go to **Alertmanager** (`dashboards/alertmanager.yml`, `127.0.0.1:9093` only): `group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`, `send_resolved: true`.
+3. Alertmanager POSTs to **incident-bridge** (`127.0.0.1:8088/webhook`). The bridge attaches a compact evidence bundle (last ~10 minutes of PromQL snapshots as min/max/avg/last — not raw series), then POSTs:
 
 ```json
 {
@@ -512,59 +561,71 @@ ResilienceOps can forward firing (and resolved) Prometheus alerts to an external
 }
 ```
 
-5. If `GROK_WEBHOOK_URL` is unset, the bridge logs that the webhook is unconfigured and **drops the payload**. The rest of the lab keeps running.
+4. The Grok Bot diagnoses and opens or comments on a GitHub `incident` issue.
+5. If `GROK_WEBHOOK_URL` is unset, the bridge logs that the webhook is unconfigured and **drops** the payload. The rest of the lab keeps running.
 
-Alertmanager and the incident-bridge HTTP ports are bound to localhost only (or the compose network). They are not published on `0.0.0.0`.
+The webhook key is never logged. Evidence is secret-stripped. Payloads are capped at ~100KB.
 
-### Operator environment variables
+### Setup (match the bot panel)
 
-Copy `.env.example` to `.env` and set:
+1. Import the template: https://x.ai/bot/feQpDSeSki7HVgkDCBUaY
+2. Complete the first conversation: GitHub repo (GitHub connected), alert source, ping preference.
+3. In the bot's routine panel, copy webhook URL, webhook key, and authorization header format.
+4. Put them in `.env`:
 
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `GROK_WEBHOOK_URL` | Yes, to enable forwarding | empty (drop) | Destination for the enriched JSON payload |
-| `GROK_WEBHOOK_KEY` | Recommended | empty | Credential placed in the auth header; never committed or logged |
-| `GROK_WEBHOOK_AUTH_HEADER` | No | `Authorization` | Header name expected by the Grok Bot |
-| `GROK_WEBHOOK_AUTH_SCHEME` | No | `Bearer` | Scheme prefix. Set to empty to send the raw key as the header value |
+| Variable | Default | Purpose |
+|---|---|---|
+| `GROK_WEBHOOK_URL` | empty (drop) | Bot webhook URL from the routine panel |
+| `GROK_WEBHOOK_KEY` | empty | Webhook key; never committed or logged |
+| `GROK_WEBHOOK_AUTH_HEADER` | `Authorization` | Header **name** from the panel |
+| `GROK_WEBHOOK_AUTH_SCHEME` | `Bearer` | Scheme prefix. Empty string sends the raw key as the header value |
 
-Restart compose after changing `.env` so `incident-bridge` picks up the values:
+5. Start (or recreate) the stack **including alertmanager + incident-bridge**, then test:
+
+```bash
+docker compose up -d
+python scripts/send_test_alert.py --target alertmanager
+```
+
+Confirm an `incident` issue appears in the configured repo. To hit the bridge only: `python scripts/send_test_alert.py --target bridge`.
+
+Restart compose after changing `.env`:
 
 ```bash
 docker compose up -d --build incident-bridge alertmanager prometheus
 ```
 
-### Test with a synthetic alert
+---
 
-With the stack running (`docker compose up --build -d`):
+## Troubleshooting
 
-```bash
-# Preferred: inject via Alertmanager (full path: AM -> bridge -> Grok webhook)
-python scripts/send_test_alert.py --target alertmanager
+### No GitHub issue after an alert
 
-# Or POST the Alertmanager webhook body straight to the bridge
-python scripts/send_test_alert.py --target bridge
-```
+1. `curl -sS http://127.0.0.1:8088/healthz` — `webhook_configured` should be `true`.
+2. Bridge logs: `docker compose logs incident-bridge`. If URL is unset you will see a drop message. The key is never printed.
+3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine panel (no trailing whitespace).
+4. Confirm `GROK_WEBHOOK_AUTH_HEADER` and `GROK_WEBHOOK_AUTH_SCHEME` match the panel's authorization format. Wrong scheme or header name yields 401 from the bot.
+5. Confirm **GitHub is connected** in the Grok Bot and the first-run conversation named the repo that should receive issues.
+6. Confirm Alertmanager is up (`curl -sS http://127.0.0.1:9093/-/healthy`) and the synthetic alert returned HTTP 200.
 
-Equivalent curl against Alertmanager:
+### Duplicate issues vs comments
 
-```bash
-curl -sS -H 'Content-Type: application/json' \
-  -d '[{"labels":{"alertname":"SyntheticTestAlert","severity":"warning","service":"api-gw"},"annotations":{"summary":"Synthetic test alert"},"startsAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}]' \
-  http://127.0.0.1:9093/api/v2/alerts
-```
+The bot comments on an **already-open** issue for the same alert fingerprint instead of opening another. If you expected a new issue, close or check the existing `incident` issue.
 
-Check the bridge:
+### 5-minute dedupe (bridge)
 
-```bash
-curl -sS http://127.0.0.1:8088/healthz
-```
+The incident-bridge forwards the same `fingerprint` + `status` at most **once per 5 minutes**. Flapping firing alerts in that window are dropped at the bridge (resolved is a different status, so a resolve can still go through). Alertmanager `repeat_interval` is 1h.
 
-A flapping alert (`fingerprint` + `status`) is forwarded at most once per 5 minutes. Payloads are capped at ~100KB. Evidence collection is secret-stripped (API keys, `Authorization` headers, password fields).
+### Compose will not start Grafana
+
+`GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` must be set. There is no default password.
 
 ---
 
 ## Detailed Technical Documentation
 
-For the comprehensive technical specification covering mathematical SLO formulations, cgroup kernel limits, Claude 3.7 prompt architectures, Kubernetes agent sandbox security, and AWS network topology, refer to:
+**This README is the current source of truth.** For a historical architecture brief (SLO notes, sandbox diagrams, AWS topology), see:
 
-**[Complete Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf)**
+**[Technical Documentation (PDF)](docs/ResilienceOps_Technical_Documentation.pdf)**
+
+Prefer this README — and `agents/config.py` for model IDs — when the PDF disagrees. See also [docs/README.md](docs/README.md).
