@@ -14,6 +14,9 @@ TARGETS = [
     ROOT / "docker-compose.yml",
     ROOT / ".pre-commit-config.yaml",
     ROOT / ".github" / "workflows" / "ci.yml",
+    ROOT / "dashboards" / "prometheus.yml",
+    ROOT / "dashboards" / "alerts.yml",
+    ROOT / "dashboards" / "alertmanager.yml",
 ]
 
 

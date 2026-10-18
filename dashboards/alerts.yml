@@ -1,0 +1,216 @@
+# ResilienceOps Prometheus alerting rules.
+# Thresholds match agents/config.py (SLO_MAX_P99_LATENCY_MS=1200, SLO_MAX_ERROR_RATE_PERCENT=2.0)
+# and docker-compose Redis --maxclients 50. `for:` windows are short for the 1s-scrape lab.
+
+groups:
+  - name: resilienceops.availability
+    interval: 5s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 10s
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus scrape target {{ $labels.instance }} (job {{ $labels.job }}) has been unreachable for more than 10s (up == 0)."
+          evidence_metrics: "up"
+
+  - name: resilienceops.slo
+    interval: 5s
+    rules:
+      - alert: APIGatewayHighErrorRate
+        expr: |
+          (
+            (
+              sum(rate(http_requests_total{job="api-gw",status=~"5.."}[30s]))
+              /
+              sum(rate(http_requests_total{job="api-gw"}[30s]))
+            ) * 100
+          )
+          > 2
+          and
+          sum(rate(http_requests_total{job="api-gw"}[30s])) > 0.05
+        for: 20s
+        labels:
+          severity: critical
+          service: api-gw
+        annotations:
+          summary: "API gateway 5xx error rate exceeds the 2% SLO"
+          description: "http_requests_total 5xx share on api-gw is {{ $value | humanize }}% over 30s (SLO_MAX_ERROR_RATE_PERCENT=2.0)."
+          evidence_metrics: "http_requests_total"
+
+      - alert: OrderServiceHighErrorRate
+        expr: |
+          (
+            (
+              sum(rate(orders_processed_total{status!="success"}[30s]))
+              /
+              sum(rate(orders_processed_total[30s]))
+            ) * 100
+          )
+          > 2
+          and
+          sum(rate(orders_processed_total[30s])) > 0.05
+        for: 20s
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order-service error rate exceeds the 2% SLO"
+          description: "Non-success orders_processed_total share is {{ $value | humanize }}% over 30s (SLO_MAX_ERROR_RATE_PERCENT=2.0). Typical chaos: error-rate injection, Redis starvation, or downstream payment failure."
+          evidence_metrics: "orders_processed_total"
+
+      - alert: PaymentServiceHighErrorRate
+        expr: |
+          (
+            (
+              sum(rate(payments_processed_total{status!="success"}[30s]))
+              /
+              sum(rate(payments_processed_total[30s]))
+            ) * 100
+          )
+          > 2
+          and
+          sum(rate(payments_processed_total[30s])) > 0.05
+        for: 20s
+        labels:
+          severity: critical
+          service: payment-service
+        annotations:
+          summary: "Payment-service failure rate exceeds the 2% SLO"
+          description: "Non-success payments_processed_total share is {{ $value | humanize }}% over 30s (SLO_MAX_ERROR_RATE_PERCENT=2.0). Typical chaos: gateway outage or packet loss."
+          evidence_metrics: "payments_processed_total"
+
+      - alert: APIGatewayP99LatencySLO
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="api-gw"}[30s]))
+          ) > 1.2
+        for: 20s
+        labels:
+          severity: critical
+          service: api-gw
+        annotations:
+          summary: "API gateway p99 latency exceeds the 1200ms SLO"
+          description: "http_request_duration_seconds p99 is {{ $value | humanizeDuration }} (SLO_MAX_P99_LATENCY_MS=1200)."
+          evidence_metrics: "http_request_duration_seconds"
+
+      - alert: OrderServiceP99LatencySLO
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(order_processing_duration_seconds_bucket[30s]))
+          ) > 1.2
+        for: 20s
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order-service p99 latency exceeds the 1200ms SLO"
+          description: "order_processing_duration_seconds p99 is {{ $value | humanizeDuration }} (SLO_MAX_P99_LATENCY_MS=1200). Typical chaos: DB latency, CPU burn, or memory pressure."
+          evidence_metrics: "order_processing_duration_seconds"
+
+      - alert: PaymentServiceP99LatencySLO
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(payment_processing_duration_seconds_bucket[30s]))
+          ) > 1.2
+        for: 20s
+        labels:
+          severity: critical
+          service: payment-service
+        annotations:
+          summary: "Payment-service p99 latency exceeds the 1200ms SLO"
+          description: "payment_processing_duration_seconds p99 is {{ $value | humanizeDuration }} (SLO_MAX_P99_LATENCY_MS=1200). Typical chaos: tc netem delay on eth0."
+          evidence_metrics: "payment_processing_duration_seconds"
+
+  - name: resilienceops.infra
+    interval: 5s
+    rules:
+      - alert: OrderServiceMemoryLeak
+        expr: active_memory_leak_bytes > 16777216
+        for: 10s
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Order-service memory leak gauge is growing"
+          description: "active_memory_leak_bytes is {{ $value | humanize1024 }}B (warning threshold 16MiB). Chaos vector: POST /fault/leak-memory."
+          evidence_metrics: "active_memory_leak_bytes,process_resident_memory_bytes"
+
+      - alert: OrderServiceMemoryLeakCritical
+        expr: active_memory_leak_bytes > 67108864
+        for: 10s
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order-service memory leak is approaching the cgroup ceiling"
+          description: "active_memory_leak_bytes is {{ $value | humanize1024 }}B (critical threshold 64MiB; container memory limit 256MiB). OOMKill (exit 137) is likely."
+          evidence_metrics: "active_memory_leak_bytes,process_resident_memory_bytes"
+
+      - alert: OrderServiceMemoryPressure
+        expr: process_resident_memory_bytes{job="order-service"} > 209715200
+        for: 15s
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Order-service RSS is above 200MiB"
+          description: "process_resident_memory_bytes is {{ $value | humanize1024 }}B versus the 256MiB cgroup limit."
+          evidence_metrics: "process_resident_memory_bytes,active_memory_leak_bytes"
+
+      - alert: RedisConnectionSaturationWarning
+        expr: redis_active_connections_count >= 40
+        for: 5s
+        labels:
+          severity: warning
+          service: order-service
+        annotations:
+          summary: "Redis client pool is nearing maxclients=50"
+          description: "redis_active_connections_count is {{ $value }} (80% of Redis maxclients 50)."
+          evidence_metrics: "redis_active_connections_count"
+
+      - alert: RedisConnectionSaturation
+        expr: redis_active_connections_count >= 48
+        for: 5s
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Redis connection pool is saturated"
+          description: "redis_active_connections_count is {{ $value }} versus Redis maxclients 50. Subsequent order requests will raise ConnectionError. Chaos vector: POST /fault/redis-starvation."
+          evidence_metrics: "redis_active_connections_count,orders_processed_total"
+
+  - name: resilienceops.payment
+    interval: 5s
+    rules:
+      - alert: PaymentServiceOutage
+        expr: sum(rate(payments_processed_total{status="503_outage"}[30s])) > 0.05
+        for: 10s
+        labels:
+          severity: critical
+          service: payment-service
+        annotations:
+          summary: "Payment gateway outage is returning HTTP 503"
+          description: "payments_processed_total{status=\"503_outage\"} rate is {{ $value | humanize }} /s. Chaos vector: POST /fault/outage."
+          evidence_metrics: "payments_processed_total"
+
+      - alert: PaymentServiceLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(payment_processing_duration_seconds_bucket[30s]))
+          ) > 1.2
+        for: 20s
+        labels:
+          severity: warning
+          service: payment-service
+        annotations:
+          summary: "Payment-service p95 latency exceeds 1200ms"
+          description: "payment_processing_duration_seconds p95 is {{ $value | humanizeDuration }} (SLO_MAX_P99_LATENCY_MS=1200 applied at p95 as an early warning before the p99 SLO page)."
+          evidence_metrics: "payment_processing_duration_seconds"

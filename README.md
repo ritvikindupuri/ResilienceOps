@@ -134,7 +134,9 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 | **Backend / Services** | Python / FastAPI / Uvicorn | `3.11` / `0.111.0` | High-throughput asynchronous target microservices & API Gateway |
 | | HTTPX | `0.27.0` | Asynchronous inter-service HTTP client and proxy router |
 | | Pydantic | `2.8.2` | Data validation and JSON schema enforcement |
-| **Observability** | Prometheus | `v2.52.0` | 1-second high-resolution metric collection and PromQL engine |
+| **Observability** | Prometheus | `v2.52.0` | 1-second high-resolution metric collection, PromQL engine, and alerting rules |
+| | Alertmanager | `v0.27.0` | Groups SLO/infra alerts and posts them to the incident bridge (localhost only) |
+| | Incident Bridge | FastAPI | Enriches alerts with Prometheus/log evidence and forwards them to an AI diagnosis webhook |
 | | Grafana | `10.4.2` | Pure infrastructure monitoring dashboard (:3000) |
 | | AWS CloudWatch | Native AWS | Dedicated security audit dashboard tracking exact agent commands and outputs |
 | **Load Testing** | Python Async Worker Engine / k6 | Custom / `0.50+` | Concurrent multi-step consumer workflow traffic generator |
@@ -487,6 +489,77 @@ python orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
 # Teardown local containers and clean volumes
 docker compose down -v
 ```
+
+---
+
+## AI incident diagnosis
+
+ResilienceOps can forward firing (and resolved) Prometheus alerts to an external Grok Bot webhook. The bot is expected to diagnose the incident and open a GitHub issue. The local stack never stores the webhook key, and the bridge will not log it.
+
+### Alert flow
+
+1. **Prometheus** (`dashboards/prometheus.yml`) scrapes api-gw, order-service, and payment-service every 1s and evaluates `dashboards/alerts.yml`.
+2. Firing rules are sent to **Alertmanager** (`dashboards/alertmanager.yml`, published only on `127.0.0.1:9093`).
+3. Alertmanager groups alerts (`group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`) and POSTs them to the **incident-bridge** webhook with `send_resolved: true`.
+4. The bridge gathers a compact **evidence bundle** (last ~10 minutes of PromQL snapshots summarized as min/max/avg/last, recent `logs/agent_activity.jsonl` lines, optional Kubernetes events), then POSTs:
+
+```json
+{
+  "status": "firing",
+  "alerts": [{"labels": {}, "annotations": {}, "fingerprint": "", "startsAt": "", "endsAt": ""}],
+  "evidence": {},
+  "source": "resilienceops"
+}
+```
+
+5. If `GROK_WEBHOOK_URL` is unset, the bridge logs that the webhook is unconfigured and **drops the payload**. The rest of the lab keeps running.
+
+Alertmanager and the incident-bridge HTTP ports are bound to localhost only (or the compose network). They are not published on `0.0.0.0`.
+
+### Operator environment variables
+
+Copy `.env.example` to `.env` and set:
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `GROK_WEBHOOK_URL` | Yes, to enable forwarding | empty (drop) | Destination for the enriched JSON payload |
+| `GROK_WEBHOOK_KEY` | Recommended | empty | Credential placed in the auth header; never committed or logged |
+| `GROK_WEBHOOK_AUTH_HEADER` | No | `Authorization` | Header name expected by the Grok Bot |
+| `GROK_WEBHOOK_AUTH_SCHEME` | No | `Bearer` | Scheme prefix. Set to empty to send the raw key as the header value |
+
+Restart compose after changing `.env` so `incident-bridge` picks up the values:
+
+```bash
+docker compose up -d --build incident-bridge alertmanager prometheus
+```
+
+### Test with a synthetic alert
+
+With the stack running (`docker compose up --build -d`):
+
+```bash
+# Preferred: inject via Alertmanager (full path: AM -> bridge -> Grok webhook)
+python scripts/send_test_alert.py --target alertmanager
+
+# Or POST the Alertmanager webhook body straight to the bridge
+python scripts/send_test_alert.py --target bridge
+```
+
+Equivalent curl against Alertmanager:
+
+```bash
+curl -sS -H 'Content-Type: application/json' \
+  -d '[{"labels":{"alertname":"SyntheticTestAlert","severity":"warning","service":"api-gw"},"annotations":{"summary":"Synthetic test alert"},"startsAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}]' \
+  http://127.0.0.1:9093/api/v2/alerts
+```
+
+Check the bridge:
+
+```bash
+curl -sS http://127.0.0.1:8088/healthz
+```
+
+A flapping alert (`fingerprint` + `status`) is forwarded at most once per 5 minutes. Payloads are capped at ~100KB. Evidence collection is secret-stripped (API keys, `Authorization` headers, password fields).
 
 ---
 

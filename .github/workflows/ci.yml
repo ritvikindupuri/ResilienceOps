@@ -23,13 +23,36 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r services/incident-bridge/requirements.txt
 
       - name: Run unit tests
         run: python -m pytest tests/ -q
 
       - name: Validate Kubernetes YAML
         run: python tests/validate_yaml.py
+
+      - name: Validate Prometheus rules and Alertmanager config
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD/dashboards/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            --entrypoint /bin/promtool \
+            prom/prometheus:v2.52.0 \
+            check rules /etc/prometheus/alerts.yml
+          docker run --rm \
+            -v "$PWD/dashboards/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/dashboards/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            --entrypoint /bin/promtool \
+            prom/prometheus:v2.52.0 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm \
+            -v "$PWD/dashboards/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+            --entrypoint /bin/amtool \
+            prom/alertmanager:v0.27.0 \
+            check-config /etc/alertmanager/alertmanager.yml
 
   gitleaks:
     runs-on: ubuntu-latest
