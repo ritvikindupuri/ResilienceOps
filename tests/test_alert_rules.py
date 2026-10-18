@@ -87,6 +87,8 @@ def test_compose_binds_alertmanager_and_bridge_to_localhost():
     assert "127.0.0.1:9093:9093" in services["alertmanager"]["ports"]
     assert "127.0.0.1:8088:8080" in services["incident-bridge"]["ports"]
     assert "127.0.0.1:9090:9090" in services["prometheus"]["ports"]
+    # Default `docker compose up` must not inject faults. Opt in with --profile agents.
+    assert services["agent-sandbox"].get("profiles") == ["agents"]
     assert "dashboards/alerts.yml:/etc/prometheus/alerts.yml" in " ".join(
         services["prometheus"]["volumes"]
     )

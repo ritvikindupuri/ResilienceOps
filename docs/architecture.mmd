@@ -1,0 +1,66 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Arial, Helvetica, sans-serif",
+    "fontSize": "16px",
+    "primaryColor": "#EEF2FF",
+    "primaryTextColor": "#111827",
+    "primaryBorderColor": "#4338CA",
+    "lineColor": "#4B5563",
+    "secondaryColor": "#F8FAFC",
+    "tertiaryColor": "#ECFDF5",
+    "clusterBkg": "#F8FAFC",
+    "clusterBorder": "#94A3B8"
+  },
+  "flowchart": { "curve": "basis", "nodeSpacing": 28, "rankSpacing": 36, "padding": 12 }
+}}%%
+flowchart TB
+  subgraph workload ["1. Workload"]
+    TG["Traffic generator<br/>compose RPS_TARGET=20"]
+  end
+
+  subgraph apps ["2. Target microservices"]
+    GW["api-gw :8000"]
+    OS["order-service :8001<br/>/fault/leak-memory redis-starvation cpu-burn crash"]
+    PS["payment-service :8002<br/>/fault/latency drop-rate outage tc netem"]
+    RD[("Redis 7 maxclients 50")]
+    PG[("PostgreSQL 16")]
+    GW --> OS
+    GW --> PS
+    OS --> RD
+    OS --> PG
+    OS --> PS
+  end
+
+  subgraph k3s ["3. k3s namespace sre-agent-sandbox"]
+    RED["Red Team chaos<br/>planner · stresser · tc netem"]
+    BLUE["Blue Team heal<br/>monitor · RCA · remediator"]
+  end
+
+  subgraph obs ["4. Observability localhost"]
+    PROM["Prometheus v2.52.0<br/>scrape 1s · 127.0.0.1:9090<br/>rule_files alerts.yml<br/>ServiceDown · 5xx/p99 SLO<br/>memory leak · Redis 50<br/>payment outage/latency"]
+    GRAF["Grafana 10.4.2 :3000<br/>liveNow · not on alert path"]
+    AM["Alertmanager v0.27.0<br/>127.0.0.1:9093<br/>send_resolved true"]
+    BR["incident-bridge<br/>host 127.0.0.1:8088<br/>enrich + 5 min dedupe"]
+    PROM -->|"PromQL datasource"| GRAF
+    PROM -->|"firing rules"| AM
+    AM -->|"POST /webhook"| BR
+  end
+
+  subgraph grok ["5. Grok Bot template AI Incident Diagnosis"]
+    BOT["Webhook · read-only<br/>x.ai/bot/feQpDSeSki7HVgkDCBUaY"]
+    GH["GitHub issue<br/>label incident"]
+    CHAT["Owner chat ping<br/>firing critical"]
+    BOT --> GH
+    BOT --> CHAT
+  end
+
+  TG -->|"HTTP"| GW
+  GW -.->|" /metrics 1s "| PROM
+  OS -.->|" /metrics 1s "| PROM
+  PS -.->|" /metrics 1s "| PROM
+  RED -->|"POST /fault/*"| OS
+  RED -->|"tc qdisc netem"| PS
+  BLUE -->|"GET /health + PromQL SLO"| GW
+  BLUE -->|"FaultCatalog.reset"| OS
+  BR -->|"JSON source=resilienceops"| BOT

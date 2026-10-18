@@ -54,37 +54,24 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
 ## System Architecture
 
 <p align="center">
-  <img src="docs/images/infraattack_platform_architecture.png" alt="Autonomous SRE Resilience Platform Architecture" width="950" />
+  <img src="docs/images/infraattack_platform_architecture.png" alt="ResilienceOps current runtime architecture" width="950" />
 </p>
-<p align="center"><b>Figure 1: End-to-End System & Runtime Architecture</b></p>
+<p align="center"><b>Figure 1: Current runtime — services, Prometheus rules, Alertmanager, incident-bridge, Grok Bot, GitHub, Grafana, k3s agents</b></p>
+<p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (render with <code>scripts/render_architecture.sh</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
 
-### Architecture Execution Lifecycle
+### Step-by-step flow (matches the code)
 
-The platform executes a closed-loop resilience lifecycle from user traffic ingress down to kernel manipulation, sub-second telemetry, in-cluster LLM reasoning, automated recovery, CloudWatch logging, and external AI incident diagnosis:
+Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TARGET` (compose default **20**; `traffic-generator/load_generator.py` defaults to **25** only if you run it on the host with no env). `api-gw` reverse-proxies `/api/orders*` to `order-service:8001` and `/api/payments*` to `payment-service:8002`. Order-service writes Redis + PostgreSQL and POSTs `/payments`. Prometheus (`dashboards/prometheus.yml`) scrapes `/metrics` every **1s** from those three jobs and evaluates `dashboards/alerts.yml`. Grafana (`:3000`) is a PromQL dashboard only — it is **not** on the alert path. Prometheus is published as `127.0.0.1:9090` only.
 
-1. **Step 1 — Client Traffic Generation & Ingress Routing**:
-   The **Traffic Generator** simulates realistic production traffic (20 RPS) consisting of asynchronous multi-step consumer journeys (catalog search, cart creation, checkout submission, payment settlement). Requests enter through the **AWS Internet Gateway** and hit the **API Gateway** (`:8000`), which manages reverse-proxy routing, timeout thresholds, and request rate-limiting.
+After a fault, **two code paths** run. Path A is `orchestrator.py`. Path B is Prometheus → Alertmanager → incident-bridge → Grok Bot. Stages below are what the code actually does.
 
-2. **Step 2 — Microservice Request Propagation & Stateful Processing**:
-   The API Gateway forwards business requests downstream to the **Order Service** (`:8001`) and **Payment Service** (`:8002`):
-   - The **Order Service** queries and updates session state in **Redis 7** (in-memory caching & client connection pool) and commits order records to **PostgreSQL 16**.
-   - The **Payment Service** executes payment authorizations and async credit card validations across network sockets.
-
-3. **Step 3 — High-Resolution Telemetry Scraping (1-Second Polling Engine)**:
-   All microservices continuously expose RED golden signals (Rate, Errors, Duration) and process memory allocations via `/metrics`. **Prometheus** scrapes every container on a 1-second interval, evaluates `dashboards/alerts.yml`, and feeds real-time telemetry into the **Grafana SRE Performance Monitor** dashboard (`:3000`), tracking p50/p95/p99 latencies, error percentages, and cgroup memory limits. Prometheus (`9090`) and Alertmanager (`9093`) bind to localhost only.
-
-4. **Step 4 — Offensive Attack Planning & Kernel-Level Execution (Red Team)**:
-   Inside the quarantined **Kubernetes Agent Sandbox** (`sre-agent-sandbox`), the **Resilience Attack Planner** queries current platform health and invokes the configured strategist model (`claude-sonnet-4-6` by default) to devise an attack vector. The planner delegates execution:
-   - **tc netem Adversary**: Injects Linux kernel queuing discipline delays (`tc qdisc add dev eth0 root netem delay 2500ms 100ms`) or packet drops onto the Payment Service.
-   - **Resource Stresser**: Squeezes the Order Service through cgroup memory spikes or triggers Redis connection pool exhaustion (`curl -X POST /fault/redis-starvation?connections=55`).
-
-5. **Step 5 — Real-Time SLO Breach Detection (Blue Team Sentinel)**:
-   As the fault manifests in production, upstream connection pools starve and payment latency spikes. The **Health & Uptime Sentinel** ingests Prometheus anomaly signals. When p99 latency breaches 1200ms or 5XX error rates cross 2.0%, the Sentinel declares an incident (`SEV-1`) and activates the Blue Team response pipeline.
-
-6. **Step 6 — Root Cause Analysis (Blue Team + configured Claude model)**:
-   The **Root Cause Investigator** extracts live metric anomalies, process memory stats, socket states, and container events, querying the diagnostic model (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) over outbound HTTPS (port 443). The model synthesizes competing hypotheses and pinpoints the fault (for example Linux `tc netem` delay or Redis client-pool starvation) with a confidence score.
-
-   Independently, firing Prometheus alerts are grouped by **Alertmanager** and POSTed to **incident-bridge**, which attaches a compact evidence bundle and forwards JSON to the Grok Bot **AI Incident Diagnosis** webhook. That bot opens or comments on a GitHub `incident` issue. It does **not** mutate the cluster.
+1. **Fault injection** (`orchestrator.py` phases 2–3) — `faultStrategistAgent.plan_campaign` then either `InfraDisruptorAgent.execute_fault` (order-service `POST /fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`) or `NetworkAdversaryAgent.execute_fault` (payment-service `tc netem` via `/fault/latency` or `/fault/drop-rate`). `--scenario` strings the CLI documents: `MEMORY_EXHAUSTION`, `REDIS_CONNECTION_STARVATION`, `CPU_SATURATION`, `NETWORK_LATENCY`, `PACKET_LOSS`. Dispatch is substring-based: `NETWORK` / `PACKET` / `LATENCY` → network agent; `REDIS` / `CPU` / `CRASH` → infra agent; anything else → memory leak. The catalog records network faults as `KERNEL_TC_NETEM_LATENCY` / `KERNEL_TC_NETEM_PACKET_LOSS` (those names also work as `--scenario` because they contain `LATENCY` / `PACKET`).
+2. **Detection** (phase 4, in parallel with Prometheus) — `IncidentMonitor.inspect_telemetry` `GET`s `/health` on api-gw (4s timeout), order-service, and payment-service. If `PROMETHEUS_URL` answers, it also queries p99 of `http_request_duration_seconds` and the 5xx share of `http_requests_total`. `evaluate_slos` declares an incident when p99/probe latency > `SLO_MAX_P99_LATENCY_MS` (1200), error rate > `SLO_MAX_ERROR_RATE_PERCENT` (2), or a service returns HTTP >= 500. The loop is at most **9 ticks of 1s** (`for tick in range(1, 10)`). Prometheus evaluates the same SLO/infra/payment rules in `dashboards/alerts.yml` every 1s independently of the orchestrator.
+3. **Alert** — when a rule stays true for its `for:` window, Prometheus sends it to Alertmanager (`127.0.0.1:9093`). Alertmanager groups (`group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`) and POSTs to `http://incident-bridge:8080/webhook` with `send_resolved: true`.
+4. **Enrichment** — `incident-bridge` (`services/incident-bridge/app.py`) builds an evidence bundle (PromQL range summaries for `EVIDENCE_WINDOW_SECONDS` default 600, tailed `AGENT_ACTIVITY_LOG`, optional k8s events), caps the payload at `PAYLOAD_MAX_BYTES` (~100KB), and POSTs `{status, alerts, evidence, source: "resilienceops"}` using `GROK_WEBHOOK_*`. Same `fingerprint`+`status` is forwarded at most once per `DEDUPE_TTL_SECONDS` (300). If `GROK_WEBHOOK_URL` is empty, the bridge logs `GROK_WEBHOOK_URL is unset; dropping alert payload` and returns `"dropped_unconfigured"` — the rest of the lab keeps running. The webhook key is never logged.
+5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` uses telemetry plus optional k8s events and `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) to pick a root cause and runbook (e.g. `MEMORY_EXHAUSTION_OOM` → `EVICT_CONTAINER_AND_PURGE_LEAK`). Path B: the imported Grok Bot template **AI Incident Diagnosis** diagnoses from the evidence bundle **plus recent commits** in the watched GitHub repo. The bot is read-only (no restart/scale/rollback/push).
+6. **Issue** — the Grok Bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate. Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
+7. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service) and may restart/scale via k8s if the toolkit is available. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch. Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The bot comments on the GitHub issue. The bot does not reset the fault.
 
 ```mermaid
 flowchart LR
@@ -96,18 +83,6 @@ flowchart LR
   grok --> gh[GitHub incident issue]
   grok --> chat[Owner chat ping]
 ```
-
-7. **Step 7 — Automated Remediation & Stateful Recovery**:
-   The **Automated Recovery Fixer** validates the RCA findings against hardened operational runbooks. It issues surgical recovery commands directly to the affected service:
-   - Purging raw Linux kernel traffic control queuing disciplines (`tc qdisc del dev eth0 root netem`).
-   - Flushing starving client sockets and resetting the Redis connection pool.
-   - Reclaiming allocated memory buffers or triggering an orchestrated rolling pod restart.
-
-8. **Step 8 — Health Verification & Incident Post-Mortem Archival**:
-   The Blue Team polls the health and metrics endpoints for 10 consecutive ticks, confirming that p99 latency drops back below 800ms, 5XX errors return to 0.00%, and memory returns beneath the cgroup quota. Once normalized, the **Incident Post-Mortem Agent** auto-generates a structured Markdown post-mortem detailing timeline, root cause, and recovery actions in `reports/`.
-
-9. **Step 9 — CloudWatch Audit Logging & Operational Dashboards**:
-   Throughout the entire lifecycle, every single shell command executed by Red and Blue team agents, along with exit codes and raw stdout/stderr, is streamed synchronously to **AWS CloudWatch Logs** (`/sre/autonomous-agent-audit`). The dual CloudWatch dashboards (**Agent-Command-Log** and **System-Fault-Metrics**) update in real-time to provide a permanent, auditable operational trail.
 
 ---
 
@@ -171,10 +146,12 @@ Follow these steps in order: local lab first (compose + Grok Bot), then AWS + k3
 
 ### 1. Prerequisites
 
-- **Git**, **Python 3.10+**, and **Docker** with Docker Compose v2.
+- **Git**, **Python 3.10+**, and **Docker** with Docker Compose v2 (`docker compose version`).
+- Commands below use **`python3`**. Ubuntu/Debian typically have no `python` alias; if `python3` is missing, install it (`sudo apt-get install python3 python3-pip`).
 - **Anthropic API key** for the in-cluster Red/Blue agents (models listed in `agents/config.py`).
 - **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template (GitHub must be connected to the bot).
 - For AWS: **AWS CLI** (`aws sts get-caller-identity`) and **Terraform 1.5+**.
+- Regenerating the architecture PNG: `librsvg2-bin` (`rsvg-convert`) or Google Chrome; then `./scripts/render_architecture.sh`.
 
 ### 2. Clone the repository
 
@@ -193,28 +170,71 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Edit `.env`. There is **no** default Grafana password. Do not commit `.env` (see [SECURITY.md](SECURITY.md)).
+Edit `.env`. There is **no** default Grafana password. **`GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` must be non-empty** before any compose command: the compose file uses `${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER}` and interpolation fails otherwise. Do not commit `.env` (see [SECURITY.md](SECURITY.md)).
 
-| Variable | Where it is used | Notes |
+Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed in [`.env.example`](.env.example). Compose interpolates Grafana, Postgres, Grok webhook, bridge tunables, `RPS_TARGET` / `CONCURRENCY`, agent-sandbox `ANTHROPIC_API_KEY`, and SLO thresholds from the same file.
+
+| Variable | Used by | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Agent sandbox / orchestrator | Required for in-cluster Claude calls |
-| `GRAFANA_ADMIN_USER` | `docker compose` Grafana | Required; compose fails closed if unset |
-| `GRAFANA_ADMIN_PASSWORD` | `docker compose` Grafana | Required; no `admin`/`admin` default |
-| `POSTGRES_PASSWORD` | Postgres + order-service | Compose falls back to `sre_password` if unset; set a real value for anything beyond a throwaway lab |
-| `EC2_INSTANCE_ID` | `deploy_remote.py` / SSM | Required before remote deploy; no default |
-| `AWS_REGION` | Deploy helpers | Default `us-east-1` |
-| `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally |
+| `GRAFANA_ADMIN_USER` | compose Grafana | **Required.** Empty → `docker compose config` exits non-zero: `GRAFANA_ADMIN_USER: Set GRAFANA_ADMIN_USER` |
+| `GRAFANA_ADMIN_PASSWORD` | compose Grafana | **Required.** No `admin`/`admin` default |
+| `ANTHROPIC_API_KEY` | `agents/common/llm_engine.py`, compose `agent-sandbox` | Required for in-cluster Claude calls. Compose uses `${ANTHROPIC_API_KEY:-}` so an empty value still starts the sandbox |
+| `POSTGRES_PASSWORD` | compose postgres + order-service | `${POSTGRES_PASSWORD:-sre_password}` |
+| `EC2_INSTANCE_ID` | `agents.config.require_ec2_instance_id`, `deploy_remote.py` | Required before remote deploy; no default |
+| `SRE_EC2_INSTANCE_ID` | same helper | Alias for `EC2_INSTANCE_ID` |
+| `AWS_REGION` | `agents/config.py` | Default `us-east-1` |
+| `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally (`webhook_configured: false`) |
 | `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the bot routine panel |
 | `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
-| `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`; set empty to send the raw key |
+| `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`. Compose uses `${GROK_WEBHOOK_AUTH_SCHEME-Bearer}` so a present-but-empty value sends the raw key |
+| `API_GATEWAY_URL` | `agents/config.py` | Host default `http://localhost:8000`. Compose sandbox sets `http://api-gw:8000` |
+| `ORDER_SERVICE_URL` | `agents/config.py`, order/payment clients | Host default `http://localhost:8001` |
+| `PAYMENT_SERVICE_URL` | `agents/config.py`, api-gw, order-service | Host default `http://localhost:8002` |
+| `PROMETHEUS_URL` | `agents/config.py`, incident-bridge | Host default `http://localhost:9090`. Bridge container uses `BRIDGE_PROMETHEUS_URL` |
+| `BRIDGE_PROMETHEUS_URL` | compose → bridge `PROMETHEUS_URL` | Default `http://prometheus:9090` (compose DNS) |
+| `LOGS_DIR` | `agents/config.py` | Default `logs` |
+| `AGENT_ACTIVITY_LOG` | incident-bridge | Compose hardcodes `/app/logs/agent_activity.jsonl` (the `./logs` volume). Host default in `.env.example` is `logs/agent_activity.jsonl` |
+| `EVIDENCE_WINDOW_SECONDS` | incident-bridge | Default `600` |
+| `PAYLOAD_MAX_BYTES` | incident-bridge | Default `102400` |
+| `DEDUPE_TTL_SECONDS` | incident-bridge | Default `300` |
+| `WEBHOOK_TIMEOUT_SECONDS` | incident-bridge | Default `10` |
+| `WEBHOOK_MAX_RETRIES` | incident-bridge | Default `3` |
+| `LOG_TAIL_LINES` | incident-bridge | Default `40` |
+| `K8S_EVIDENCE_ENABLED` | incident-bridge | Default `true`; `0`/`false`/`no` disables |
+| `SLO_MAX_P99_LATENCY_MS` | `agents/config.py`, compose `agent-sandbox` | Default `1200.0` (must match `dashboards/alerts.yml` `> 1.2`) |
+| `SLO_MAX_ERROR_RATE_PERCENT` | `agents/config.py`, compose `agent-sandbox` | Default `2.0` |
+| `MODEL_fault_STRATEGIST` | `agents/config.py` | Default `claude-sonnet-4-6` (name is spelled this way in code) |
+| `MODEL_INFRA_DISRUPTOR` | `agents/config.py` | Default `claude-sonnet-4-6` |
+| `MODEL_NETWORK_ADVERSARY` | `agents/config.py` | Default `claude-haiku-4-5-20251001` |
+| `MODEL_INCIDENT_MONITOR` | `agents/config.py` | Default `claude-haiku-4-5-20251001` |
+| `MODEL_DIAGNOSTIC_RCA` | `agents/config.py` | Default `claude-sonnet-4-6` |
+| `MODEL_AUTO_REMEDIATOR` | `agents/config.py` | Default `claude-sonnet-4-6` |
+| `MODEL_POST_MORTEM` | `agents/config.py` | Default `claude-sonnet-4-6` |
+| `DEFAULT_MODEL` | `agents/config.py` | Default = `MODEL_DIAGNOSTIC_RCA` |
+| `AI_PROVIDER` | `agents/config.py` | Default `anthropic` |
+| `GEMINI_API_KEY` | `agents/config.py` | Unused by default; kept so `arena_runner` imports |
+| `OPENAI_API_KEY` | `agents/config.py` | Unused by default; kept so `arena_runner` imports |
+| `CW_LOG_GROUP_ATTACKER` | `agents/config.py` | Default `/sre/autonomous-agent-audit` |
+| `CW_LOG_GROUP_DEFENDER` | `agents/config.py` | Default `/sre/autonomous-agent-audit` |
+| `CW_LOG_GROUP_INCIDENTS` | `agents/config.py` | Default `/sre/autonomous-agent-incidents` |
+| `GATEWAY_URL` | `traffic-generator/load_generator.py`; fallback in `structured_logger.py` | Compose hardcodes `http://api-gw:8000` inside the generator container |
+| `RPS_TARGET` | traffic-generator | Compose default **20**. Module default is **25** if unset |
+| `CONCURRENCY` | traffic-generator | Compose default **8**. Module default is **10** if unset |
+| `REDIS_HOST` / `REDIS_PORT` | order-service | Compose sets `redis` / `6379` |
+| `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_DB` | order-service | Compose sets `postgres` / `5432` / `sre_user` / `orders_db` |
 
 Terraform ingress is **not** an env var. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set `allowed_cidr` to your `/32` or office CIDR. `0.0.0.0/0` is rejected.
+
+`orchestrator.py` loads `.env` via `python-dotenv` in `agents/common/llm_engine.py` (`load_dotenv()` does not override variables already in the process environment). Compose interpolates `.env` itself.
 
 ### 4. Install Python dependencies
 
 ```bash
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
+python3 -m pip install -r services/incident-bridge/requirements.txt
 ```
+
+`requirements.txt` covers host-side agents, pytest, and `scripts/send_test_alert.py` (`httpx`). The bridge file adds FastAPI/Uvicorn if you run the bridge without Compose.
 
 ### 5. Import the Grok Bot template and copy webhook credentials
 
@@ -229,29 +249,77 @@ Details: [AI incident diagnosis](#ai-incident-diagnosis).
 
 Grafana, Alertmanager, and the incident-bridge are part of this stack. Alertmanager (`127.0.0.1:9093`) and the bridge (`127.0.0.1:8088`) are localhost-only.
 
+Validate interpolation (this **fails** if Grafana admin vars are still empty):
+
+```bash
+docker compose config >/dev/null
+```
+
+Expected: no output, exit 0. If you skipped Grafana vars, Compose exits non-zero and prints:
+
+```text
+error while interpolating services.grafana.environment.[]: required variable GRAFANA_ADMIN_USER is missing a value: Set GRAFANA_ADMIN_USER
+```
+
 ```bash
 docker compose up --build -d
 ```
 
-Confirm the bridge is up:
+Wait until `docker compose ps` shows `incident-bridge` as running (first build compiles the FastAPI images plus Redis, Postgres, Prometheus, Alertmanager, Grafana, and traffic-generator). A warning `Docker Compose is configured to build using Bake, but buildx isn't installed` is harmless — Compose falls back to the classic builder.
+
+`agent-sandbox` is **opt-in**. Its image `CMD` is `python orchestrator.py --cycles 5 --delay 10`, which injects real faults. It does **not** start on a plain `docker compose up`. To include it (needs `ANTHROPIC_API_KEY`):
+
+```bash
+docker compose --profile agents up -d --build agent-sandbox
+```
+
+Then:
 
 ```bash
 curl -sS http://127.0.0.1:8088/healthz
 ```
 
-Optional local agent cycle (needs `ANTHROPIC_API_KEY`):
+Expected JSON when `GROK_WEBHOOK_URL` is still empty:
+
+```json
+{"status":"ok","webhook_configured":false}
+```
+
+After you set `GROK_WEBHOOK_URL`, recreate the bridge (`docker compose up -d incident-bridge`) and expect `"webhook_configured":true`.
+
+Optional local agent cycle on the host (needs `ANTHROPIC_API_KEY` in `.env`; `llm_engine.py` calls `load_dotenv()`), instead of the compose profile:
 
 ```bash
-python orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
+python3 orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
 ### 7. Fire a synthetic alert and confirm a GitHub issue
 
 ```bash
-python scripts/send_test_alert.py --target alertmanager
+python3 scripts/send_test_alert.py --target alertmanager
 ```
 
-You should see a new GitHub issue labeled `incident` in the repo you configured with the bot. If an issue for that fingerprint is already open, the bot comments there instead.
+Expected from Alertmanager: HTTP 200 with an empty body. The script prints:
+
+```text
+200
+```
+
+That only means Alertmanager **accepted** the alert. Confirm the bridge received it:
+
+```bash
+docker compose logs --tail 20 incident-bridge
+```
+
+- If `GROK_WEBHOOK_URL` is empty you will see `GROK_WEBHOOK_URL is unset; dropping alert payload`.
+- If the URL is set you will see `forwarded N alert(s) status=firing source=resilienceops`, then a GitHub `incident` issue in the repo you configured with the bot (or a comment on an existing fingerprint).
+- If Alertmanager logs `Notify for alerts failed ... context deadline exceeded`, container-to-container traffic on the compose network is blocked. That is an environment/firewall issue, not a missing config file. Use `--target bridge` (host `127.0.0.1:8088`) to prove the bridge itself.
+
+If the stack is not running, the script prints `request failed: ConnectError` (or `ConnectTimeout`) on stderr and exits 1. Use `--target bridge` to POST `http://127.0.0.1:8088/webhook` directly; expected:
+
+```text
+200 {"accepted":true}
+```
 
 Equivalent curl:
 
@@ -299,7 +367,7 @@ export EC2_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
 export AWS_REGION=us-east-1
 # On the host, set ANTHROPIC_API_KEY, GRAFANA_ADMIN_*, POSTGRES_PASSWORD,
 # and GROK_WEBHOOK_* via SSM Parameter Store, Secrets Manager, or instance env.
-python deploy_remote.py
+python3 deploy_remote.py
 ```
 
 ### 10. k3s agent sandbox
@@ -419,13 +487,15 @@ Keep the AWS Grafana dashboard open while running the cycle:
 Target different failure mechanisms on your AWS cluster using the `--scenario` argument directly through the sandbox pod:
 
 ```bash
-# Test Linux Kernel tc netem Packet Latency on eth0 (Inside Sandbox Pod):
+# Test Linux Kernel tc netem Packet Latency on eth0 (Inside Sandbox Pod).
+# CLI name NETWORK_LATENCY; catalog records KERNEL_TC_NETEM_LATENCY.
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario KERNEL_TC_NETEM_LATENCY
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario NETWORK_LATENCY
 
-# Test Linux Kernel tc netem Packet Loss (35% frame drops on eth0):
+# Test Linux Kernel tc netem Packet Loss (35% frame drops on eth0).
+# CLI name PACKET_LOSS; catalog records KERNEL_TC_NETEM_PACKET_LOSS.
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario KERNEL_TC_NETEM_PACKET_LOSS
+  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario PACKET_LOSS
 
 # Test Redis Connection Pool Starvation (saturating maxclients limit):
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
@@ -584,10 +654,10 @@ The webhook key is never logged. Evidence is secret-stripped. Payloads are cappe
 
 ```bash
 docker compose up -d
-python scripts/send_test_alert.py --target alertmanager
+python3 scripts/send_test_alert.py --target alertmanager
 ```
 
-Confirm an `incident` issue appears in the configured repo. To hit the bridge only: `python scripts/send_test_alert.py --target bridge`.
+Confirm an `incident` issue appears in the configured repo. To hit the bridge only: `python3 scripts/send_test_alert.py --target bridge`.
 
 Restart compose after changing `.env`:
 
@@ -619,6 +689,33 @@ The incident-bridge forwards the same `fingerprint` + `status` at most **once pe
 ### Compose will not start Grafana
 
 `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` must be set. There is no default password.
+
+### `docker compose config` fails immediately
+
+If Grafana vars are still empty, Compose prints:
+
+```text
+error while interpolating services.grafana.environment.[]: required variable GRAFANA_ADMIN_USER is missing a value: Set GRAFANA_ADMIN_USER
+```
+
+and exits non-zero. Fill those two values in `.env` and re-run `docker compose config >/dev/null`.
+
+### Alertmanager 200 but the bridge never logs the webhook
+
+`python3 scripts/send_test_alert.py --target alertmanager` talks to `127.0.0.1:9093`. Alertmanager then POSTs to `http://incident-bridge:8080/webhook` **on the compose network**. Host binds (`curl 127.0.0.1:8088/healthz`, `--target bridge`) can succeed even when container-to-container TCP is blocked.
+
+Check:
+
+```bash
+docker compose logs alertmanager | tail
+docker exec "$(docker compose ps -q alertmanager)" wget -T 3 -qO- http://incident-bridge:8080/healthz
+```
+
+If that wget times out, Docker bridge forwarding is broken on the host (nested VMs sometimes do this). The lab still answers on localhost ports; Prometheus scrapes (`api-gw:8000`, etc.) will also fail until the engine can route between containers. On Docker Desktop or a normal Linux Engine install this path works without extra flags.
+
+### Bake / buildx warning
+
+`Docker Compose is configured to build using Bake, but buildx isn't installed` is a Compose v2 message. The stack still builds with the default docker driver.
 
 ---
 

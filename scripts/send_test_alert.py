@@ -84,7 +84,8 @@ def main() -> int:
     except httpx.HTTPError as exc:
         print(f"request failed: {type(exc).__name__}", file=sys.stderr)
         return 1
-    print(f"{response.status_code} {response.text[:500]}")
+    body = (response.text or "").strip()
+    print(f"{response.status_code}{(' ' + body[:500]) if body else ''}")
     return 0 if response.is_success or response.status_code in {200, 202, 204} else 1
 
 

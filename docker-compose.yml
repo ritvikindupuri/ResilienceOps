@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api-gw:
     build:
@@ -74,8 +72,8 @@ services:
       context: ./traffic-generator
     environment:
       - GATEWAY_URL=http://api-gw:8000
-      - RPS_TARGET=20
-      - CONCURRENCY=8
+      - RPS_TARGET=${RPS_TARGET:-20}
+      - CONCURRENCY=${CONCURRENCY:-8}
     depends_on:
       - api-gw
 
@@ -114,8 +112,15 @@ services:
       - GROK_WEBHOOK_KEY=${GROK_WEBHOOK_KEY:-}
       - GROK_WEBHOOK_AUTH_HEADER=${GROK_WEBHOOK_AUTH_HEADER:-Authorization}
       - GROK_WEBHOOK_AUTH_SCHEME=${GROK_WEBHOOK_AUTH_SCHEME-Bearer}
-      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_URL=${BRIDGE_PROMETHEUS_URL:-http://prometheus:9090}
       - AGENT_ACTIVITY_LOG=/app/logs/agent_activity.jsonl
+      - EVIDENCE_WINDOW_SECONDS=${EVIDENCE_WINDOW_SECONDS:-600}
+      - PAYLOAD_MAX_BYTES=${PAYLOAD_MAX_BYTES:-102400}
+      - DEDUPE_TTL_SECONDS=${DEDUPE_TTL_SECONDS:-300}
+      - WEBHOOK_TIMEOUT_SECONDS=${WEBHOOK_TIMEOUT_SECONDS:-10}
+      - WEBHOOK_MAX_RETRIES=${WEBHOOK_MAX_RETRIES:-3}
+      - LOG_TAIL_LINES=${LOG_TAIL_LINES:-40}
+      - K8S_EVIDENCE_ENABLED=${K8S_EVIDENCE_ENABLED:-true}
     volumes:
       - ./logs:/app/logs:ro
 
@@ -132,16 +137,23 @@ services:
     depends_on:
       - prometheus
 
-  # Autonomous Agent Sandbox Container (Runs Red Team vs Blue Team cycles in isolation)
+  # Autonomous Agent Sandbox Container (Runs Red Team vs Blue Team cycles in isolation).
+  # Opt-in: `docker compose --profile agents up -d`. Default `docker compose up` is the
+  # observability lab only (services, Prometheus, Alertmanager, bridge, Grafana).
   agent-sandbox:
+    profiles:
+      - agents
     build:
       context: .
       dockerfile: Dockerfile.agent-sandbox
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - API_GATEWAY_URL=http://api-gw:8000
       - ORDER_SERVICE_URL=http://order-service:8001
       - PAYMENT_SERVICE_URL=http://payment-service:8002
+      - PROMETHEUS_URL=http://prometheus:9090
+      - SLO_MAX_P99_LATENCY_MS=${SLO_MAX_P99_LATENCY_MS:-1200.0}
+      - SLO_MAX_ERROR_RATE_PERCENT=${SLO_MAX_ERROR_RATE_PERCENT:-2.0}
     volumes:
       - ./reports:/app/reports
       - ./logs:/app/logs
