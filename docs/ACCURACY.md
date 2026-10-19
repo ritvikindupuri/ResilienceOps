@@ -63,7 +63,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | VPC group | Purple dashed, “VPC  sre-enterprise-vpc”, AWS VPC icon | `build_architecture.py` vpc group; Name tag `terraform/main.tf` `sre-enterprise-vpc` |
 | Public subnet group | Green, “public_ingress  10.0.1.0/24  ·  one EC2 host”, public-subnet icon | `terraform/main.tf` `aws_subnet.public_ingress` (only subnet with `map_public_ip_on_launch` and the only one associated with the public RT) |
 | SG around host | Dashed red “SG  ingress + internal” wrapping optional k3s + Compose | SGs `terraform/main.tf` `ingress_sg` / `internal_app_sg` |
-| k3s group | Small dashed “k3s (optional)” + `deploy_k8s_sandbox.py` | Optional path `deploy_k8s_sandbox.py`; k3s installed on the **same** EC2 `user_data` (`https://get.k3s.io`) |
+| k3s group | Small dashed “k3s sandbox (optional)” + “Runs the agents in isolated pods” | Optional path `deploy_k8s_sandbox.py`; k3s installed on the **same** EC2 `user_data` (`https://get.k3s.io`); namespace `sre-agent-sandbox` |
 | Agents group | Inner “Agents (--profile agents)” holds Red + Blue, inside Docker Compose | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` `docker-compose.yml` |
 | Compose group | Outer “Docker Compose on this host” wrapping Agents and “App + observability (default)” | `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
 | Grok column | “Grok Bot (external)” | Imported template, not hosted in-repo. Bridge needs outbound HTTPS (`GROK_WEBHOOK_URL`); agents also call Anthropic |
@@ -85,7 +85,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | put_lab_secrets.py satellite | “laptop → Param” | Operator script; not an AWS resource. Arrow into Param Store |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
-| k3s | small dashed “k3s (optional)” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox` |
+| k3s | small dashed “k3s sandbox (optional)” / “Runs the agents in isolated pods” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox` |
 | Red Team | “Injects faults” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
 | Blue Team | “Detects and resets” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
 | Traffic | “Live load” | `docker-compose.yml:120-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |

@@ -14,7 +14,7 @@ flowchart LR
     IGW["IGW · public RT only"]
     subgraph pub ["public_ingress 10.0.1.0/24 — one EC2 host"]
       subgraph sg ["SG ingress + internal · :3000 / :8000"]
-        subgraph k3sopt ["k3s (optional) · deploy_k8s_sandbox.py"]
+        subgraph k3sopt ["k3s sandbox (optional) · Runs the agents in isolated pods"]
           K3S[k3s]
         end
         subgraph compose ["Docker Compose on this host"]

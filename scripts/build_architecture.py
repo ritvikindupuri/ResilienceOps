@@ -654,7 +654,11 @@ def build_scene() -> tuple[str, list[str]]:
     sg_w, sg_h = subnet_w - 20, subnet_h - 46
 
     nested_y = sg_y + 44
-    k3s_x, k3s_w, k3s_opt_h = sg_x + 12, 268, 68
+    k3s_title = "k3s sandbox (optional)"
+    k3s_sub = "Runs the agents in isolated pods"
+    k3s_x = sg_x + 12
+    k3s_opt_h = 72
+    k3s_w = 42 + max(_tw(k3s_title, 17, True), _tw(k3s_sub, 16)) + 20
     compose_x = sg_x + 12
     compose_y = nested_y + k3s_opt_h + 8
     compose_w = sg_w - 24
@@ -744,9 +748,9 @@ def build_scene() -> tuple[str, list[str]]:
     scene.add(group(sg_x, sg_y, sg_w, sg_h, "SG  ingress + internal  ·  :3000 / :8000", icon="aws-sg", style="sg"))
     scene.container("sg", sg_x, sg_y, sg_w, sg_h)
     scene.text(sg_x + 42, sg_y + 26, "SG  ingress + internal  ·  :3000 / :8000", 15, bold=True, name="group:sg", container="sg")
-    scene.add(group(k3s_x, nested_y, k3s_w, k3s_opt_h, "k3s (optional)", icon="k3s", style="optional"))
+    scene.add(group(k3s_x, nested_y, k3s_w, k3s_opt_h, k3s_title, icon="k3s", style="optional"))
     scene.container("k3s", k3s_x, nested_y, k3s_w, k3s_opt_h)
-    scene.text(k3s_x + 42, nested_y + 26, "k3s (optional)", 17, bold=True, name="group:k3s", container="k3s")
+    scene.text(k3s_x + 42, nested_y + 26, k3s_title, 17, bold=True, name="group:k3s", container="k3s")
     scene.add(group(compose_x, compose_y, compose_w, compose_h, "Docker Compose on this host", icon="docker"))
     scene.container("compose", compose_x, compose_y, compose_w, compose_h)
     scene.text(compose_x + 42, compose_y + 26, "Docker Compose on this host", 17, bold=True, name="group:compose", container="compose")
@@ -762,9 +766,9 @@ def build_scene() -> tuple[str, list[str]]:
 
     scene.add(
         f'  <text x="{k3s_x + 42:.0f}" y="{nested_y + 50:.0f}" class="cap">'
-        "deploy_k8s_sandbox.py</text>"
+        f"{k3s_sub}</text>"
     )
-    scene.text(k3s_x + 42, nested_y + 50, "deploy_k8s_sandbox.py", 16, name="k3s-sub", container="k3s")
+    scene.text(k3s_x + 42, nested_y + 50, k3s_sub, 16, name="k3s-sub", container="k3s")
     scene.add(
         f'  <text x="{agents_x + 16:.0f}" y="{inner_y + 46:.0f}" class="cap">'
         "POST /api/agent-events · jsonl</text>"
