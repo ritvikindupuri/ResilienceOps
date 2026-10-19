@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Render docs/architecture.svg (canonical source) to
-# docs/images/infraattack_platform_architecture.png
+# Rebuild docs/architecture.svg from scripts/build_architecture.py + docs/icons/,
+# then rasterize to docs/images/infraattack_platform_architecture.png.
 #
-# Preferred: rsvg-convert (librsvg). Fallback: headless Chrome/Chromium.
-# Companion mermaid source is docs/architecture.mmd (not used for the PNG;
-# mermaid LR/TB layouts were too cramped for this architecture).
+# Preferred rasterizer: rsvg-convert (librsvg). Fallback: headless Chrome.
+# Companion mermaid source: docs/architecture.mmd (same flow, no icons).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SVG="$ROOT/docs/architecture.svg"
 OUT="$ROOT/docs/images/infraattack_platform_architecture.png"
+
+python3 "$ROOT/scripts/build_architecture.py"
 
 if [[ ! -f "$SVG" ]]; then
   echo "missing $SVG" >&2
@@ -16,7 +17,8 @@ if [[ ! -f "$SVG" ]]; then
 fi
 
 if command -v rsvg-convert >/dev/null 2>&1; then
-  rsvg-convert -w 2000 -h 1080 "$SVG" -o "$OUT"
+  # Native SVG size (1920x1000). Do not squash into a different aspect ratio.
+  rsvg-convert -w 1920 "$SVG" -o "$OUT"
   echo "wrote $OUT via rsvg-convert ($(wc -c < "$OUT") bytes)"
   exit 0
 fi
@@ -39,7 +41,7 @@ timeout 20s "$CHROME" \
   --headless --disable-gpu --no-sandbox --hide-scrollbars \
   --user-data-dir="$tmpdir" \
   --default-background-color=FFFFFFFF \
-  --window-size=2000,1080 \
+  --window-size=1920,1000 \
   --virtual-time-budget=4000 \
   --screenshot="$OUT" \
   "file://$SVG" >/tmp/architecture-chrome.log 2>&1 || true

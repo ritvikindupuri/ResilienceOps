@@ -6,10 +6,10 @@ The [root README](../README.md) is the **current source of truth** for setup, ar
 
 Images used by the README live in [`images/`](images/).
 
-The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). Canonical source is [`architecture.svg`](architecture.svg). Render:
+The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). It is rebuilt from Simple Icons in [`icons/`](icons/) plus [`../scripts/build_architecture.py`](../scripts/build_architecture.py) into [`architecture.svg`](architecture.svg), then rasterized:
 
 ```bash
 ./scripts/render_architecture.sh
 ```
 
-That script prefers `rsvg-convert` (`librsvg2-bin` on Debian/Ubuntu) and falls back to headless Chrome. Companion mermaid source: [`architecture.mmd`](architecture.mmd) (not used for the PNG; column layout is easier in SVG).
+That script prefers `rsvg-convert` (`librsvg2-bin` on Debian/Ubuntu) and falls back to headless Chrome. Companion mermaid (same flow, no logos): [`architecture.mmd`](architecture.mmd).

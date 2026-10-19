@@ -77,6 +77,7 @@ def test_readme_referenced_scripts_exist():
     required = [
         "scripts/send_test_alert.py",
         "scripts/render_architecture.sh",
+        "scripts/build_architecture.py",
         "orchestrator.py",
         "deploy_remote.py",
         "teardown.sh",
@@ -139,6 +140,11 @@ def test_readme_sample_post_mortem_is_current_generator():
 
 
 def test_architecture_png_is_nontrivial():
+    import struct
+
     data = (ROOT / "docs/images/infraattack_platform_architecture.png").read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
+    width, height = struct.unpack(">II", data[16:24])
+    assert 1600 <= width <= 2000, width
+    assert 900 <= height <= 1200, height
