@@ -370,158 +370,262 @@ def pill(x: float, y: float, text: str) -> str:
   </g>"""
 
 
-def _ic(node_y: float) -> float:
-    """Vertical center of a node icon (node y is the name baseline)."""
-    return node_y - ICON / 2 - 4
+def _tw(text: str, size: float, bold: bool = False) -> float:
+    return size * (0.62 if bold else 0.55) * max(len(text), 1)
 
 
-def _icon_top(node_y: float) -> float:
-    return node_y - ICON - 8
+def _ic(node_y: float, size: float = ICON) -> float:
+    """Vertical center of the icon drawn by node()."""
+    return node_y - size / 2 - 8
+
+
+def _icon_top(node_y: float, size: float = ICON) -> float:
+    return node_y - size - 8
+
+
+EPS = 1.6
+CLIP_HIT = 7.0
+
+
+def _ranges_overlap(a1: float, a2: float, b1: float, b2: float) -> tuple[float, float] | None:
+    lo, hi = max(min(a1, a2), min(b1, b2)), min(max(a1, a2), max(b1, b2))
+    if hi - lo > EPS:
+        return lo, hi
+    return None
+
+
+def _hv_cross(h: tuple, v: tuple) -> bool:
+    hy = h[1]
+    vx = v[0]
+    hx1, hx2 = min(h[0], h[2]), max(h[0], h[2])
+    vy1, vy2 = min(v[1], v[3]), max(v[1], v[3])
+    interior_h = hx1 + EPS < vx < hx2 - EPS
+    interior_v = vy1 + EPS < hy < vy2 - EPS
+    return interior_h and interior_v
+
+
+def _collinear_overlap(s1: tuple, s2: tuple, horizontal: bool) -> bool:
+    if horizontal:
+        if abs(s1[1] - s2[1]) > 1.0:
+            return False
+        return _ranges_overlap(s1[0], s1[2], s2[0], s2[2]) is not None
+    if abs(s1[0] - s2[0]) > 1.0:
+        return False
+    return _ranges_overlap(s1[1], s1[3], s2[1], s2[3]) is not None
+
+
+def _proper_intersect(s1: tuple, s2: tuple) -> bool:
+    h1 = abs(s1[1] - s1[3]) < 0.6
+    v1 = abs(s1[0] - s1[2]) < 0.6
+    h2 = abs(s2[1] - s2[3]) < 0.6
+    v2 = abs(s2[0] - s2[2]) < 0.6
+    if h1 and v2:
+        return _hv_cross(s1, s2)
+    if v1 and h2:
+        return _hv_cross(s2, s1)
+    if h1 and h2:
+        return _collinear_overlap(s1, s2, True)
+    if v1 and v2:
+        return _collinear_overlap(s1, s2, False)
+    return False
+
+
+def _seg_clip_len(s: tuple, box: tuple) -> float:
+    x, y, w, h = box[0], box[1], box[2], box[3]
+    l, t, r, b = x, y, x + w, y + h
+    x1, y1, x2, y2 = s[0], s[1], s[2], s[3]
+    if abs(y1 - y2) < 0.6:  # horizontal
+        if y1 < t + EPS or y1 > b - EPS:
+            return 0.0
+        ov = _ranges_overlap(x1, x2, l, r)
+        return 0.0 if ov is None else ov[1] - ov[0]
+    if abs(x1 - x2) < 0.6:  # vertical
+        if x1 < l + EPS or x1 > r - EPS:
+            return 0.0
+        ov = _ranges_overlap(y1, y2, t, b)
+        return 0.0 if ov is None else ov[1] - ov[0]
+    return 0.0
+
+
+class Scene:
+    """Orthogonal arrows + bboxes, with a no-crossing checker."""
+
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.segments: list[tuple[float, float, float, float, str]] = []
+        self.boxes: list[tuple[float, float, float, float, str, str]] = []
+
+    def add(self, svg: str) -> None:
+        self.parts.append(svg)
+
+    def box(self, x: float, y: float, w: float, h: float, name: str, kind: str) -> None:
+        if w < 0:
+            x, w = x + w, -w
+        if h < 0:
+            y, h = y + h, -h
+        self.boxes.append((x, y, w, h, name, kind))
+
+    def text(self, x: float, baseline: float, value: str, size: float, *, bold: bool = False, anchor: str = "start", name: str = "") -> None:
+        width = _tw(value, size, bold)
+        if anchor == "middle":
+            left = x - width / 2
+        elif anchor == "end":
+            left = x - width
+        else:
+            left = x
+        self.box(left, baseline - 0.82 * size, width, size * 1.05, name or value, "text")
+
+    def icon(self, cx: float, top: float, size: float, name: str) -> None:
+        self.box(cx - size / 2, top, size, size, name, "icon")
+
+    def add_seg(self, x1: float, y1: float, x2: float, y2: float, name: str) -> None:
+        if abs(x1 - x2) < 0.5 and abs(y1 - y2) < 0.5:
+            return
+        self.segments.append((x1, y1, x2, y2, name))
+
+    def poly(self, points: list[tuple[float, float]], *, dashed: bool = False, marked: bool = True, name: str = "edge") -> None:
+        self.add(poly(points, dashed=dashed, marked=marked))
+        for i in range(len(points) - 1):
+            self.add_seg(*points[i], *points[i + 1], f"{name}:{i}")
+
+    def arrow(self, x1: float, y1: float, x2: float, y2: float, *, dashed: bool = False, name: str = "edge") -> None:
+        self.add(arrow(x1, y1, x2, y2, dashed=dashed))
+        self.add_seg(x1, y1, x2, y2, name)
+
+    def pill_at(self, x: float, y: float, text: str) -> None:
+        self.add(pill(x, y, text))
+        w = max(56, 8.2 * len(text) + 22)
+        self.box(x - w / 2, y - 11, w, 22, f"pill:{text}", "pill")
+
+    def node_at(self, x: float, y: float, icon: str, name: str, cap: str, size: float = ICON, cap2: str = "") -> None:
+        self.add(node(x, y, icon, name, cap, size=size, cap2=cap2))
+        self.icon(x, _icon_top(y, size), size, f"icon:{name}")
+        self.text(x, y + 18, name, 18, bold=True, anchor="middle", name=f"name:{name}")
+        if cap:
+            self.text(x, y + 40, cap, 16, anchor="middle", name=f"cap:{name}")
+        if cap2:
+            self.text(x, y + 56, cap2, 16, anchor="middle", name=f"cap2:{name}")
+
+    def satellite_at(self, x: float, y: float, icon: str, name: str, cap: str, size: float = 26, label_side: str = "below", name_size: int = 14) -> None:
+        self.add(satellite(x, y, icon, name, cap, size=size, label_side=label_side, name_size=name_size))
+        self.icon(x, y - size / 2, size, f"sat-icon:{name}")
+        if label_side == "below":
+            self.text(x, y + size / 2 + 16, name, name_size, bold=True, anchor="middle", name=f"sat:{name}")
+            self.text(x, y + size / 2 + 32, cap, 13, anchor="middle", name=f"sat-cap:{name}")
+        elif label_side == "right":
+            tx = x + size / 2 + 14
+            self.text(tx, y + 5, name, 14, bold=True, anchor="start", name=f"sat:{name}")
+            self.text(tx, y + 22, cap, 13, anchor="start", name=f"sat-cap:{name}")
+
+    def grok_at(self, x: float, y: float, name: str) -> None:
+        self.add(grok_avatar(x, y, name, ""))
+        self.box(x - 48, y - 80, 96, 96, "icon:grok", "icon")
+        self.text(x, y + 36, name, 18, bold=True, anchor="middle", name="name:grok")
+
+    def check(self) -> list[str]:
+        hits: list[str] = []
+        for i, s1 in enumerate(self.segments):
+            for s2 in self.segments[i + 1 :]:
+                if _proper_intersect(s1, s2):
+                    hits.append(f"lines {s1[4]} × {s2[4]}")
+        for s in self.segments:
+            for b in self.boxes:
+                if _seg_clip_len(s, b) > CLIP_HIT:
+                    hits.append(f"line {s[4]} through {b[5]} {b[4]}")
+        skip = ("group:", "title", "unused", "agent-events", "k3s-sub", "sg-ports")
+        for i, b1 in enumerate(self.boxes):
+            if b1[5] not in {"text", "pill", "icon"}:
+                continue
+            if any(b1[4].startswith(s) for s in skip):
+                continue
+            for b2 in self.boxes[i + 1 :]:
+                if b2[5] not in {"text", "pill", "icon"}:
+                    continue
+                if any(b2[4].startswith(s) for s in skip):
+                    continue
+                ox = _ranges_overlap(b1[0], b1[0] + b1[2], b2[0], b2[0] + b2[2])
+                oy = _ranges_overlap(b1[1], b1[1] + b1[3], b2[1], b2[1] + b2[3])
+                if ox and oy and (ox[1] - ox[0]) > 8 and (oy[1] - oy[0]) > 6:
+                    hits.append(f"bbox {b1[5]} {b1[4]} × {b2[5]} {b2[4]}")
+        return hits
 
 
 def build() -> str:
+    svg, _violations = build_scene()
+    return svg
+
+
+def build_scene() -> tuple[str, list[str]]:
     W, H = 1920, 1200
+    scene = Scene()
 
-    # Title band is 0–58 (36px type, baseline y=34). Nothing else may enter
-    # that band — the AWS-account strip starts below it. IGW straddles the
-    # VPC *right* border; labels sit in the VPC–Grok gutter, off the stroke.
-    aws_icon = 44
-    tf_x, deploy_x, op_y = 84, 268, 118  # icon top = 66, fully below the title
-    # Wider account strip so S3 / Param Store / SSM / IAM / CW sit in one row.
-    acct_x, acct_y, acct_w, acct_h = 430, 60, 1000, 108  # 60–168, under the title
-    # S3+SSM sit together so deploy_remote.py can fork without crossing Param.
-    # put_lab_secrets.py sits immediately left of Param Store.
-    s3_x, ssm_x, secrets_x, param_x, iam_x, cw_x = 540, 670, 860, 1040, 1180, 1320
-    acct_node_y = 108  # icons; labels sit below inside the strip
+    # Title band 0–44. Operator sits LEFT of the AWS account strip so no
+    # operator shaft enters the account box or its captions.
+    aws_icon = 40
+    tf_x, deploy_x, op_y = 70, 220, 86
+    acct_x, acct_y, acct_w, acct_h = 380, 44, 1070, 90
+    s3_x, ssm_x, secrets_x, param_x, iam_x, cw_x = 470, 605, 760, 940, 1110, 1275
+    acct_node_y = 84
 
-    # VPC is 8px shorter than 896 so the footer box can sit *below* the
-    # purple stroke with padding, instead of kissing the VPC border.
-    vpc_x, vpc_y, vpc_w, vpc_h = 16, 176, 1276, 888  # right 1292, bottom 1064
-    bot_x, bot_y, bot_w, bot_h = 1452, 176, 452, 888  # gutter 160px for IGW labels
+    vpc_x, vpc_y, vpc_w, vpc_h = 16, 150, 1388, 936
+    bot_x, bot_y, bot_w, bot_h = 1552, 150, 352, 936
     col_bottom = vpc_y + vpc_h
 
-    g_bot = group(bot_x, bot_y, bot_w, bot_h, "Grok Bot (external)")
-    g_vpc = group(
-        vpc_x, vpc_y, vpc_w, vpc_h, "VPC  sre-enterprise-vpc",
-        icon="aws-vpc", style="vpc",
-    )
-    g_acct = group(
-        acct_x, acct_y, acct_w, acct_h,
-        "AWS account",
-        style="account",
-    )
+    subnet_x, subnet_y = vpc_x + 10, vpc_y + 34
+    subnet_w, subnet_h = vpc_w - 24, vpc_h - 46
+    sg_x, sg_y = subnet_x + 10, subnet_y + 32
+    sg_w, sg_h = subnet_w - 20, subnet_h - 44
 
-    # Green public subnet fills the VPC except a slim right gutter (IGW labels
-    # live *outside* the purple border, in the VPC–Grok gap).
-    subnet_x, subnet_y = vpc_x + 10, vpc_y + 36
-    subnet_w, subnet_h = vpc_w - 24, vpc_h - 48
-    g_subnet = group(
-        subnet_x, subnet_y, subnet_w, subnet_h,
-        "public_ingress  10.0.1.0/24  ·  one EC2 host",
-        icon="aws-subnet-public", style="public_subnet",
-    )
-
-    # Dashed SG around the host contents (k3s + Compose), not around the VPC.
-    sg_x, sg_y = subnet_x + 10, subnet_y + 34
-    sg_w, sg_h = subnet_w - 20, subnet_h - 46
-    g_sg = group(
-        sg_x, sg_y, sg_w, sg_h,
-        "SG  ingress + internal",
-        icon="aws-sg", style="sg",
-    )
-
-    # SG title baseline is sg_y+26. k3s top needs a real gap under that type
-    # (previously nested_y = sg_y+28 sat on the glyphs).
-    nested_y = sg_y + 52
-    k3s_x, k3s_w, k3s_opt_h = sg_x + 12, 248, 58
-    g_k3s_opt = group(
-        k3s_x, nested_y, k3s_w, k3s_opt_h,
-        "k3s (optional)",
-        icon="k3s", style="optional",
-    )
-
-    # Outer Compose wraps Agents *and* the app stack. k3s stays outside it
-    # (deploy_k8s_sandbox.py is not a Compose service).
+    nested_y = sg_y + 44
+    k3s_x, k3s_w, k3s_opt_h = sg_x + 12, 248, 40
     compose_x = sg_x + 12
-    compose_y = nested_y + k3s_opt_h + 12
+    compose_y = nested_y + k3s_opt_h + 8
     compose_w = sg_w - 24
     compose_h = sg_y + sg_h - compose_y - 10
-    g_compose = group(
-        compose_x, compose_y, compose_w, compose_h,
-        "Docker Compose on this host",
-        icon="docker",
-    )
 
-    inner_y = compose_y + 40
+    inner_y = compose_y + 38
     inner_h = compose_y + compose_h - inner_y - 10
-    agents_x, agents_w = compose_x + 10, 268
-    app_x = agents_x + agents_w + 72
+    agents_x, agents_w = compose_x + 10, 258
+    app_x = agents_x + agents_w + 64
     app_w = compose_x + compose_w - 12 - app_x
-    g_agents = group(
-        agents_x, inner_y, agents_w, inner_h,
-        "Agents (--profile agents)",
-    )
-    g_app = group(
-        app_x, inner_y, app_w, inner_h,
-        "App + observability (default)",
-    )
 
-    # Three alley spines in the Agents↔App gutter (never through box titles).
-    # Red climbs (left). Scrape drops (middle). Blue climbs (right).
+    # Two vertical alleys between Agents and App. Red uses the left alley;
+    # Blue uses the right. Nothing else is allowed on these x's.
     alley_red = agents_x + agents_w + 16
-    alley_scrape = agents_x + agents_w + 36
     alley_blue = app_x - 16
-
-    r1 = inner_y + 176  # Traffic / api-gw / order / payment (room above for Red flyover)
-    r2 = r1 + 152  # Redis + Postgres under order-service; Red Team in Agents
-    r3 = r2 + 168  # Prometheus → Alertmanager → incident-bridge; Blue Team
-    graf_y = inner_y + inner_h - 22  # keep Grafana name above the App stroke
-
     k3s_cx = agents_x + agents_w / 2
-    # Keep payment-service / incident-bridge names inside the App stroke.
-    tg_x, gw_x, os_x, ps_x = app_x + 64, app_x + 230, app_x + 450, app_x + 720
-    rd_x, pg_x = os_x - 90, os_x + 90
-    prom_x, am_x, br_x = gw_x, os_x + 40, ps_x
-    graf_x = prom_x
 
-    # IGW icon sits on the VPC right border (straddles the stroke). Labels
-    # hang to the right, fully in the gutter — not on the dashed line.
-    igw_x, igw_y = vpc_x + vpc_w, vpc_y + 56
+    # Unique y-lanes. Payments / faults / health sit ABOVE the service
+    # icons so Redis + scrape verticals never meet them. Pills sit off the
+    # shafts (above each bus, below the request arrows).
+    pay_y = inner_y + 58
+    faults_y = inner_y + 100
+    health_y = inner_y + 142
+    r_svc = inner_y + 248
+    r_db = r_svc + 148
+    r_obs = r_db + 128
+    graf_y = inner_y + inner_h - 46
+    promql_y = r_obs + 88
 
+    tg_x = app_x + 50
+    gw_x = app_x + 155
+    os_x = app_x + 310
+    ps_x = app_x + 480
+    rd_x, pg_x = os_x - 88, os_x + 88
+    br_x = app_x + app_w - 90
+    am_x = br_x - 160
+    prom_x = am_x - 155
+    graf_x = ps_x
+    scrape_x = prom_x
+    br_y = r_obs
+
+    igw_x, igw_y = vpc_x + vpc_w, vpc_y + 52
     bot_cx = bot_x + bot_w / 2
-    bot_avatar_y = bot_y + 160
-    bot_row_y = bot_avatar_y + 360
-    gh_x, ping_x = bot_cx - 155, bot_cx + 155
+    bot_avatar_y = bot_y + 150
+    bot_row_y = bot_avatar_y + 380
+    gh_x, ping_x = bot_cx - 130, bot_cx + 130
 
-    nodes = [
-        node(tf_x, op_y, "terraform", "Terraform", "optional AWS", size=aws_icon),
-        node(deploy_x, op_y, "document", "deploy_remote.py", "operator", size=aws_icon),
-        satellite(s3_x, acct_node_y, "aws-s3", "S3", "deploy → host", size=26, label_side="below"),
-        satellite(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command", size=26, label_side="below"),
-        satellite(secrets_x, acct_node_y, "document", "put_lab_secrets.py", "laptop → Param", size=26, label_side="below", name_size=11),
-        satellite(param_x, acct_node_y, "aws-ssm", "Param Store", "secrets → .env", size=26, label_side="below"),
-        satellite(iam_x, acct_node_y, "aws-iam", "IAM", "role + profile", size=26, label_side="below"),
-        satellite(cw_x, acct_node_y, "aws-cloudwatch", "CW Logs", "agents → CW", size=26, label_side="below"),
-        satellite(igw_x, igw_y, "aws-igw", "IGW", "public RT only", size=28, label_side="right"),
-        node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
-        node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
-        node(tg_x, r1, "traffic", "Traffic", "Live load"),
-        node(gw_x, r1, "fastapi", "api-gw", "Gateway"),
-        node(os_x, r1, "fastapi", "order-service", "Orders"),
-        node(ps_x, r1, "fastapi", "payment-service", "Payments"),
-        node(rd_x, r2, "redis", "Redis", "order-service cache"),
-        node(pg_x, r2, "postgresql", "PostgreSQL", "orders_db"),
-        node(prom_x, r3, "prometheus", "Prometheus", ""),
-        node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
-        node(br_x, r3, "document", "incident-bridge", "PromQL · agent jsonl", cap2="(Compose agents)"),
-        node(graf_x, graf_y, "grafana", "Grafana", "", size=52),
-        grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", ""),
-        node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
-        node(ping_x, bot_row_y, "bell", "Owner ping", "Firing critical"),
-    ]
-
-    parts = [
-        f'''<?xml version="1.0" encoding="UTF-8"?>
+    scene.add(f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img"
      aria-label="How ResilienceOps plus AI Incident Diagnosis works">
@@ -548,234 +652,247 @@ def build() -> str:
   </defs>
   <rect width="{W}" height="{H}" fill="#FFFFFF"/>
   <text x="{W / 2:.0f}" y="34" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
-'''
-    ]
-    parts.append(g_acct)
-    parts.append(g_vpc)
-    parts.append(g_subnet)
-    parts.append(g_sg)
-    parts.append(g_k3s_opt)
-    parts.append(g_compose)
-    parts.append(g_agents)
-    parts.append(g_app)
-    parts.append(g_bot)
-    # Operator reaches Grafana :3000 and api-gw :8000 through IGW + ingress SG.
-    # Caption lives in the VPC–Grok gutter (same side as IGW labels) so it
-    # does not cross Compose arrows.
-    parts.append(
-        f'  <text x="{igw_x + 20:.0f}" y="{igw_y + 52:.0f}" class="cap">'
-        "operator :3000 / :8000</text>"
-    )
-    # Subtitles that do not fit in the group title band.
-    parts.append(
+''')
+    scene.text(W / 2, 34, "How ResilienceOps + AI Incident Diagnosis works", 36, bold=True, anchor="middle", name="title")
+
+    scene.add(group(acct_x, acct_y, acct_w, acct_h, "AWS account", style="account"))
+    scene.text(acct_x + 24, acct_y + 26, "AWS account", 17, bold=True, name="group:account")
+    scene.add(group(vpc_x, vpc_y, vpc_w, vpc_h, "VPC  sre-enterprise-vpc", icon="aws-vpc", style="vpc"))
+    scene.text(vpc_x + 42, vpc_y + 26, "VPC  sre-enterprise-vpc", 17, bold=True, name="group:vpc")
+    scene.add(group(subnet_x, subnet_y, subnet_w, subnet_h, "public_ingress  10.0.1.0/24  ·  one EC2 host", icon="aws-subnet-public", style="public_subnet"))
+    scene.text(subnet_x + 42, subnet_y + 26, "public_ingress  10.0.1.0/24  ·  one EC2 host", 17, bold=True, name="group:subnet")
+    scene.add(group(sg_x, sg_y, sg_w, sg_h, "SG  ingress + internal  ·  :3000 / :8000", icon="aws-sg", style="sg"))
+    scene.text(sg_x + 42, sg_y + 26, "SG  ingress + internal  ·  :3000 / :8000", 15, bold=True, name="group:sg")
+    scene.add(group(k3s_x, nested_y, k3s_w, k3s_opt_h, "k3s (optional)", icon="k3s", style="optional"))
+    scene.text(k3s_x + 42, nested_y + 26, "k3s (optional)", 17, bold=True, name="group:k3s")
+    scene.add(group(compose_x, compose_y, compose_w, compose_h, "Docker Compose on this host", icon="docker"))
+    scene.text(compose_x + 42, compose_y + 26, "Docker Compose on this host", 17, bold=True, name="group:compose")
+    scene.add(group(agents_x, inner_y, agents_w, inner_h, "Agents (--profile agents)"))
+    scene.text(agents_x + 24, inner_y + 26, "Agents (--profile agents)", 17, bold=True, name="group:agents")
+    scene.add(group(app_x, inner_y, app_w, inner_h, "App + observability (default)"))
+    scene.text(app_x + 24, inner_y + 26, "App + observability (default)", 17, bold=True, name="group:app")
+    scene.add(group(bot_x, bot_y, bot_w, bot_h, "Grok Bot (external)"))
+    scene.text(bot_x + 24, bot_y + 26, "Grok Bot (external)", 17, bold=True, name="group:grok")
+
+    scene.add(
         f'  <text x="{k3s_x + 42:.0f}" y="{nested_y + 44:.0f}" class="cap">'
         "deploy_k8s_sandbox.py</text>"
     )
-    # Unused subnets live in the VPC but have no workloads today. Right of the
-    # VPC title, *above* public_ingress. Account-strip drops stop at the VPC
-    # stroke so they cannot run through this type.
-    parts.append(
+    scene.text(k3s_x + 42, nested_y + 44, "deploy_k8s_sandbox.py", 16, name="k3s-sub")
+    scene.add(
+        f'  <text x="{agents_x + 16:.0f}" y="{inner_y + 46:.0f}" class="cap">'
+        "POST /api/agent-events · jsonl</text>"
+    )
+    scene.text(agents_x + 16, inner_y + 46, "POST /api/agent-events · jsonl", 16, name="agent-events")
+    scene.add(
         f'  <text x="{vpc_x + vpc_w - 18:.0f}" y="{vpc_y + 26:.0f}" text-anchor="end" '
         f'class="cap">app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused</text>'
     )
-    parts.extend(nodes)
+    scene.text(
+        vpc_x + vpc_w - 18, vpc_y + 26,
+        "app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused",
+        16, anchor="end", name="unused-cidrs",
+    )
 
-    svc_ic = _ic(r1)
-    red_ic = _ic(r2)
-    blue_ic = _ic(r3)
-    op_ic = op_y - aws_icon / 2 - 4
-    k3s_right = k3s_cx + 44  # past the 68px person icon so shafts never clip Red/Blue
-    db_top = _icon_top(r2)
-    prom_top = _icon_top(r3)
-    graf_top = graf_y - 52 - 8  # Grafana is drawn at size 52, not ICON
-    pay_y = inner_y + 82
-    # Red flies over the services (above the /api/payments U-turn) and ticks
-    # down into order-service and payment-service. Blue's health bus sits
-    # *below* Redis/Postgres so those arrows can start at order-service.
-    red_y = inner_y + 58
-    # Health ticks stop *below* the scrape collector so the two never share a
-    # y in the service columns (a full-height tick would cross the merge bar).
-    collector_y = r1 + 54  # under Gateway / Orders / Payments captions (below descenders)
-    svc_bottom = r1 + 66  # health-tick arrowheads; 18px below the scrape bar
-    health_y = r2 + 72  # well below Redis/Postgres captions (pills sit under the bus)
+    scene.node_at(tf_x, op_y, "terraform", "Terraform", "optional AWS", size=aws_icon)
+    scene.node_at(deploy_x, op_y, "document", "deploy_remote.py", "operator", size=aws_icon)
+    scene.satellite_at(s3_x, acct_node_y, "aws-s3", "S3", "deploy → host")
+    scene.satellite_at(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command")
+    scene.satellite_at(secrets_x, acct_node_y, "document", "put_lab_secrets.py", "laptop → Param", name_size=11)
+    scene.satellite_at(param_x, acct_node_y, "aws-ssm", "Param Store", "secrets → .env")
+    scene.satellite_at(iam_x, acct_node_y, "aws-iam", "IAM", "role + profile")
+    scene.satellite_at(cw_x, acct_node_y, "aws-cloudwatch", "CW Logs", "agents → CW")
+    scene.satellite_at(igw_x, igw_y, "aws-igw", "IGW", "public RT only", size=28, label_side="right")
 
-    # 1. Terraform (operator laptop, outside AWS) → VPC border, *right of*
-    # the "VPC  sre-enterprise-vpc" title so the shaft never bisects the type.
-    # Run the elbow just above the VPC stroke (not up at the "operator" cap).
-    vpc_label_right = vpc_x + 250  # icon + "VPC  sre-enterprise-vpc"
-    tf_land_x = max(vpc_label_right + 24, 400)
-    tf_run_y = vpc_y - 5
-    parts.append(poly([
-        (tf_x, op_y + 52),
-        (tf_x, tf_run_y),
-        (tf_land_x, tf_run_y),
+    # Red sits on the faults lane (short hop into the alley). Blue sits on
+    # the observability row so the query is a straight run and health uses
+    # a dedicated riser in alley_blue.
+    red_y = faults_y + ICON / 2 + 8
+    blue_y = r_obs
+    scene.node_at(k3s_cx, red_y, "person-red", "Red Team", "Injects faults")
+    scene.node_at(k3s_cx, blue_y, "person-blue", "Blue Team", "Detects and resets")
+    scene.node_at(tg_x, r_svc, "traffic", "Traffic", "Live load")
+    scene.node_at(gw_x, r_svc, "fastapi", "api-gw", "Gateway")
+    scene.node_at(os_x, r_svc, "fastapi", "order-service", "Orders")
+    scene.node_at(ps_x, r_svc, "fastapi", "payment-service", "Payments")
+    scene.node_at(rd_x, r_db, "redis", "Redis", "order-service cache")
+    scene.node_at(pg_x, r_db, "postgresql", "PostgreSQL", "orders_db")
+    scene.node_at(prom_x, r_obs, "prometheus", "Prometheus", "")
+    scene.node_at(am_x, r_obs, "alertmanager", "Alertmanager", "Groups alerts")
+    scene.node_at(br_x, br_y, "document", "incident-bridge", "PromQL · agent jsonl", cap2="(Compose agents)")
+    scene.node_at(graf_x, graf_y, "grafana", "Grafana", "", size=52)
+    scene.grok_at(bot_cx, bot_avatar_y, "AI Incident Diagnosis")
+    scene.node_at(gh_x, bot_row_y, "github", "GitHub issue", "label: incident")
+    scene.node_at(ping_x, bot_row_y, "bell", "Owner ping", "Firing critical")
+
+    svc_ic = _ic(r_svc)
+    red_ic = _ic(red_y)
+    blue_ic = _ic(blue_y)
+    red_right = k3s_cx + ICON / 2 + 14
+    blue_right = k3s_cx + ICON / 2 + 14
+    icon_top_svc = _icon_top(r_svc)
+    db_top = _icon_top(r_db)
+    prom_top = _icon_top(r_obs)
+    graf_top = _icon_top(graf_y, 52)
+    tf_bot = op_y + 48  # below Terraform cap bbox
+    deploy_right = deploy_x + _tw("deploy_remote.py", 18, True) / 2 + 8
+
+    # 1. Terraform L-routes just above the VPC stroke and lands right of
+    # the VPC title — never into the account strip.
+    vpc_title_end = vpc_x + 42 + _tw("VPC  sre-enterprise-vpc", 17, True) + 16
+    tf_land_x = max(vpc_title_end, tf_x + 40)
+    scene.poly([
+        (tf_x, tf_bot),
+        (tf_x, vpc_y - 8),
+        (tf_land_x, vpc_y - 8),
         (tf_land_x, vpc_y),
-    ]))
+    ], name="tf-vpc")
 
-    # 1b. deploy_remote.py → S3 → host and deploy_remote.py → SSM → host.
-    # S3 is a short diagonal (nothing sits between deploy_remote.py and S3).
-    # SSM uses an orthogonal under-caption highway so the shaft cannot run
-    # through the S3 icon. Drops are vertical and stop at public_ingress.
-    deploy_label_right = deploy_x + 110  # 18px bold "deploy_remote.py" ~160px wide
-    fork_x = deploy_label_right + 16
-    parts.append(arrow(fork_x, op_y, s3_x - 36, acct_node_y))
-    ssm_run_y = acct_y + acct_h - 10  # 158: below satellite captions, above VPC
-    vpc_top = vpc_y  # stop on the VPC stroke; unused-CIDR type sits below it
-    parts.append(poly([
-        (fork_x, op_y + 8),
-        (fork_x, ssm_run_y),
-        (ssm_x, ssm_run_y),
-        (ssm_x, acct_node_y + 16),
-    ]))
-    parts.append(poly([(ssm_x, ssm_run_y), (ssm_x, vpc_top)]))
-    drop_from = acct_node_y + 46  # below satellite captions, still in the strip
-    parts.append(poly([(s3_x, drop_from), (s3_x, vpc_top)]))
-    # 1c. put_lab_secrets.py → Param Store → host .env. Short hop between
-    # the two icons (names sit below), then a vertical drop.
-    parts.append(arrow(secrets_x + 16, acct_node_y, param_x - 16, acct_node_y))
-    parts.append(poly([(param_x, drop_from), (param_x, vpc_top)]))
+    # 1b. deploy_remote.py → S3 (short orthogonal). SSM is caption-only
+    # (`send_command`); S3 caption covers deploy → host. No drop through
+    # the account labels or the VPC title row.
+    scene.poly([
+        (deploy_right, op_y),
+        (s3_x - 30, op_y),
+        (s3_x - 30, acct_node_y),
+        (s3_x - 16, acct_node_y),
+    ], name="deploy-s3")
 
-    # 2–4. Request path. Pills sit in the gaps above the icons.
-    parts.append(arrow(tg_x + 36, svc_ic, gw_x - 36, svc_ic))
-    parts.append(arrow(gw_x + 36, svc_ic, os_x - 36, svc_ic))
-    parts.append(arrow(os_x + 36, svc_ic, ps_x - 36, svc_ic))
-    parts.append(pill((tg_x + gw_x) / 2, svc_ic - 26, "requests"))
-    parts.append(pill((gw_x + os_x) / 2, svc_ic - 26, "/api/orders"))
-    parts.append(pill((os_x + ps_x) / 2, svc_ic - 26, "POST /payments"))
+    # 1c. put_lab_secrets.py → Param Store. Short hop between adjacent icons.
+    scene.arrow(secrets_x + 16, acct_node_y, param_x - 16, acct_node_y, name="secrets-param")
 
-    # 5. api-gw → payment-service proxy. U-turn above the icons, below the group label.
-    parts.append(poly([
-        (gw_x, _icon_top(r1) - 6),
-        (gw_x, pay_y),
-        (ps_x, pay_y),
-        (ps_x, _icon_top(r1) - 6),
-    ]))
-    parts.append(pill((gw_x + os_x) / 2, pay_y - 24, "/api/payments"))
+    # 2–4. Request path at icon centers. Pills sit ABOVE the shafts (and
+    # above the icons) so they can be wider than the inter-icon gap.
+    scene.arrow(tg_x + 36, svc_ic, gw_x - 36, svc_ic, name="req-gw")
+    scene.arrow(gw_x + 36, svc_ic, os_x - 36, svc_ic, name="req-os")
+    scene.arrow(os_x + 36, svc_ic, ps_x - 36, svc_ic, name="req-ps")
+    req_pill_y = icon_top_svc - 16
+    scene.pill_at((tg_x + gw_x) / 2, req_pill_y, "requests")
+    scene.pill_at((gw_x + os_x) / 2, req_pill_y, "/api/orders")
+    # Sit to the right of the order-service health tick so the tick
+    # cannot run through this (wide) pill.
+    scene.pill_at(os_x + (ps_x - os_x) * 0.62, req_pill_y, "POST /payments")
 
-    # 6–7. order-service → Redis and PostgreSQL. Fork just below the
-    # order-service caption, then drop into each datastore. Stays above
-    # the Blue health bus (no crossing).
-    os_fork_y = r1 + 56
-    parts.append(poly([
-        (os_x - 10, os_fork_y),
-        (rd_x, os_fork_y),
-        (rd_x, db_top),
-    ]))
-    parts.append(poly([
-        (os_x + 10, os_fork_y),
-        (pg_x, os_fork_y),
-        (pg_x, db_top),
-    ]))
+    # 5. /api/payments U-turn on its own lane above faults. Ticks stop
+    # before the faults bus.
+    scene.poly([(gw_x, pay_y), (ps_x, pay_y)], marked=False, name="pay-bus")
+    scene.arrow(gw_x, pay_y, gw_x, faults_y - 10, name="pay-tick-gw")
+    scene.arrow(ps_x, pay_y, ps_x, faults_y - 10, name="pay-tick-ps")
+    scene.pill_at((gw_x + os_x) / 2, pay_y - 20, "/api/payments")
 
-    # 8. Red Team → order-service and payment-service (not Traffic). Climbs
-    # in the Agents↔App gutter (alley_red, *outside* the Agents title), flies
-    # over the service icons, then a short bracket ticks down into both
-    # targets. Pill sits *above* the flyover, between the ticks — not on the
-    # shaft and not under the App title. Does not cross Blue's spine.
-    red_tick_end = pay_y - 10  # stop above the /api/payments U-turn; no crossing
-    parts.append(poly([
-        (k3s_right, red_ic),
+    # 8. Faults lane. Red is on this y, so the bus is a short hop into
+    # alley_red then across. Ticks stop above the health bus.
+    fault_tick_x_os, fault_tick_x_ps = os_x - 22, ps_x - 22
+    scene.poly([
+        (red_right, red_ic),
         (alley_red, red_ic),
-        (alley_red, red_y),
-        (ps_x - 18, red_y),
-    ], marked=False))
-    parts.append(arrow(os_x - 18, red_y, os_x - 18, red_tick_end))
-    parts.append(arrow(ps_x - 18, red_y, ps_x - 18, red_tick_end))
-    # Sit between the two ticks, above the flyover — not under the App title
-    # and not on the shaft.
-    parts.append(pill((os_x + ps_x) / 2, red_y - 26, "faults"))
+        (alley_red, faults_y),
+        (fault_tick_x_ps, faults_y),
+    ], marked=False, name="fault-bus")
+    scene.arrow(fault_tick_x_os, faults_y, fault_tick_x_os, health_y - 10, name="fault-os")
+    scene.arrow(fault_tick_x_ps, faults_y, fault_tick_x_ps, health_y - 10, name="fault-ps")
+    scene.pill_at((os_x + ps_x) / 2, faults_y - 20, "faults")
 
-    # 9. Blue Team health-checks api-gw, order-service, and payment-service
-    # (monitor.py GET /health ×3). Reset POSTs /fault/reset on order-service
-    # and payment-service only (fault_catalog.py). Three ticks; two pills.
-    parts.append(poly([
-        (k3s_right, blue_ic),
+    # 9. Health/reset lane. Blue riser in alley_blue; ticks down to icon
+    # tops. Pills sit ABOVE the bus, not on it.
+    h_gw, h_os, h_ps = gw_x + 22, os_x + 22, ps_x + 22
+    scene.poly([
+        (blue_right, blue_ic),
         (alley_blue, blue_ic),
         (alley_blue, health_y),
-        (ps_x + 18, health_y),
-    ], marked=False))
-    parts.append(arrow(gw_x + 18, health_y, gw_x + 18, svc_bottom))
-    parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
-    parts.append(arrow(ps_x + 18, health_y, ps_x + 18, svc_bottom))
-    # Sit on the health bus, clear of the observability-row pills (alerts / webhook).
-    parts.append(pill(gw_x - 110, health_y, "health ×3"))
-    parts.append(pill(ps_x - 50, health_y, "reset ×2"))
+        (h_ps, health_y),
+    ], marked=False, name="health-bus")
+    scene.arrow(h_gw, health_y, h_gw, icon_top_svc - 2, name="health-gw")
+    scene.arrow(h_os, health_y, h_os, icon_top_svc - 2, name="health-os")
+    scene.arrow(h_ps, health_y, h_ps, icon_top_svc - 2, name="health-ps")
+    scene.pill_at(gw_x - 10, health_y - 20, "health ×3")
+    scene.pill_at((os_x + ps_x) / 2, health_y - 20, "reset ×2")
 
-    # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
-    # cross Red's spine. Stays under Redis/Postgres.
-    parts.append(arrow(alley_blue, blue_ic, prom_x - 48, blue_ic))
-    parts.append(pill(tg_x + 20, blue_ic, "query"))
+    # 6–7. order-service → Redis / Postgres. Stem drops from below the
+    # service caption, then forks. Entirely under the health lane.
+    os_bot = r_svc + 52
+    fork_y = os_bot + 18
+    scene.poly([(os_x, os_bot), (os_x, fork_y), (rd_x, fork_y), (rd_x, db_top)], name="os-redis")
+    scene.poly([(os_x, fork_y), (pg_x, fork_y), (pg_x, db_top)], name="os-pg")
 
-    # 11. Services → Prometheus. A merge bar sits *under the three service
-    # captions* (above Redis and above the Blue health ticks), drops the
-    # Agents↔App gutter (alley_scrape), and enters Prometheus from the left.
-    # Separate x from Blue's spine; separate y from the health bus.
-    parts.append(poly([
-        (ps_x, collector_y),
-        (alley_scrape, collector_y),
-        (alley_scrape, prom_top + 8),
-        (prom_x - 48, prom_top + 8),
-    ]))
-    # Below the collector in the Traffic / api-gw gap — not on "Live load", Redis, or the health bus.
-    parts.append(pill((tg_x + gw_x) / 2, collector_y + 20, "3 scrape jobs"))
+    # 10. Blue → Prometheus. Shares the Blue riser; branches right at
+    # icon-center y of the observability row (below Redis captions).
+    scene.arrow(alley_blue, blue_ic, prom_x - 48, blue_ic, name="blue-query")
+    scene.pill_at(rd_x, blue_ic - 22, "query")
 
-    # 12–13. Observability row, left → right, short straight arrows.
-    parts.append(arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic))
-    parts.append(pill((prom_x + am_x) / 2, blue_ic - 28, "alerts"))
-    parts.append(arrow(am_x + 44, blue_ic, br_x - 44, blue_ic))
-    parts.append(pill((am_x + br_x) / 2, blue_ic - 28, "webhook"))
+    # 11. Scrape: one short orthogonal from the service row, down a
+    # dedicated column (scrape_x) that is not prom_x (so it cannot share
+    # a shaft with Prom→Grafana).
+    scene.poly([
+        (ps_x + 36, svc_ic),
+        (scrape_x, svc_ic),
+        (scrape_x, prom_top),
+    ], name="scrape")
+    scene.pill_at(scrape_x + 78, svc_ic - 22, "3 scrape jobs")
 
-    # 14. Prometheus → Grafana, directly below. Pill sits left of the drop
-    # so it does not sit on the PromQL arc.
-    parts.append(arrow(prom_x, r3 + 24, prom_x, graf_top))
-    parts.append(pill(prom_x - 100, (r3 + 24 + graf_top) / 2, "reads"))
+    # 12–13. Observability row.
+    scene.arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic, name="prom-am")
+    scene.pill_at((prom_x + am_x) / 2, blue_ic - 22, "alerts")
+    scene.arrow(am_x + 44, blue_ic, br_x - 44, blue_ic, name="am-br")
+    scene.pill_at((am_x + br_x) / 2, blue_ic - 22, "webhook")
 
-    # 15. Bridge PromQL back to Prometheus. Dip under Alertmanager's caption
-    # (empty), arrive at Prometheus from the right, above Grafana.
-    parts.append(arc(br_x, r3 + 58, am_x, r3 + 92, prom_x + 72, r3 + 16, dashed=True))
-    parts.append(pill(am_x + 50, r3 + 104, "PromQL"))
+    # 14. Prometheus → Grafana. Grafana sits under payment-service so the
+    # PromQL U-turn (right of Prometheus) cannot run through it.
+    graf_shaft_y0 = r_obs + 28
+    graf_run_y = graf_top - 18
+    scene.poly([
+        (prom_x, graf_shaft_y0),
+        (prom_x, graf_run_y),
+        (graf_x, graf_run_y),
+        (graf_x, graf_top),
+    ], name="prom-graf")
+    scene.pill_at(graf_x - 8, graf_run_y - 20, "reads")
 
-    # 16. Bridge → Grok avatar via the EC2/Grok gutter (orthogonal).
+    # 15. PromQL, dashed, under the bridge caption. Column is to the RIGHT
+    # of Prometheus so it does not share the Prom→Grafana shaft.
+    scene.poly([
+        (br_x, r_obs + 72),
+        (br_x, promql_y),
+        (prom_x + 52, promql_y),
+        (prom_x + 52, r_obs + 34),
+    ], dashed=True, name="promql")
+    scene.pill_at((am_x + br_x) / 2, promql_y + 20, "PromQL")
+
+    # 16. Bridge → Grok via the VPC–Grok gutter, well below the IGW labels.
     hex_cy = bot_avatar_y - 32
-    gutter = (vpc_x + vpc_w + bot_x) / 2  # 1388
-    parts.append(poly([
+    gutter = vpc_x + vpc_w + 56
+    scene.poly([
         (br_x + 40, blue_ic),
         (gutter, blue_ic),
         (gutter, hex_cy),
         (bot_cx - 52, hex_cy),
-    ]))
-    # Fully inside the Grok card, above the incoming shaft — not on the left edge.
-    parts.append(pill(bot_cx - 130, hex_cy - 32, "enriched JSON"))
+    ], name="br-grok")
+    scene.pill_at(bot_cx - 110, hex_cy - 26, "enriched JSON")
 
-    # 17–18. Grok → GitHub / owner ping: stem down, then orthogonal split.
+    # 17–18. Grok → GitHub / ping.
     out_y = bot_avatar_y + 78
-    fork_y = out_y + 36
+    fork_y_g = out_y + 40
     gh_top = _icon_top(bot_row_y)
-    parts.append(poly([(bot_cx, out_y), (bot_cx, fork_y)], marked=False))
-    parts.append(poly([(bot_cx, fork_y), (gh_x, fork_y), (gh_x, gh_top)]))
-    parts.append(poly([(bot_cx, fork_y), (ping_x, fork_y), (ping_x, gh_top)]))
-    # Below the fork horizontal (the stem has already ended) so the pill
-    # does not sit on the T-junction.
-    parts.append(pill(bot_cx, fork_y + 24, "diagnose"))
+    scene.poly([(bot_cx, out_y), (bot_cx, fork_y_g)], marked=False, name="grok-stem")
+    scene.poly([(bot_cx, fork_y_g), (gh_x, fork_y_g), (gh_x, gh_top)], name="grok-gh")
+    scene.poly([(bot_cx, fork_y_g), (ping_x, fork_y_g), (ping_x, gh_top)], name="grok-ping")
+    scene.pill_at(bot_cx, fork_y_g + 24, "diagnose")
 
-    # Clear gap under the VPC stroke; type sits *inside* the dashed footer
-    # with padding so the bold line is not on the top border.
     gate_y = col_bottom + 14
     gate_h = 58
-    parts.append(
+    scene.add(
         f'  <rect x="16" y="{gate_y:.0f}" width="1888" height="{gate_h:.0f}" rx="16" fill="#FFFFFF" '
         f'stroke="#D1D5DB" stroke-dasharray="7 6"/>'
     )
-    parts.append(
+    scene.add(
         f'  <text x="960" y="{gate_y + 28:.0f}" text-anchor="middle" class="gate">'
         "The bot has no control path into the lab: it only receives webhooks and writes GitHub issues.</text>"
     )
-    parts.append(
+    scene.add(
         f'  <text x="960" y="{gate_y + 48:.0f}" text-anchor="middle" class="gate-sub">'
         "AWS/EC2 is optional: docker compose up runs the same lab (agents need --profile agents). "
         "The bridge needs outbound HTTPS to the bot; agents also call Anthropic.</text>"
     )
-
     card_y = gate_y + gate_h + 6
 
     def card2(n: int, x: float, line1: str, line2: str) -> str:
@@ -786,21 +903,34 @@ def build() -> str:
     <text x="52" y="48" class="card-t">{line2}</text>
   </g>"""
 
-    parts.append(card2(
+    scene.add(card2(
         1, 16,
         "Held fault (FAULT_HOLD_SECONDS, default 120)",
         "or a real outage trips a Prometheus alert rule.",
     ))
-    parts.append(card2(2, 664, "Bridge adds PromQL + jsonl and posts", "enriched JSON to the bot."))
-    parts.append(card2(3, 1312, "Bot diagnoses and files or", "updates a GitHub issue."))
+    scene.add(card2(2, 664, "Bridge adds PromQL + jsonl and posts", "enriched JSON to the bot."))
+    scene.add(card2(3, 1312, "Bot diagnoses and files or", "updates a GitHub issue."))
+    scene.add("</svg>\n")
+    return "\n".join(scene.parts), scene.check()
 
-    parts.append("</svg>\n")
-    return "\n".join(parts)
+
+def check_geometry() -> list[str]:
+    _svg, violations = build_scene()
+    return violations
 
 
 def main() -> int:
-    OUT.write_text(build(), encoding="utf-8")
+    svg, violations = build_scene()
+    OUT.write_text(svg, encoding="utf-8")
     print(f"wrote {OUT}")
+    if violations:
+        print(f"{len(violations)} geometry violation(s):")
+        for item in violations[:60]:
+            print(f"  {item}")
+        if len(violations) > 60:
+            print(f"  ... {len(violations) - 60} more")
+        return 1
+    print("geometry: 0 violations")
     return 0
 
 

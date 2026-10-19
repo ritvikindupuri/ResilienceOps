@@ -238,6 +238,19 @@ def test_live_run_artifacts_redact_webhook_url():
     assert "ConnectTimeout" in log
 
 
+def test_architecture_geometry_has_no_overlaps():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "build_architecture", ROOT / "scripts" / "build_architecture.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    hits = mod.check_geometry()
+    assert hits == [], "architecture geometry violations:\n  " + "\n  ".join(hits[:20])
+
+
 def test_architecture_png_is_nontrivial():
     import struct
 

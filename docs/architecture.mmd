@@ -13,12 +13,12 @@ flowchart LR
   subgraph vpc ["VPC sre-enterprise-vpc — app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused"]
     IGW["IGW · public RT only"]
     subgraph pub ["public_ingress 10.0.1.0/24 — one EC2 host"]
-      subgraph sg ["SG ingress + internal"]
+      subgraph sg ["SG ingress + internal · :3000 / :8000"]
         subgraph k3sopt ["k3s (optional) · deploy_k8s_sandbox.py"]
           K3S[k3s]
         end
         subgraph compose ["Docker Compose on this host"]
-          subgraph agents ["Agents (--profile agents)"]
+          subgraph agents ["Agents (--profile agents) · POST /api/agent-events · jsonl"]
             RED[Red Team]
             BLUE[Blue Team]
           end
@@ -59,10 +59,8 @@ flowchart LR
   end
 
   TF -->|provisions| pub
-  DEPLOY --> S3 --> pub
-  DEPLOY --> SSM --> pub
-  SECRETS --> PARAM -->|"host .env"| pub
-  IGW -->|"operator :3000 / :8000"| sg
+  DEPLOY --> S3
+  SECRETS --> PARAM
   RED -->|"faults"| OS
   RED -->|"faults"| PS
   BLUE -->|"health ×3"| GW

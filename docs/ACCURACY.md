@@ -49,6 +49,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Figure put Red/Blue in k3s; caption said `PromQL · jsonl · k8s`; Grok title `local or AWS`; footer called the bot read-only; unused CIDRs sat in `public_ingress`; Redis arrows started detached; pill `firing alerts` | Agents box inside `Docker Compose on this host` as `Agents (--profile agents)`; small dashed `k3s (optional)` outside Compose; Grok `Grok Bot (external)`; pill `diagnose`; unused CIDRs on the VPC; `public_ingress` labeled `10.0.1.0/24`; Redis/Postgres arrows from order-service; pill `alerts` |
 | `put-user-policy` over the 2,048-char inline cap; deployer-policy missing provider-v5 S3 Gets / `DeleteObjectVersion`; README `cd terraform` broke step 9; k3s pod had no `workingDir` | Managed policy `create-policy`/`attach-*-policy`; `s3:Get*`/`List*` + `DeleteObjectVersion`; `terraform -chdir=terraform`; sandbox `workingDir: /app` |
 | README k3s steps used laptop `$PRIVATE_IP`; empty `PROMETHEUS_BIND` could bind `0.0.0.0`; empty `GROK_WEBHOOK_AUTH_SCHEME` skipped on AWS; audit-stream never created; README implied k3s restart/scale | IMDSv2 on the host; `${PROMETHEUS_BIND:?…}` + host `COMPOSE_FILE`; `__EMPTY__` sentinel; Terraform `audit-stream` + logger `CreateLogStream` + Compose `AWS_REGION`; README says `sre-target-apps` is empty |
+| Diagram at `0fcdcd2` crossed itself: SSM shaft through the label, Terraform/deploy arrows through the account box, faults/`/api/payments` buses through request arrows, verticals through health/reset/query/scrape, missing order-service→Redis/Postgres, Grafana on the bottom border, IGW caption on `operator :3000/:8000` | Orthogonal lanes in `build_architecture.py`. Dropped the operator-port edge (SG title `:3000 / :8000`) and the agents→api-gw edge (Agents caption `POST /api/agent-events · jsonl`). SSM is caption-only. `check_geometry()` refuses line×line, line-through-bbox, and overlapping icon/text/pill boxes; `render_architecture.sh` still writes 2× |
 
 ---
 
@@ -83,7 +84,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | CW Logs satellite | “agents → CW” | `agents/common/structured_logger.py` `CreateLogStream` + `put_log_events` to `/sre/autonomous-agent-audit` stream `audit-stream` (Terraform + logger). Compose `agent-sandbox` `AWS_REGION` |
 | put_lab_secrets.py satellite | “laptop → Param” | Operator script; not an AWS resource. Arrow into Param Store |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
-| IGW satellite | “public RT only”, straddling the VPC **right** border; gutter text `operator :3000 / :8000` | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` |
+| IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
 | k3s | small dashed “k3s (optional)” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox` |
 | Red Team | “Injects faults” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
 | Blue Team | “Detects and resets” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
@@ -93,10 +94,10 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | payment-service | “Payments” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:70`); uvicorn `:135` |
 | Redis | “order-service cache” | compose `redis:7-alpine` `docker-compose.yml:92-95` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
 | PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:103-109`; order-service `POSTGRES_DB` `:39` |
-| Prometheus | “Scrapes + rules” | image `prom/prometheus:v2.52.0` `docker-compose.yml:132`; `dashboards/prometheus.yml:1-12` |
+| Prometheus | (no caption; scrape arrow from the service row) | image `prom/prometheus:v2.52.0` `docker-compose.yml:132`; `dashboards/prometheus.yml:1-12` |
 | Alertmanager | “Groups alerts” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:153`; `dashboards/alertmanager.yml:4-16` |
 | incident-bridge | “PromQL · agent jsonl (Compose agents)” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
-| Grafana | (no caption; sits under Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
+| Grafana | (no caption; under the payment-service column, reads from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
 | GitHub issue | “label: incident” | Bot behavior (imported template). Sample: issue #5 label `incident`. Path A does **not** open issues (`orchestrator.py:112-115` writes `reports/`) |
 | Owner ping | “Firing critical” | Bot template at import (not in this repo). README `:40`, `:666` |
@@ -109,9 +110,9 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 
 | # | Arrow | Pill | Evidence |
 |---|---|---|---|
-| 1 | Terraform → VPC border (right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf` |
-| 1b | deploy_remote.py → S3 → EC2 host **and** deploy_remote.py → SSM (`send_command`) → host | (none) | Zip upload `_upload_payload`; `ssm.send_command` `AWS-RunShellScript`. Two drops from the account strip; fork starts past the `deploy_remote.py` name |
-| 1c | put_lab_secrets.py → Param Store → host `.env` | (satellite cap `secrets → .env`) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
+| 1 | Terraform → VPC border (L-route just above the stroke, right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf` |
+| 1b | deploy_remote.py → S3 | (none; S3 cap `deploy → host`, SSM cap `send_command`) | Zip upload `_upload_payload`. SSM `send_command` is caption-only so no shaft runs through the SSM mark. No drop through the account box or VPC title row |
+| 1c | put_lab_secrets.py → Param Store | (satellite cap `secrets → .env`) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
 | 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:124` |
 | 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
 | 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
@@ -120,14 +121,15 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 8 | Red Team → order-service **and** payment-service | `faults` | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic. One flyover + two ticks; pill sits above the shaft (`build_architecture.py:576-591`) instead of one arrow per endpoint |
 | 9 | Blue Team → api-gw, order-service, payment-service | `health ×3` and `reset ×2` | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** (api-gw has no `/fault/reset`). Three ticks; two pills off the bus (`build_architecture.py:593-606`) |
 | 10 | Blue Team → Prometheus | `query` | `monitor.py:15-25`, `:98-110` PromQL if `PROMETHEUS_URL` answers |
-| 11 | Services → Prometheus | `3 scrape jobs` | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s` `:2`. Merge bar under the three service captions, then the Agents↔App gutter into Prometheus — not from the Blue health bus |
+| 11 | Services → Prometheus | `3 scrape jobs` | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s` `:2`. One short orthogonal from the payment-service row down a dedicated column into Prometheus — not three arrows and not from the Blue health bus |
 | 12 | Prometheus → Alertmanager | `alerts` | `prometheus.yml` `alertmanager:9093`; rules `dashboards/alerts.yml` |
 | 13 | Alertmanager → incident-bridge | `webhook` | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
 | 14 | Prometheus → Grafana | `reads` | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml`. Host Grafana `:3000` (`docker-compose.yml:212`) |
 | 15 | incident-bridge ⇢ Prometheus (dashed) | `PromQL` | `evidence.py:29-67` range queries; `app.py` `collect_evidence` |
 | 16 | incident-bridge → Grok avatar | `enriched JSON` | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}` (`:155-160`); HTTPS to `GROK_WEBHOOK_URL` |
 | 17–18 | Grok → GitHub / owner ping | `diagnose` | Imported bot. Opening an issue is a write. The bot has no control path into the lab (webhooks in, GitHub issues out) |
-| (omitted) | agents → api-gw `/api/agent-events`; agents → `agent_activity.jsonl` → bridge | Covered by bridge caption `PromQL · agent jsonl (Compose agents)` and CW `agents → CW`. Extra shafts would cross the scrape/health alleys | `structured_logger.py` POST `/api/agent-events` + jsonl; `evidence.py` `collect_agent_activity` |
+| (omitted) | agents → api-gw `/api/agent-events`; agents → `agent_activity.jsonl` → bridge | Agents caption `POST /api/agent-events · jsonl`; bridge caption `PromQL · agent jsonl (Compose agents)`; CW `agents → CW`. No extra shaft | `structured_logger.py` POST `/api/agent-events` + jsonl; `evidence.py` `collect_agent_activity` |
+| (omitted) | operator → SG `:3000 / :8000` | SG title `SG  ingress + internal  ·  :3000 / :8000`. No IGW→SG arrow | `ingress_sg` Grafana 3000 + API 8000 to `allowed_cidr` |
 
 ---
 
