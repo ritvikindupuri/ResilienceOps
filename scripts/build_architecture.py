@@ -275,10 +275,10 @@ def _icon_top(node_y: float) -> float:
 
 
 def build() -> str:
-    W, H = 1920, 1160
+    W, H = 1920, 1200
     gy = 52
-    main_h = 934
-    col_bottom = gy + main_h  # 986
+    main_h = 974
+    col_bottom = gy + main_h  # 1026
 
     bot_x, bot_w = 1396, 504
     ec2_x, ec2_w = 16, 1364
@@ -307,10 +307,10 @@ def build() -> str:
     g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s sandbox")
     g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab", icon="docker")
 
-    r1 = 390  # Traffic / api-gw / order / payment
-    r2 = 615  # Redis + Postgres under order-service; Red Team in k3s
-    r3 = 760  # Prometheus → Alertmanager → incident-bridge; Blue Team
-    graf_y = 920  # Grafana sits under Prometheus, not on the alert row
+    r1 = 420  # Traffic / api-gw / order / payment (room above for Red flyover)
+    r2 = 700  # Redis + Postgres under order-service; Red Team in k3s
+    r3 = 840  # Prometheus → Alertmanager → incident-bridge; Blue Team
+    graf_y = 978  # Grafana sits under Prometheus, not on the alert row
 
     k3s_cx = k3s_x + k3s_w / 2  # 146
     k3s_node_y = nested_y + LABEL_BAND + ICON + 10  # 360
@@ -388,9 +388,14 @@ def build() -> str:
     db_top = _icon_top(r2)
     prom_top = _icon_top(r3)
     graf_top = _icon_top(graf_y)
-    pay_y = nested_y + LABEL_BAND + 18  # 300, between Compose label and service icons
-    health_y = r1 + 72  # below service captions; stays left of Redis/Postgres
-    metrics_from = r1 + 56
+    pay_y = nested_y + LABEL_BAND + 40  # 330, below Red ticks so they do not cross it
+    # Red flies over the services (above the /api/payments U-turn) and ticks
+    # down into order-service and payment-service. Blue stays in the corridor
+    # under the captions and ticks up into order-service. The two never share y.
+    red_y = nested_y + LABEL_BAND + 10  # 300
+    svc_bottom = r1 + 52
+    health_y = r1 + 100  # Blue horizontal under captions, above Redis/metrics
+    metrics_from = r1 + 136
 
     # 1. Terraform → EC2 host. IAM and SSM are attached badges, not a chain.
     parts.append(arrow(tf_x + 40, aws_ic, ec2_node_x - 40, aws_ic))
@@ -413,30 +418,36 @@ def build() -> str:
     parts.append(pill((gw_x + os_x) / 2, pay_y - 16, "/api/payments"))
 
     # 6–7. order-service → Redis and PostgreSQL. Two short straight drops.
-    # Nothing else is routed through this column.
+    # Drops start below the Red/Blue corridor; nothing else uses this column.
     parts.append(arrow(rd_x, metrics_from, rd_x, db_top))
     parts.append(arrow(pg_x, metrics_from, pg_x, db_top))
 
-    # 8. Red Team → services row. Climbs inside k3s (alley_red), then one
-    # rightward arrow at service-icon height. Does not cross Blue's spine.
+    # 8. Red Team → order-service and payment-service (not Traffic). Climbs
+    # inside k3s (alley_red), flies over the service icons, then a short
+    # bracket ticks down into both targets. Pill sits on that flyover.
+    # Does not cross Blue's spine (Blue is below the row).
+    red_tick_end = pay_y - 10  # stop above the /api/payments U-turn; no crossing
     parts.append(poly([
         (k3s_right, red_ic),
         (alley_red, red_ic),
-        (alley_red, svc_ic),
-        (tg_x - 40, svc_ic),
-    ]))
-    parts.append(pill(k3s_cx, (svc_ic + red_ic) / 2 - 28, "faults"))
+        (alley_red, red_y),
+        (ps_x - 18, red_y),
+    ], marked=False))
+    parts.append(arrow(os_x - 18, red_y, os_x - 18, red_tick_end))
+    parts.append(arrow(ps_x - 18, red_y, ps_x - 18, red_tick_end))
+    parts.append(pill((tg_x + gw_x) / 2, red_y, "faults"))
 
-    # 9. Blue Team → services row. Climbs in the k3s↔compose gutter
-    # (alley_blue, to the right of Red's spine). Lands left of api-gw so
-    # the Redis/Postgres column stays empty.
+    # 9. Blue Team → FastAPI services (not Traffic). Climbs in the gutter
+    # (alley_blue, right of Red's spine). Horizontal runs under api-gw to
+    # order-service, then ticks up into the node.
     parts.append(poly([
         (k3s_right, blue_ic),
         (alley_blue, blue_ic),
         (alley_blue, health_y),
-        (gw_x - 40, health_y),
-    ]))
-    parts.append(pill((alley_blue + gw_x - 40) / 2 + 30, health_y + 18, "health / reset"))
+        (os_x + 18, health_y),
+    ], marked=False))
+    parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
+    parts.append(pill((gw_x + os_x) / 2, health_y, "health / reset"))
 
     # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
     # cross Red's spine. Stays under Redis/Postgres.

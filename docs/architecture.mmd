@@ -48,7 +48,7 @@ flowchart LR
     BOT -->|"firing critical"| PING
   end
 
-  RED -->|"faults"| lab
-  BLUE -->|"health / reset"| lab
+  RED -->|"faults"| OS
+  BLUE -->|"health / reset"| OS
   BLUE -->|"query"| PROM
   BR -->|"enriched JSON"| BOT
