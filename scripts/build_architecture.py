@@ -36,6 +36,8 @@ ICON_FILES = [
     "aws-ec2",
     "aws-iam",
     "aws-ssm",
+    "aws-s3",
+    "aws-cloudwatch",
     "aws-vpc",
     "aws-subnet-public",
     "terraform",
@@ -263,6 +265,14 @@ def group(
             "rx": "8",
             "cls": "group-sg",
         },
+        "optional": {
+            "fill": "#FAFBFC",
+            "stroke": "#94A3B8",
+            "sw": "1.6",
+            "dash": ' stroke-dasharray="5 4"',
+            "rx": "8",
+            "cls": "group",
+        },
     }
     pal = palettes[style]
     icon_svg = ""
@@ -370,21 +380,23 @@ def build() -> str:
     # VPC *right* border; labels sit in the VPC–Grok gutter, off the stroke.
     aws_icon = 44
     tf_x, deploy_x, op_y = 84, 268, 118  # icon top = 66, fully below the title
-    acct_x, acct_y, acct_w, acct_h = 448, 72, 820, 90  # 72–162, under the title
-    iam_x, ssm_x, acct_node_y = 980, 640, 118
+    # Wider account strip so S3 / Param Store / SSM / IAM / CW sit in one row.
+    acct_x, acct_y, acct_w, acct_h = 430, 60, 1000, 108  # 60–168, under the title
+    s3_x, param_x, ssm_x, iam_x, cw_x = 620, 760, 900, 1040, 1180
+    acct_node_y = 108  # icons; labels sit below inside the strip
 
     vpc_x, vpc_y, vpc_w, vpc_h = 16, 176, 1276, 896  # right 1292, bottom 1072
     bot_x, bot_y, bot_w, bot_h = 1452, 176, 452, 896  # gutter 160px for IGW labels
     col_bottom = vpc_y + vpc_h
 
-    g_bot = group(bot_x, bot_y, bot_w, bot_h, "Grok Bot  ·  local or AWS")
+    g_bot = group(bot_x, bot_y, bot_w, bot_h, "Grok Bot (external)")
     g_vpc = group(
         vpc_x, vpc_y, vpc_w, vpc_h, "VPC  sre-enterprise-vpc",
         icon="aws-vpc", style="vpc",
     )
     g_acct = group(
         acct_x, acct_y, acct_w, acct_h,
-        "AWS account  ·  outside the VPC",
+        "AWS account",
         style="account",
     )
 
@@ -394,7 +406,7 @@ def build() -> str:
     subnet_w, subnet_h = vpc_w - 24, vpc_h - 48
     g_subnet = group(
         subnet_x, subnet_y, subnet_w, subnet_h,
-        "public_ingress  ·  one EC2 host",
+        "public_ingress  10.0.1.0/24  ·  one EC2 host",
         icon="aws-subnet-public", style="public_subnet",
     )
 
@@ -409,7 +421,7 @@ def build() -> str:
 
     nested_y = sg_y + 28
     nested_h = sg_y + sg_h - nested_y - 10
-    k3s_x, k3s_w = sg_x + 10, 228
+    k3s_x, k3s_w = sg_x + 10, 252
     lab_x = k3s_x + k3s_w + 48
     lab_w = sg_x + sg_w - 12 - lab_x
     # Two alley spines. Red climbs inside k3s (left). Blue climbs in the
@@ -417,16 +429,27 @@ def build() -> str:
     alley_blue = k3s_x + k3s_w + 22
     alley_red = k3s_x + k3s_w - 40
 
-    g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s on this host")
+    k3s_opt_h = 78
+    g_k3s_opt = group(
+        k3s_x, nested_y, k3s_w, k3s_opt_h,
+        "k3s (optional)",
+        icon="k3s", style="optional",
+    )
+    agents_y = nested_y + k3s_opt_h + 10
+    agents_h = nested_y + nested_h - agents_y
+    g_k3s = group(
+        k3s_x, agents_y, k3s_w, agents_h,
+        "Agents · orchestrator.py",
+    )
     g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab on this host", icon="docker")
 
     r1 = nested_y + 210  # Traffic / api-gw / order / payment (room above for Red flyover)
-    r2 = r1 + 268  # Redis + Postgres under order-service; Red Team in k3s
-    r3 = r2 + 148  # Prometheus → Alertmanager → incident-bridge; Blue Team
-    graf_y = nested_y + nested_h - 22  # Grafana under Prometheus, not on the alert row
+    r2 = r1 + 155  # Redis + Postgres under order-service; Red Team in Agents
+    r3 = r2 + 230  # Prometheus → Alertmanager → incident-bridge; Blue Team
+    graf_y = nested_y + nested_h - 48  # keep Grafana name above the SG stroke
 
     k3s_cx = k3s_x + k3s_w / 2
-    k3s_node_y = nested_y + LABEL_BAND + ICON + 10
+    k3s_node_y = nested_y + LABEL_BAND + 8
     tg_x, gw_x, os_x, ps_x = lab_x + 72, lab_x + 252, lab_x + 492, lab_x + 812
     rd_x, pg_x = os_x - 90, os_x + 90
     prom_x, am_x, br_x = gw_x, os_x + 40, ps_x
@@ -444,10 +467,12 @@ def build() -> str:
     nodes = [
         node(tf_x, op_y, "terraform", "Terraform", "optional AWS", size=aws_icon),
         node(deploy_x, op_y, "document", "deploy_remote.py", "operator", size=aws_icon),
-        satellite(iam_x, acct_node_y, "aws-iam", "IAM", "role + instance profile"),
-        satellite(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command"),
+        satellite(s3_x, acct_node_y, "aws-s3", "S3", "deploy → host", size=26, label_side="below"),
+        satellite(param_x, acct_node_y, "aws-ssm", "Param Store", "secrets → .env", size=26, label_side="below"),
+        satellite(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command", size=26, label_side="below"),
+        satellite(iam_x, acct_node_y, "aws-iam", "IAM", "role + profile", size=26, label_side="below"),
+        satellite(cw_x, acct_node_y, "aws-cloudwatch", "CW Logs", "agents → CW", size=26, label_side="below"),
         satellite(igw_x, igw_y, "aws-igw", "IGW", "public RT only", size=28, label_side="right"),
-        node(k3s_cx, k3s_node_y, "k3s", "k3s", "Agent sandbox"),
         node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
         node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
         node(tg_x, r1, "traffic", "Traffic", "Live load"),
@@ -458,7 +483,7 @@ def build() -> str:
         node(pg_x, r2, "postgresql", "PostgreSQL", "orders_db"),
         node(prom_x, r3, "prometheus", "Prometheus", ""),
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
-        node(br_x, r3, "document", "incident-bridge", "PromQL · jsonl · k8s"),
+        node(br_x, r3, "document", "incident-bridge", "PromQL · agent jsonl"),
         node(graf_x, graf_y, "grafana", "Grafana", "", size=56),
         grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", ""),
         node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
@@ -499,14 +524,24 @@ def build() -> str:
     parts.append(g_vpc)
     parts.append(g_subnet)
     parts.append(g_sg)
+    parts.append(g_k3s_opt)
     parts.append(g_k3s)
     parts.append(g_lab)
     parts.append(g_bot)
-    # Unused subnets live in the VPC but have no workloads today — caption only.
-    # Sits on the VPC title row, left of the IGW (which occupies the top-right border).
+    # Subtitles that do not fit in the group title band.
     parts.append(
-        f'  <text x="{subnet_x + subnet_w - 14:.0f}" y="{subnet_y + 26:.0f}" text-anchor="end" '
-        f'class="cap">unused: 10.0.10.0/24 · 10.0.20.0/24</text>'
+        f'  <text x="{k3s_x + 42:.0f}" y="{nested_y + 44:.0f}" class="cap">'
+        "deploy_k8s_sandbox.py</text>"
+    )
+    parts.append(
+        f'  <text x="{k3s_x + 24:.0f}" y="{agents_y + 44:.0f}" class="cap">'
+        "(Compose --profile agents)</text>"
+    )
+    # Unused subnets live in the VPC but have no workloads today — caption on
+    # the VPC box (not the public_ingress header). Left of the IGW gutter.
+    parts.append(
+        f'  <text x="{vpc_x + vpc_w - 18:.0f}" y="{vpc_y + 26:.0f}" text-anchor="end" '
+        f'class="cap">app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused</text>'
     )
     parts.extend(nodes)
 
@@ -514,18 +549,18 @@ def build() -> str:
     red_ic = _ic(r2)
     blue_ic = _ic(r3)
     op_ic = op_y - aws_icon / 2 - 4
-    k3s_right = k3s_cx + 32
+    k3s_right = k3s_cx + 44  # past the 68px person icon so shafts never clip Red/Blue
     db_top = _icon_top(r2)
     prom_top = _icon_top(r3)
     graf_top = graf_y - 56 - 8  # Grafana is drawn at size 56, not ICON
-    pay_y = nested_y + 108
+    pay_y = nested_y + 120
     # Red flies over the services (above the /api/payments U-turn) and ticks
-    # down into order-service and payment-service. Blue stays in the corridor
-    # under the captions and ticks up into api-gw, order, and payment.
-    red_y = nested_y + 62
+    # down into order-service and payment-service. Blue's health bus sits
+    # *below* Redis/Postgres so those arrows can start at order-service.
+    red_y = nested_y + 92
     svc_bottom = r1 + 52
-    health_y = r1 + 100  # Blue horizontal under captions, above Redis/metrics
-    metrics_from = r1 + 136
+    health_y = r2 + 78  # well below Redis/Postgres captions (pills sit under the bus)
+    metrics_from = health_y + 36  # scrape starts below the Blue bus (no cross)
     host_top = subnet_y
 
     # 1. Terraform (operator laptop, outside AWS) → VPC border, *right of*
@@ -541,14 +576,15 @@ def build() -> str:
         (tf_land_x, vpc_y),
     ]))
 
-    # 1b. deploy_remote.py → SSM → EC2. Start at the right edge of the
-    # name (plus a gap), at the operator origin so the shaft is between the
-    # icon and the "deploy_remote.py" label — never through the type.
+    # 1b. deploy_remote.py → S3 → host. Start past the deploy_remote.py name.
+    # Param Store drops to the host (.env from put_lab_secrets.py). Drops end
+    # at the public_ingress top so they never enter Compose titles.
     deploy_label_right = deploy_x + 110  # 18px bold "deploy_remote.py" ~160px wide
-    parts.append(arrow(deploy_label_right + 16, op_y, ssm_x - 24, acct_node_y))
+    parts.append(arrow(deploy_label_right + 16, op_y, s3_x - 40, acct_node_y))
+    drop_from = acct_y + acct_h + 4  # gap above the VPC stroke, below captions
     parts.append(poly([
-        (ssm_x, acct_node_y + 28),
-        (ssm_x, host_top),
+        (s3_x, drop_from),
+        (s3_x, host_top),
     ]))
 
     # 2–4. Request path. Pills sit in the gaps above the icons.
@@ -568,10 +604,20 @@ def build() -> str:
     ]))
     parts.append(pill((gw_x + os_x) / 2, pay_y - 24, "/api/payments"))
 
-    # 6–7. order-service → Redis and PostgreSQL. Two short straight drops.
-    # Drops start below the Red/Blue corridor; nothing else uses this column.
-    parts.append(arrow(rd_x, metrics_from, rd_x, db_top))
-    parts.append(arrow(pg_x, metrics_from, pg_x, db_top))
+    # 6–7. order-service → Redis and PostgreSQL. Fork just below the
+    # order-service caption, then drop into each datastore. Stays above
+    # the Blue health bus (no crossing).
+    os_fork_y = r1 + 48
+    parts.append(poly([
+        (os_x - 10, os_fork_y),
+        (rd_x, os_fork_y),
+        (rd_x, db_top),
+    ]))
+    parts.append(poly([
+        (os_x + 10, os_fork_y),
+        (pg_x, os_fork_y),
+        (pg_x, db_top),
+    ]))
 
     # 8. Red Team → order-service and payment-service (not Traffic). Climbs
     # inside k3s (alley_red), flies over the service icons, then a short
@@ -603,8 +649,8 @@ def build() -> str:
     parts.append(arrow(gw_x + 18, health_y, gw_x + 18, svc_bottom))
     parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
     parts.append(arrow(ps_x + 18, health_y, ps_x + 18, svc_bottom))
-    parts.append(pill((gw_x + os_x) / 2, health_y - 32, "health ×3"))
-    parts.append(pill((os_x + ps_x) / 2, health_y - 32, "reset ×2"))
+    parts.append(pill((gw_x + os_x) / 2, health_y + 18, "health ×3"))
+    parts.append(pill((os_x + ps_x) / 2, health_y + 18, "reset ×2"))
 
     # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
     # cross Red's spine. Stays under Redis/Postgres.
@@ -614,11 +660,11 @@ def build() -> str:
     # 11. Services → Prometheus. One vertical in the api-gw / Prometheus column.
     parts.append(arrow(gw_x, metrics_from, gw_x, prom_top))
     # Left of the scrape vertical, above Redis — never on the Redis icon.
-    parts.append(pill(gw_x - 92, metrics_from + 30, "3 scrape jobs"))
+    parts.append(pill(gw_x - 100, (metrics_from + prom_top) / 2, "3 scrape jobs"))
 
     # 12–13. Observability row, left → right, short straight arrows.
     parts.append(arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic))
-    parts.append(pill((prom_x + am_x) / 2, blue_ic - 28, "firing alerts"))
+    parts.append(pill((prom_x + am_x) / 2, blue_ic - 28, "alerts"))
     parts.append(arrow(am_x + 44, blue_ic, br_x - 44, blue_ic))
     parts.append(pill((am_x + br_x) / 2, blue_ic - 28, "webhook"))
 
@@ -653,7 +699,7 @@ def build() -> str:
     parts.append(poly([(bot_cx, fork_y), (ping_x, fork_y), (ping_x, gh_top)]))
     # Below the fork horizontal (the stem has already ended) so the pill
     # does not sit on the T-junction.
-    parts.append(pill(bot_cx, fork_y + 24, "read-only"))
+    parts.append(pill(bot_cx, fork_y + 24, "diagnose"))
 
     gate_y = col_bottom + 4
     parts.append(
@@ -662,12 +708,12 @@ def build() -> str:
     )
     parts.append(
         f'  <text x="960" y="{gate_y + 14:.0f}" text-anchor="middle" class="gate">'
-        "Read-only: the bot never restarts, scales, or pushes</text>"
+        "The bot has no control path into the lab: it only receives webhooks and writes GitHub issues.</text>"
     )
     parts.append(
         f'  <text x="960" y="{gate_y + 30:.0f}" text-anchor="middle" class="gate-sub">'
-        "AWS/EC2 is optional: docker compose up is the same lab. "
-        "The bot only needs outbound HTTPS from the bridge.</text>"
+        "AWS/EC2 is optional: docker compose up runs the same lab (agents need --profile agents). "
+        "The bridge needs outbound HTTPS to the bot; agents also call Anthropic.</text>"
     )
 
     card_y = gate_y + 40
@@ -680,8 +726,8 @@ def build() -> str:
     <text x="52" y="48" class="card-t">{line2}</text>
   </g>"""
 
-    parts.append(card2(1, 16, "Fault or real outage trips a", "Prometheus alert rule."))
-    parts.append(card2(2, 664, "Bridge adds evidence and posts", "enriched JSON to your bot."))
+    parts.append(card2(1, 16, "Held fault (~120s) or a real outage", "trips a Prometheus alert rule."))
+    parts.append(card2(2, 664, "Bridge adds PromQL + jsonl and posts", "enriched JSON to the bot."))
     parts.append(card2(3, 1312, "Bot diagnoses and files or", "updates a GitHub issue."))
 
     parts.append("</svg>\n")

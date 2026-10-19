@@ -87,6 +87,7 @@ def test_readme_referenced_scripts_exist():
         "teardown.sh",
         "teardown.ps1",
         ".env.example",
+        "docker-compose.prom-lan.yml",
         "dashboards/prometheus.yml",
         "dashboards/alerts.yml",
         "dashboards/alertmanager.yml",
@@ -162,6 +163,21 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "optional AWS" in svg
     assert "health ×3" in svg
     assert "reset ×2" in svg
+    assert "Grok Bot (external)" in svg
+    assert "PromQL · agent jsonl" in svg
+    assert "PromQL · jsonl · k8s" not in svg
+    assert "Agents · orchestrator.py" in svg
+    assert "k3s (optional)" in svg
+    assert "diagnose" in svg
+    assert "read-only" not in svg.lower()
+    assert "Your Grok bot" not in svg
+    assert "app_workloads 10.0.10.0/24" in svg
+    assert "public_ingress  10.0.1.0/24" in svg
+    assert "FAULT_HOLD_SECONDS" in readme
+    assert "PROMETHEUS_BIND" in readme
+    assert "put-user-policy" in readme
+    assert "delete-user-policy" in readme
+    assert "ResilienceOpsDeployer" in readme
     assert "terraform/deployer-policy.json" in readme
     assert "put_lab_secrets.py" in readme
     assert "deploy_k8s_sandbox.py" in readme
@@ -208,5 +224,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    assert 1600 <= width <= 2000, width
-    assert 900 <= height <= 1200, height
+    # Native SVG is 1920×1200; render_architecture.sh writes 2× (3840×2400).
+    assert width in {1920, 3840}, width
+    assert height in {1200, 2400}, height

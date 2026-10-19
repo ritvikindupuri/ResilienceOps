@@ -37,6 +37,7 @@ INCLUDE_PATHS = [
     "dashboards",
     "traffic-generator",
     "docker-compose.yml",
+    "docker-compose.prom-lan.yml",
     "agents",
     "orchestrator.py",
     "requirements.txt",
@@ -260,15 +261,50 @@ def _upload_payload(s3, bucket: str, instance_id: str, payload: bytes) -> tuple[
     return key, url
 
 
+def _prometheus_lan_bind_script() -> str:
+    """Publish Prometheus on the instance private IP for same-host k3s pods.
+
+    Compose already binds 127.0.0.1:9090 (SSM port forwarding). This overlay
+    adds <private-ip>:9090. Never 0.0.0.0. ingress_sg does not open 9090.
+    Same-host k3s → private IP is local delivery (no security-group hop).
+    """
+    return r"""
+TOKEN=$(curl -sS -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')
+PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+case "$PRIVATE_IP" in
+  ''|0.0.0.0|127.*)
+    echo "[warn] refusing PROMETHEUS_BIND='$PRIVATE_IP' (need the instance private IP)"
+    COMPOSE_FILES='-f docker-compose.yml'
+    ;;
+  *)
+    if grep -q '^PROMETHEUS_BIND=' /opt/sre-colosseum/.env 2>/dev/null; then
+      sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
+    fi
+    printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
+    echo "[ok] PROMETHEUS_BIND=$PRIVATE_IP (k3s on-host; ingress_sg does not open 9090)"
+    if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
+      COMPOSE_FILES='-f docker-compose.yml -f docker-compose.prom-lan.yml'
+    else
+      COMPOSE_FILES='-f docker-compose.yml'
+    fi
+    ;;
+esac
+export COMPOSE_FILES
+"""
+
+
 def _compose_up_commands(with_agents: bool) -> list[str]:
     commands = [
         "cd /opt/sre-colosseum",
         "docker compose version",
-        "docker compose up --build -d",
+        _prometheus_lan_bind_script().strip(),
+        'docker compose ${COMPOSE_FILES:- -f docker-compose.yml} up --build -d',
     ]
     if with_agents:
-        commands.append("docker compose --profile agents up --build -d")
-    commands.append("docker compose ps")
+        commands.append(
+            'docker compose ${COMPOSE_FILES:- -f docker-compose.yml} --profile agents up --build -d'
+        )
+    commands.append("docker compose ${COMPOSE_FILES:- -f docker-compose.yml} ps")
     return commands
 
 

@@ -80,8 +80,15 @@ def test_terraform_aws_path_knobs():
 def test_deploy_remote_uses_s3_and_compose_v2_all_services():
     src = (ROOT / "deploy_remote.py").read_text(encoding="utf-8")
     assert "reports" in dr.INCLUDE_PATHS
-    assert "docker compose up --build -d" in src
-    assert "docker compose --profile agents" in src
+    assert "up --build -d" in src
+    assert "--profile agents" in src
+    assert "docker-compose.prom-lan.yml" in src
+    assert "PROMETHEUS_BIND" in src
+    assert "0.0.0.0" in dr._prometheus_lan_bind_script()
+    lan = dr._prometheus_lan_bind_script()
+    assert "127.*" in lan
+    commands = dr._compose_up_commands(True)
+    assert any("prom-lan.yml" in c or "COMPOSE_FILES" in c for c in commands)
     assert "docker-compose up" not in src
     assert "base64 -d" not in src
     assert "get-parameter" in src
@@ -94,7 +101,7 @@ def test_deploy_remote_uses_s3_and_compose_v2_all_services():
     assert "supersecret" not in script
     assert "ANTHROPIC_API_KEY" in script
     commands = dr._compose_up_commands(True)
-    assert "docker compose up --build -d" in commands
+    assert any("up --build -d" in c for c in commands)
     assert any("--profile agents" in c for c in commands)
 
 
@@ -142,8 +149,112 @@ def test_sandbox_script_applies_required_manifests_not_microservices_by_default(
     assert "orchestrator.py" in script
     assert "/app/reports" in script
     assert "PRIVATE_IP" in script
+    assert "docker-compose.prom-lan.yml" in script
+    assert "PROMETHEUS_BIND" in script
     with_ms = k8s_deploy.sandbox_host_script(apply_microservices=True, skip_copy=True)
     assert "k8s/apps/microservices.yaml" in with_ms
+
+
+def test_orchestrator_holds_before_remediation(monkeypatch):
+    import orchestrator as orch
+
+    class Fake:
+        def plan_campaign(self, *a, **k):
+            return {"llm_model": "x", "strategic_intent": "y"}
+
+        def execute_fault(self, *a, **k):
+            return {"scenario": "MEMORY_EXHAUSTION"}
+
+        def inspect_telemetry(self):
+            return {"gateway_status": 500, "latency_ms": 5000}
+
+        def evaluate_slos(self, curr):
+            return {"severity": "SEV-1", "violations": ["p99"]}
+
+        def analyze(self, *a, **k):
+            return {
+                "primary_root_cause": "MEMORY_EXHAUSTION_OOM",
+                "confidence_score": 0.9,
+                "llm_reasoning": "test",
+                "recommended_runbook": "EVICT_CONTAINER_AND_PURGE_LEAK",
+            }
+
+        def execute_runbook(self, *a, **k):
+            return {"actions_taken": ["reset"], "verification": {"status": "ok"}}
+
+        def generate(self, *a, **k):
+            return {}
+
+    sleeps: list[float] = []
+    remediations: list[str] = []
+    resets: list[str] = []
+    monkeypatch.setenv("FAULT_HOLD_SECONDS", "120")
+    monkeypatch.setattr(orch, "faultStrategistAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "InfraDisruptorAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "NetworkAdversaryAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "IncidentMonitor", lambda: Fake())
+    monkeypatch.setattr(orch, "DiagnosticAgent", lambda: Fake())
+
+    class RecordingRemediator(Fake):
+        def execute_runbook(self, *a, **k):
+            remediations.append("remediate")
+            return super().execute_runbook(*a, **k)
+
+    monkeypatch.setattr(orch, "RemediatorAgent", lambda: RecordingRemediator())
+    monkeypatch.setattr(orch, "PostMortemGenerator", lambda: Fake())
+    monkeypatch.setattr(orch.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        orch.FaultCatalog,
+        "reset_environment",
+        staticmethod(lambda: resets.append("reset") or {"ok": True}),
+    )
+    orch.run_resilience_cycle(1, forced_scenario="MEMORY_EXHAUSTION")
+    assert 120 in sleeps, sleeps
+    assert remediations == ["remediate"]
+    assert resets == ["reset"]
+    assert sleeps.index(120) < len(sleeps)
+    # Hold happens before remediation: the last sleep before remediate is 120.
+    assert sleeps[-1] == 120 or sleeps[sleeps.index(120) :].count(120) >= 1
+    hold_at = sleeps.index(120)
+    # Diagnosis uses sleep(0.5) before the hold; remediator is not a sleep.
+    assert hold_at == len(sleeps) - 1
+
+
+def test_orchestrator_hold_zero_still_resets(monkeypatch):
+    import orchestrator as orch
+
+    class Fake:
+        def plan_campaign(self, *a, **k):
+            return {"llm_model": "x", "strategic_intent": "y"}
+
+        def execute_fault(self, *a, **k):
+            return {"scenario": "MEMORY_EXHAUSTION"}
+
+        def inspect_telemetry(self):
+            return {"gateway_status": 200, "latency_ms": 5}
+
+        def evaluate_slos(self, curr):
+            return None
+
+    sleeps: list[float] = []
+    monkeypatch.setenv("FAULT_HOLD_SECONDS", "0")
+    monkeypatch.setattr(orch, "faultStrategistAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "InfraDisruptorAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "NetworkAdversaryAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "IncidentMonitor", lambda: Fake())
+    monkeypatch.setattr(orch, "DiagnosticAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "RemediatorAgent", lambda: Fake())
+    monkeypatch.setattr(orch, "PostMortemGenerator", lambda: Fake())
+    monkeypatch.setattr(orch.time, "sleep", lambda s: sleeps.append(s))
+    calls: list[str] = []
+    monkeypatch.setattr(
+        orch.FaultCatalog,
+        "reset_environment",
+        staticmethod(lambda: calls.append("reset") or {"ok": True}),
+    )
+    orch.run_resilience_cycle(1, forced_scenario="MEMORY_EXHAUSTION")
+    assert 120 not in sleeps
+    assert calls == ["reset"]
 
 
 def test_orchestrator_always_resets(monkeypatch):
@@ -178,6 +289,22 @@ def test_orchestrator_always_resets(monkeypatch):
     )
     orch.run_resilience_cycle(1, forced_scenario="MEMORY_EXHAUSTION")
     assert calls == ["reset"]
+
+
+def test_prometheus_is_not_on_the_internet():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    lan = (ROOT / "docker-compose.prom-lan.yml").read_text(encoding="utf-8")
+    tf = (ROOT / "terraform/main.tf").read_text(encoding="utf-8")
+    assert "127.0.0.1:9090:9090" in compose
+    assert "0.0.0.0:9090" not in compose
+    assert "0.0.0.0:9090" not in lan
+    assert "${PROMETHEUS_BIND}:9090:9090" in lan
+    assert "ingress_sg" in tf
+    # No ingress rule opens 9090 (Grafana 3000 + API 8000 only).
+    assert "from_port   = 9090" not in tf
+    assert "from_port = 9090" not in tf
+    assert "to_port     = 9090" not in tf
+    assert "to_port = 9090" not in tf
 
 
 def test_host_env_script_has_no_secret_literals():

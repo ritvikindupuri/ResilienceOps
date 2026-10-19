@@ -68,6 +68,22 @@ k3s kubectl set env deployment/red-team-sandbox -n sre-agent-sandbox \
   PAYMENT_SERVICE_URL="http://$PRIVATE_IP:8002" \
   PROMETHEUS_URL="http://$PRIVATE_IP:9090" \
   --overwrite
+# Compose publishes Prometheus on 127.0.0.1:9090. Also bind the private IP
+# so this pod can query http://$PRIVATE_IP:9090. Never 0.0.0.0; ingress_sg
+# does not open 9090 (same-host k3s is local delivery).
+if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
+  case "$PRIVATE_IP" in
+    ''|0.0.0.0|127.*) echo "[warn] skipping Prometheus LAN bind for '$PRIVATE_IP'" ;;
+    *)
+      if grep -q '^PROMETHEUS_BIND=' /opt/sre-colosseum/.env 2>/dev/null; then
+        sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
+      fi
+      printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
+      (cd /opt/sre-colosseum && docker compose -f docker-compose.yml -f docker-compose.prom-lan.yml up -d prometheus)
+      echo "[ok] Prometheus also published on $PRIVATE_IP:9090 for k3s"
+      ;;
+  esac
+fi
 if [ -f /opt/sre-colosseum/.env ] && grep -q '^ANTHROPIC_API_KEY=.\\+' /opt/sre-colosseum/.env; then
   umask 077
   grep '^ANTHROPIC_API_KEY=' /opt/sre-colosseum/.env > /tmp/sandbox-anthropic.env

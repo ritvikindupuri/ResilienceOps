@@ -130,7 +130,11 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.52.0
-    # Bind to localhost only. Grafana reaches Prometheus on the compose network.
+    # Loopback: local curl and SSM port forwarding. Grafana scrapes on the
+    # compose network (no host bind needed). On AWS, deploy_remote.py also
+    # merges docker-compose.prom-lan.yml so k3s pods can query
+    # http://<private-ip>:9090. Never 0.0.0.0; ingress_sg does not open 9090
+    # (only 3000/8000 to allowed_cidr).
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
@@ -243,6 +247,7 @@ services:
       - PROMETHEUS_URL=http://prometheus:9090
       - SLO_MAX_P99_LATENCY_MS=${SLO_MAX_P99_LATENCY_MS:-1200.0}
       - SLO_MAX_ERROR_RATE_PERCENT=${SLO_MAX_ERROR_RATE_PERCENT:-2.0}
+      - FAULT_HOLD_SECONDS=${FAULT_HOLD_SECONDS:-120}
     volumes:
       - ./reports:/app/reports
       - ./logs:/app/logs

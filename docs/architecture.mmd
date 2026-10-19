@@ -3,19 +3,24 @@ flowchart LR
   TF["Terraform · optional AWS"]
   DEPLOY["deploy_remote.py"]
   subgraph aws ["AWS account — outside the VPC"]
-    IAM["IAM role + instance profile"]
+    S3["S3 deploy bucket"]
+    PARAM["SSM Parameter Store"]
     SSM["SSM send_command"]
+    IAM["IAM role + instance profile"]
+    CW["CloudWatch Logs"]
   end
-  subgraph vpc ["VPC sre-enterprise-vpc — unused 10.0.10.0/24 · 10.0.20.0/24"]
+  subgraph vpc ["VPC sre-enterprise-vpc — app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused"]
     IGW["IGW · public RT only"]
-    subgraph pub ["public_ingress — one EC2 host"]
+    subgraph pub ["public_ingress 10.0.1.0/24 — one EC2 host"]
       subgraph sg ["SG ingress + internal"]
-        subgraph k3s ["k3s on this host"]
+        subgraph k3sopt ["k3s (optional) · deploy_k8s_sandbox.py"]
           K3S[k3s]
-          RED[Red Team]
-          BLUE[Blue Team]
         end
         subgraph lab ["Compose lab on this host"]
+          subgraph agents ["Agents · orchestrator.py (Compose --profile agents)"]
+            RED[Red Team]
+            BLUE[Blue Team]
+          end
           TG[Traffic]
           GW[api-gw]
           OS[order-service]
@@ -34,7 +39,7 @@ flowchart LR
           OS --> PG
           GW -->|"3 scrape jobs"| PROM
           PROM -->|"reads"| GRAF
-          PROM -->|"firing alerts"| AM
+          PROM -->|"alerts"| AM
           AM -->|"webhook"| BR
           BR -.->|"PromQL"| PROM
         end
@@ -42,7 +47,7 @@ flowchart LR
     end
   end
 
-  subgraph grok ["Grok Bot — local or AWS"]
+  subgraph grok ["Grok Bot (external)"]
     BOT["AI Incident Diagnosis"]
     GH[GitHub issue]
     PING[Owner ping]
@@ -51,7 +56,8 @@ flowchart LR
   end
 
   TF -->|provisions| pub
-  DEPLOY --> SSM --> pub
+  DEPLOY --> S3 --> pub
+  PARAM -->|"put_lab_secrets.py → .env"| pub
   RED -->|"faults"| OS
   RED -->|"faults"| PS
   BLUE -->|"health ×3"| GW
@@ -60,4 +66,6 @@ flowchart LR
   BLUE -->|"reset ×2"| OS
   BLUE -->|"reset ×2"| PS
   BLUE -->|"query"| PROM
+  BLUE --> CW
   BR -->|"enriched JSON"| BOT
+  BOT -->|"diagnose"| GH

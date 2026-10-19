@@ -6,6 +6,7 @@ Icons in this folder are inlined into `docs/architecture.svg` by
 | File | Source |
 | --- | --- |
 | `aws-ec2.svg`, `aws-iam.svg`, `aws-ssm.svg` | [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) (2D service icons). AWS, the AWS logo, and AWS service names are trademarks of Amazon.com, Inc. or its affiliates. |
+| `aws-s3.svg`, `aws-cloudwatch.svg` | Compact AWS-style marks (storage orange / management magenta) drawn for the architecture figure. |
 | `aws-vpc.svg`, `aws-subnet-public.svg` | AWS Architecture Icons **group** marks (`Virtual-private-cloud-VPC_32`, `Public-subnet_32`). The diagram draws the matching VPC (purple dashed) and public-subnet (green) group boundaries; the security-group marker is the official dashed-red group treatment (no 32px group icon in the current package). |
 | `k3s.svg` | Official k3s mark from [CNCF artwork](https://github.com/cncf/artwork) (`projects/k3s`). |
 | `alertmanager.svg` | Grafana Alertmanager data-source mark (Prometheus flame + bell) from the Grafana project. |

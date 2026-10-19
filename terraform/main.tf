@@ -188,7 +188,11 @@ resource "aws_security_group" "ingress_sg" {
     cidr_blocks = [var.allowed_cidr]
   }
 
-  # Prometheus is not published. Scrape stays on the host / compose network.
+  # Prometheus 9090 is intentionally absent: the internet must not reach it.
+  # Grafana :3000 and API :8000 are the only ingress_sg openings (allowed_cidr).
+  # On the host, Compose binds 127.0.0.1:9090 (SSM port forwarding) and
+  # deploy_remote.py also binds the instance private IP so same-host k3s pods
+  # can query :9090 via local delivery (no security-group hop, never 0.0.0.0).
   # SSH/22 is not opened. Use AWS Systems Manager Session Manager for access.
 
   # Outbound egress (package downloads, container image registries)
@@ -515,8 +519,8 @@ output "api_gateway_url" {
 }
 
 output "prometheus_url" {
-  description = "Prometheus is host-local only. Use SSM port forwarding; it is not in the ingress security group."
-  value       = "http://127.0.0.1:9090 (host-local; AWS SSM port forwarding)"
+  description = "Prometheus is not in ingress_sg. SSM port-forwards 127.0.0.1:9090; k3s uses the instance private IP (local delivery)."
+  value       = "http://127.0.0.1:9090 (SSM); k3s uses http://<private_ip>:9090 (no SG 9090)"
 }
 
 output "deployment_instructions" {

@@ -46,6 +46,9 @@ try {
       --log-group-name-prefix "/sre/autonomous-agent" `
       --query "logGroups[].logGroupName" --output text
     Write-Host "SSM parameters under /resilienceops are not in Terraform state; delete them if you do not want them reused."
+    Write-Host "If you attached the operator inline policy, delete it from an admin login:"
+    Write-Host "  aws iam delete-user-policy --user-name <YOUR_IAM_USER> --policy-name ResilienceOpsDeployer"
+    Write-Host "  aws iam delete-role-policy --role-name <YOUR_IAM_ROLE> --policy-name ResilienceOpsDeployer"
 
     Write-Host "`n[SUCCESS] Terraform-managed AWS infrastructure destroyed." -ForegroundColor Green
 }

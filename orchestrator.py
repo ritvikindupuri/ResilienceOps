@@ -34,6 +34,33 @@ from agents.incident_response.diagnostician import DiagnosticAgent
 from agents.incident_response.remediator import RemediatorAgent
 from agents.incident_response.post_mortem import PostMortemGenerator
 
+
+def fault_hold_seconds() -> int:
+    """Seconds to leave a Red fault in place before Blue remediates / finally-reset.
+
+    Default 120s covers `dashboards/alerts.yml` `for:` windows (up to 20s) plus
+    Alertmanager `group_wait` / `group_interval` so incident-bridge can forward.
+    Set FAULT_HOLD_SECONDS=0 to skip the hold (tests, or Path A-only runs).
+    """
+    raw = (os.getenv("FAULT_HOLD_SECONDS") or "120").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 120
+
+
+def hold_fault_for_alerts() -> None:
+    hold = fault_hold_seconds()
+    if hold <= 0:
+        print("[*] FAULT_HOLD_SECONDS=0; skipping hold before Blue remediation/reset.")
+        return
+    print(
+        f"[*] Holding fault for {hold}s (FAULT_HOLD_SECONDS) so Prometheus "
+        "for: windows can fire and Alertmanager → incident-bridge can forward."
+    )
+    time.sleep(hold)
+
+
 def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
     print("\n" + "="*80)
     print(f"[*] RESILIENCE TESTING CYCLE #{cycle_id} INITIALIZED - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -63,9 +90,9 @@ def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
     print(f"    Attack Strategy: {campaign['strategic_intent']}")
 
     # Always reset at the end of a cycle so MEMORY_EXHAUSTION leaks (and tc
-    # netem / Redis starvation) cannot pile up across --cycles when Blue does
-    # not declare an incident within 9 ticks. Path B (Prometheus → Grok) that
-    # needs the fault to stay up should POST /fault/* without the orchestrator.
+    # netem / Redis starvation) cannot pile up across --cycles. Before that
+    # reset (and before Blue remediation), hold FAULT_HOLD_SECONDS so Path B
+    # alerts with `for:` windows can fire. Set FAULT_HOLD_SECONDS=0 to skip.
     try:
         # Phase 3: Red Team Tactical Execution (Server Resource Stresser OR Network Delay Injector)
         print("\n[PHASE 3 - RED TEAM] Dispatching Tactical Stress Agent...")
@@ -96,17 +123,22 @@ def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
             else:
                 print(f"    [t+{tick}s] Latency: {curr['latency_ms']}ms | Gateway HTTP: {curr['gateway_status']}")
 
+        if incident:
+            # Phase 5: Blue Team Diagnostic RCA with Extended Thinking (Root Cause Investigator)
+            print("\n[PHASE 5 - BLUE TEAM] Root Cause Investigator Running Deep Step-by-Step Diagnosis...")
+            time.sleep(0.5)
+            diagnosis = blue_diagnostician.analyze(incident)
+            print(f"    Identified Root Cause: {diagnosis['primary_root_cause']} (Confidence: {diagnosis['confidence_score']*100:.1f}%)")
+            print(f"    Claude Reasoning: {diagnosis.get('llm_reasoning', 'Analyzed')}")
+            print(f"    Prescribed Fix: {diagnosis['recommended_runbook']}")
+
+        # Hold before Blue remediation and the guaranteed finally-reset so a
+        # Red fault lasts long enough for matching Prometheus alerts to fire.
+        hold_fault_for_alerts()
+
         if not incident:
             print("[-] Service absorbed degradation within SLO error budget. Cycle complete.")
             return
-
-        # Phase 5: Blue Team Diagnostic RCA with Extended Thinking (Root Cause Investigator)
-        print("\n[PHASE 5 - BLUE TEAM] Root Cause Investigator Running Deep Step-by-Step Diagnosis...")
-        time.sleep(0.5)
-        diagnosis = blue_diagnostician.analyze(incident)
-        print(f"    Identified Root Cause: {diagnosis['primary_root_cause']} (Confidence: {diagnosis['confidence_score']*100:.1f}%)")
-        print(f"    Claude Reasoning: {diagnosis.get('llm_reasoning', 'Analyzed')}")
-        print(f"    Prescribed Fix: {diagnosis['recommended_runbook']}")
 
         # Phase 6: Blue Team Automated Remediation & Verification (Automated Recovery Fixer)
         print("\n[PHASE 6 - BLUE TEAM] Automated Recovery Fixer Executing Recovery Fix...")
