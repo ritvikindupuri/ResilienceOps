@@ -57,7 +57,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1920×1200, title “How ResilienceOps + AI Incident Diagnosis works” (top band, baseline `y=34`) | `scripts/build_architecture.py:366`, title in `build()` |
+| Canvas | 2100×1420 with a 28px margin; title “How ResilienceOps + AI Incident Diagnosis works” | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 4200×2840 |
 | Operator (outside AWS) | Terraform + `deploy_remote.py` above the VPC | `build_architecture.py:372,445-446`; Terraform is IaC on the operator laptop, not an ENI |
 | AWS account strip | “AWS account” holds S3, Param Store, SSM, IAM, CW Logs, below the title band | `build_architecture.py` account satellites; S3 `terraform/main.tf` deploy bucket; Param Store `scripts/put_lab_secrets.py`; CW log groups `terraform/main.tf` |
 | VPC group | Purple dashed, “VPC  sre-enterprise-vpc”, AWS VPC icon | `build_architecture.py` vpc group; Name tag `terraform/main.tf` `sre-enterprise-vpc` |
@@ -111,7 +111,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | # | Arrow | Pill | Evidence |
 |---|---|---|---|
 | 1 | Terraform → VPC border (L-route just above the stroke, right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf` |
-| 1b | deploy_remote.py → S3 | (none; S3 cap `deploy → host`, SSM cap `send_command`) | Zip upload `_upload_payload`. SSM `send_command` is caption-only so no shaft runs through the SSM mark. No drop through the account box or VPC title row |
+| 1b | deploy_remote.py lands on the AWS-account **left border** (below the caption) → S3; S3 → VPC/host and SSM → VPC/host drop from the account **bottom border** | (S3 cap `deploy → host`, SSM cap `send_command`) | Zip upload `_upload_payload`; `ssm.send_command` `AWS-RunShellScript`. Drops start on the box stroke so they do not run through satellite captions or the AWS title |
 | 1c | put_lab_secrets.py → Param Store | (satellite cap `secrets → .env`) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
 | 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:124` |
 | 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |

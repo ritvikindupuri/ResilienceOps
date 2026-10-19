@@ -59,7 +59,8 @@ flowchart LR
   end
 
   TF -->|provisions| pub
-  DEPLOY --> S3
+  DEPLOY --> S3 --> pub
+  SSM --> pub
   SECRETS --> PARAM
   RED -->|"faults"| OS
   RED -->|"faults"| PS

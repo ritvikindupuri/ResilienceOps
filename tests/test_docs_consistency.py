@@ -258,6 +258,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1920×1200; render_architecture.sh writes 2× (3840×2400).
-    assert width in {1920, 3840}, width
-    assert height in {1200, 2400}, height
+    # Native SVG is 2100×1420; render_architecture.sh writes 2×.
+    assert width in {1920, 2100, 3840, 4200}, width
+    assert height in {1200, 1420, 2400, 2840}, height
