@@ -10,7 +10,7 @@ Modern distributed systems require continuous resilience validation, yet convent
 
 The platform runs an authentic containerized stack under live traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (cgroup memory leaks, CPU CFS quota exhaustion, network delays, TCP drops). A **3-Agent Blue Team** watches Golden Signals, declares SLO breaches, runs RCA, executes recovery runbooks, and writes post-mortems. In-cluster model IDs are set in [`agents/config.py`](agents/config.py) (defaults: `claude-sonnet-4-6` and `claude-haiku-4-5-20251001`; override with env vars).
 
-In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). That path is **read-only**: the bot never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item.
+In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). That path is **read-only**: the bot never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item. A labeled synthetic run of that path is in [Sample output: a real test run](#sample-output-a-real-test-run).
 
 All telemetry is streamed in **real time (1-second scrape)** to Grafana.
 
@@ -321,6 +321,8 @@ docker compose logs --tail 20 incident-bridge
 - If the URL is set you will see `forwarded N alert(s) status=firing source=resilienceops`, then a GitHub `incident` issue in the repo you configured with the bot (or a comment on an existing fingerprint).
 - If Alertmanager logs `Notify for alerts failed ... context deadline exceeded`, container-to-container traffic on the compose network is blocked. That is an environment/firewall issue, not a missing config file. Use `--target bridge` (host `127.0.0.1:8088`) to prove the bridge itself.
 
+A recorded run of a clearly labeled synthetic payload against the live bot (webhook 200, GitHub [issue #4](https://github.com/ritvikindupuri/ResilienceOps/issues/4)) is in [Sample output: a real test run](#sample-output-a-real-test-run).
+
 If the stack is not running, the script prints `request failed: ConnectError` (or `ConnectTimeout`) on stderr and exits 1. Use `--target bridge` to POST `http://127.0.0.1:8088/webhook` directly; expected:
 
 ```text
@@ -592,6 +594,35 @@ terraform destroy -auto-approve
 ---
 
 Back to the local lab: Docker Compose (including Alertmanager and incident-bridge) is [Installation step 6](#6-start-the-local-docker-compose-lab).
+
+---
+
+## Sample output: a real test run
+
+At **9:39 PM EDT on 2026-10-18** (01:39Z on 19 Oct) we POSTed a synthetic, clearly labeled E2E test alert to the live **AI Incident Diagnosis** bot webhook (`Authorization: Bearer` plus the routine key). The exact body is [`examples/e2e_test_alert.json`](examples/e2e_test_alert.json). Evidence values are **representative** of a Redis connection-starvation fault (`POST /fault/redis-starvation`); they were not scraped from a running stack.
+
+You can send that file the same way, or go through the lab with `python3 scripts/send_test_alert.py --target alertmanager` (or `--target bridge`). Straight to the bot:
+
+```bash
+curl -X POST "$GROK_WEBHOOK_URL" -H "Content-Type: application/json" -H "Authorization: Bearer $GROK_WEBHOOK_KEY" --data @examples/e2e_test_alert.json
+```
+
+Use env vars only — never paste the key into the command. The webhook returned **HTTP 200** `{success:true}`. The bot then diagnosed high-confidence Redis starvation, created the missing `incident` label, and opened **[issue #4](https://github.com/ritvikindupuri/ResilienceOps/issues/4)** (`[critical] RedisConnectionsSaturated on order-service`): summary, evidence table, suggest-only remediation, related commits, and fingerprint `e2etest-redis-starvation-20261018`.
+
+<p align="center">
+  <img src="docs/images/sample-incident-issue-1.png" alt="GitHub incident issue #4 title, incident label, Summary, and likely root cause" width="950" />
+</p>
+<p align="center"><b>Issue #4 — title, <code>incident</code> label, Summary, and Redis starvation root cause (high confidence).</b></p>
+
+<p align="center">
+  <img src="docs/images/sample-incident-issue-2.png" alt="Issue #4 evidence table, agent activity tail, and suggest-only remediation" width="950" />
+</p>
+<p align="center"><b>Evidence table, agent-activity tail, and suggest-only remediation (the bot took no action).</b></p>
+
+<p align="center">
+  <img src="docs/images/sample-incident-issue-3.png" alt="Issue #4 related commits and alert fingerprint" width="950" />
+</p>
+<p align="center"><b>Related commits and fingerprint <code>e2etest-redis-starvation-20261018</code>.</b></p>
 
 ---
 
