@@ -385,8 +385,10 @@ def build() -> str:
     s3_x, param_x, ssm_x, iam_x, cw_x = 620, 760, 900, 1040, 1180
     acct_node_y = 108  # icons; labels sit below inside the strip
 
-    vpc_x, vpc_y, vpc_w, vpc_h = 16, 176, 1276, 896  # right 1292, bottom 1072
-    bot_x, bot_y, bot_w, bot_h = 1452, 176, 452, 896  # gutter 160px for IGW labels
+    # VPC is 8px shorter than 896 so the footer box can sit *below* the
+    # purple stroke with padding, instead of kissing the VPC border.
+    vpc_x, vpc_y, vpc_w, vpc_h = 16, 176, 1276, 888  # right 1292, bottom 1064
+    bot_x, bot_y, bot_w, bot_h = 1452, 176, 452, 888  # gutter 160px for IGW labels
     col_bottom = vpc_y + vpc_h
 
     g_bot = group(bot_x, bot_y, bot_w, bot_h, "Grok Bot (external)")
@@ -419,38 +421,56 @@ def build() -> str:
         icon="aws-sg", style="sg",
     )
 
-    nested_y = sg_y + 28
-    nested_h = sg_y + sg_h - nested_y - 10
-    k3s_x, k3s_w = sg_x + 10, 252
-    lab_x = k3s_x + k3s_w + 48
-    lab_w = sg_x + sg_w - 12 - lab_x
-    # Two alley spines. Red climbs inside k3s (left). Blue climbs in the
-    # gutter (right). Horizontal segments never share an x with the other spine.
-    alley_blue = k3s_x + k3s_w + 22
-    alley_red = k3s_x + k3s_w - 40
-
-    k3s_opt_h = 78
+    # SG title baseline is sg_y+26. k3s top needs a real gap under that type
+    # (previously nested_y = sg_y+28 sat on the glyphs).
+    nested_y = sg_y + 52
+    k3s_x, k3s_w, k3s_opt_h = sg_x + 12, 248, 58
     g_k3s_opt = group(
         k3s_x, nested_y, k3s_w, k3s_opt_h,
         "k3s (optional)",
         icon="k3s", style="optional",
     )
-    agents_y = nested_y + k3s_opt_h + 10
-    agents_h = nested_y + nested_h - agents_y
-    g_k3s = group(
-        k3s_x, agents_y, k3s_w, agents_h,
-        "Agents · orchestrator.py",
+
+    # Outer Compose wraps Agents *and* the app stack. k3s stays outside it
+    # (deploy_k8s_sandbox.py is not a Compose service).
+    compose_x = sg_x + 12
+    compose_y = nested_y + k3s_opt_h + 12
+    compose_w = sg_w - 24
+    compose_h = sg_y + sg_h - compose_y - 10
+    g_compose = group(
+        compose_x, compose_y, compose_w, compose_h,
+        "Docker Compose on this host",
+        icon="docker",
     )
-    g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab on this host", icon="docker")
 
-    r1 = nested_y + 210  # Traffic / api-gw / order / payment (room above for Red flyover)
-    r2 = r1 + 155  # Redis + Postgres under order-service; Red Team in Agents
-    r3 = r2 + 230  # Prometheus → Alertmanager → incident-bridge; Blue Team
-    graf_y = nested_y + nested_h - 48  # keep Grafana name above the SG stroke
+    inner_y = compose_y + 40
+    inner_h = compose_y + compose_h - inner_y - 10
+    agents_x, agents_w = compose_x + 10, 268
+    app_x = agents_x + agents_w + 72
+    app_w = compose_x + compose_w - 12 - app_x
+    g_agents = group(
+        agents_x, inner_y, agents_w, inner_h,
+        "Agents (--profile agents)",
+    )
+    g_app = group(
+        app_x, inner_y, app_w, inner_h,
+        "App + observability (default)",
+    )
 
-    k3s_cx = k3s_x + k3s_w / 2
-    k3s_node_y = nested_y + LABEL_BAND + 8
-    tg_x, gw_x, os_x, ps_x = lab_x + 72, lab_x + 252, lab_x + 492, lab_x + 812
+    # Three alley spines in the Agents↔App gutter (never through box titles).
+    # Red climbs (left). Scrape drops (middle). Blue climbs (right).
+    alley_red = agents_x + agents_w + 16
+    alley_scrape = agents_x + agents_w + 36
+    alley_blue = app_x - 16
+
+    r1 = inner_y + 176  # Traffic / api-gw / order / payment (room above for Red flyover)
+    r2 = r1 + 152  # Redis + Postgres under order-service; Red Team in Agents
+    r3 = r2 + 168  # Prometheus → Alertmanager → incident-bridge; Blue Team
+    graf_y = inner_y + inner_h - 22  # keep Grafana name above the App stroke
+
+    k3s_cx = agents_x + agents_w / 2
+    # Keep payment-service / incident-bridge names inside the App stroke.
+    tg_x, gw_x, os_x, ps_x = app_x + 64, app_x + 230, app_x + 450, app_x + 720
     rd_x, pg_x = os_x - 90, os_x + 90
     prom_x, am_x, br_x = gw_x, os_x + 40, ps_x
     graf_x = prom_x
@@ -484,7 +504,7 @@ def build() -> str:
         node(prom_x, r3, "prometheus", "Prometheus", ""),
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
         node(br_x, r3, "document", "incident-bridge", "PromQL · agent jsonl"),
-        node(graf_x, graf_y, "grafana", "Grafana", "", size=56),
+        node(graf_x, graf_y, "grafana", "Grafana", "", size=52),
         grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", ""),
         node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
         node(ping_x, bot_row_y, "bell", "Owner ping", "Firing critical"),
@@ -525,17 +545,14 @@ def build() -> str:
     parts.append(g_subnet)
     parts.append(g_sg)
     parts.append(g_k3s_opt)
-    parts.append(g_k3s)
-    parts.append(g_lab)
+    parts.append(g_compose)
+    parts.append(g_agents)
+    parts.append(g_app)
     parts.append(g_bot)
     # Subtitles that do not fit in the group title band.
     parts.append(
         f'  <text x="{k3s_x + 42:.0f}" y="{nested_y + 44:.0f}" class="cap">'
         "deploy_k8s_sandbox.py</text>"
-    )
-    parts.append(
-        f'  <text x="{k3s_x + 24:.0f}" y="{agents_y + 44:.0f}" class="cap">'
-        "(Compose --profile agents)</text>"
     )
     # Unused subnets live in the VPC but have no workloads today — caption on
     # the VPC box (not the public_ingress header). Left of the IGW gutter.
@@ -552,15 +569,17 @@ def build() -> str:
     k3s_right = k3s_cx + 44  # past the 68px person icon so shafts never clip Red/Blue
     db_top = _icon_top(r2)
     prom_top = _icon_top(r3)
-    graf_top = graf_y - 56 - 8  # Grafana is drawn at size 56, not ICON
-    pay_y = nested_y + 120
+    graf_top = graf_y - 52 - 8  # Grafana is drawn at size 52, not ICON
+    pay_y = inner_y + 82
     # Red flies over the services (above the /api/payments U-turn) and ticks
     # down into order-service and payment-service. Blue's health bus sits
     # *below* Redis/Postgres so those arrows can start at order-service.
-    red_y = nested_y + 92
-    svc_bottom = r1 + 52
-    health_y = r2 + 78  # well below Redis/Postgres captions (pills sit under the bus)
-    metrics_from = health_y + 36  # scrape starts below the Blue bus (no cross)
+    red_y = inner_y + 58
+    # Health ticks stop *below* the scrape collector so the two never share a
+    # y in the service columns (a full-height tick would cross the merge bar).
+    collector_y = r1 + 54  # under Gateway / Orders / Payments captions (below descenders)
+    svc_bottom = r1 + 66  # health-tick arrowheads; 18px below the scrape bar
+    health_y = r2 + 72  # well below Redis/Postgres captions (pills sit under the bus)
     host_top = subnet_y
 
     # 1. Terraform (operator laptop, outside AWS) → VPC border, *right of*
@@ -607,7 +626,7 @@ def build() -> str:
     # 6–7. order-service → Redis and PostgreSQL. Fork just below the
     # order-service caption, then drop into each datastore. Stays above
     # the Blue health bus (no crossing).
-    os_fork_y = r1 + 48
+    os_fork_y = r1 + 56
     parts.append(poly([
         (os_x - 10, os_fork_y),
         (rd_x, os_fork_y),
@@ -620,10 +639,10 @@ def build() -> str:
     ]))
 
     # 8. Red Team → order-service and payment-service (not Traffic). Climbs
-    # inside k3s (alley_red), flies over the service icons, then a short
-    # bracket ticks down into both targets. Pill sits *above* the flyover,
-    # between the ticks — not on the shaft and not under the Compose title.
-    # Does not cross Blue's spine (Blue is below the row).
+    # in the Agents↔App gutter (alley_red, *outside* the Agents title), flies
+    # over the service icons, then a short bracket ticks down into both
+    # targets. Pill sits *above* the flyover, between the ticks — not on the
+    # shaft and not under the App title. Does not cross Blue's spine.
     red_tick_end = pay_y - 10  # stop above the /api/payments U-turn; no crossing
     parts.append(poly([
         (k3s_right, red_ic),
@@ -633,7 +652,7 @@ def build() -> str:
     ], marked=False))
     parts.append(arrow(os_x - 18, red_y, os_x - 18, red_tick_end))
     parts.append(arrow(ps_x - 18, red_y, ps_x - 18, red_tick_end))
-    # Sit between the two ticks, above the flyover — not under the Compose title
+    # Sit between the two ticks, above the flyover — not under the App title
     # and not on the shaft.
     parts.append(pill((os_x + ps_x) / 2, red_y - 26, "faults"))
 
@@ -649,18 +668,27 @@ def build() -> str:
     parts.append(arrow(gw_x + 18, health_y, gw_x + 18, svc_bottom))
     parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
     parts.append(arrow(ps_x + 18, health_y, ps_x + 18, svc_bottom))
-    parts.append(pill((gw_x + os_x) / 2, health_y + 18, "health ×3"))
-    parts.append(pill((os_x + ps_x) / 2, health_y + 18, "reset ×2"))
+    # Sit on the health bus, clear of the observability-row pills (alerts / webhook).
+    parts.append(pill(gw_x - 110, health_y, "health ×3"))
+    parts.append(pill(ps_x - 50, health_y, "reset ×2"))
 
     # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
     # cross Red's spine. Stays under Redis/Postgres.
     parts.append(arrow(alley_blue, blue_ic, prom_x - 48, blue_ic))
-    parts.append(pill(tg_x + 20, blue_ic - 28, "query"))
+    parts.append(pill(tg_x + 20, blue_ic, "query"))
 
-    # 11. Services → Prometheus. One vertical in the api-gw / Prometheus column.
-    parts.append(arrow(gw_x, metrics_from, gw_x, prom_top))
-    # Left of the scrape vertical, above Redis — never on the Redis icon.
-    parts.append(pill(gw_x - 100, (metrics_from + prom_top) / 2, "3 scrape jobs"))
+    # 11. Services → Prometheus. A merge bar sits *under the three service
+    # captions* (above Redis and above the Blue health ticks), drops the
+    # Agents↔App gutter (alley_scrape), and enters Prometheus from the left.
+    # Separate x from Blue's spine; separate y from the health bus.
+    parts.append(poly([
+        (ps_x, collector_y),
+        (alley_scrape, collector_y),
+        (alley_scrape, prom_top + 8),
+        (prom_x - 48, prom_top + 8),
+    ]))
+    # Below the collector in the Traffic / api-gw gap — not on "Live load", Redis, or the health bus.
+    parts.append(pill((tg_x + gw_x) / 2, collector_y + 20, "3 scrape jobs"))
 
     # 12–13. Observability row, left → right, short straight arrows.
     parts.append(arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic))
@@ -675,8 +703,8 @@ def build() -> str:
 
     # 15. Bridge PromQL back to Prometheus. Dip under Alertmanager's caption
     # (empty), arrive at Prometheus from the right, above Grafana.
-    parts.append(arc(br_x, r3 + 50, am_x, r3 + 78, prom_x + 72, r3 + 14, dashed=True))
-    parts.append(pill(am_x + 40, r3 + 90, "PromQL"))
+    parts.append(arc(br_x, r3 + 58, am_x, r3 + 92, prom_x + 72, r3 + 16, dashed=True))
+    parts.append(pill(am_x + 50, r3 + 104, "PromQL"))
 
     # 16. Bridge → Grok avatar via the EC2/Grok gutter (orthogonal).
     hex_cy = bot_avatar_y - 32
@@ -701,26 +729,29 @@ def build() -> str:
     # does not sit on the T-junction.
     parts.append(pill(bot_cx, fork_y + 24, "diagnose"))
 
-    gate_y = col_bottom + 4
+    # Clear gap under the VPC stroke; type sits *inside* the dashed footer
+    # with padding so the bold line is not on the top border.
+    gate_y = col_bottom + 14
+    gate_h = 58
     parts.append(
-        f'  <rect x="16" y="{gate_y:.0f}" width="1888" height="36" rx="16" fill="#FFFFFF" '
+        f'  <rect x="16" y="{gate_y:.0f}" width="1888" height="{gate_h:.0f}" rx="16" fill="#FFFFFF" '
         f'stroke="#D1D5DB" stroke-dasharray="7 6"/>'
     )
     parts.append(
-        f'  <text x="960" y="{gate_y + 14:.0f}" text-anchor="middle" class="gate">'
+        f'  <text x="960" y="{gate_y + 28:.0f}" text-anchor="middle" class="gate">'
         "The bot has no control path into the lab: it only receives webhooks and writes GitHub issues.</text>"
     )
     parts.append(
-        f'  <text x="960" y="{gate_y + 30:.0f}" text-anchor="middle" class="gate-sub">'
+        f'  <text x="960" y="{gate_y + 48:.0f}" text-anchor="middle" class="gate-sub">'
         "AWS/EC2 is optional: docker compose up runs the same lab (agents need --profile agents). "
         "The bridge needs outbound HTTPS to the bot; agents also call Anthropic.</text>"
     )
 
-    card_y = gate_y + 40
+    card_y = gate_y + gate_h + 6
 
     def card2(n: int, x: float, line1: str, line2: str) -> str:
         return f"""  <g transform="translate({x:.0f},{card_y:.0f})">
-    <rect width="592" height="64" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+    <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="26" class="card-n">{n}.</text>
     <text x="52" y="26" class="card-t">{line1}</text>
     <text x="52" y="48" class="card-t">{line2}</text>

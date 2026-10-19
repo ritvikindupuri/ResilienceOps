@@ -166,7 +166,10 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Grok Bot (external)" in svg
     assert "PromQL · agent jsonl" in svg
     assert "PromQL · jsonl · k8s" not in svg
-    assert "Agents · orchestrator.py" in svg
+    assert "Agents (--profile agents)" in svg
+    assert "Docker Compose on this host" in svg
+    assert "App + observability (default)" in svg
+    assert "Compose lab on this host" not in svg
     assert "k3s (optional)" in svg
     assert "diagnose" in svg
     assert "read-only" not in svg.lower()

@@ -46,7 +46,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Orchestrator `finally` reset ran before `alerts.yml` `for:` windows (up to 20s) could fire | `FAULT_HOLD_SECONDS` default 120 holds after detection / RCA and before Blue remediation; `finally` still always `FaultCatalog.reset_environment()` (`orchestrator.py`) |
 | k3s Blue PromQL failed: `deploy_k8s_sandbox.py` set `PROMETHEUS_URL=http://<private-ip>:9090` while Compose bound `127.0.0.1:9090` | Compose keeps loopback (SSM). `docker-compose.prom-lan.yml` + `PROMETHEUS_BIND=<private-ip>` on AWS. **No** `ingress_sg` rule for 9090 (only 3000/8000). Never `0.0.0.0` |
 | Figure/README claimed incident-bridge k8s evidence | Compose bridge has no `kubernetes` client and no kubeconfig (`services/incident-bridge/requirements.txt`). Evidence is PromQL + agent jsonl (jsonl only with `--profile agents`) |
-| Figure put Red/Blue in k3s; caption said `PromQL · jsonl · k8s`; Grok title `local or AWS`; footer called the bot read-only; unused CIDRs sat in `public_ingress`; Redis arrows started detached; pill `firing alerts` | Agents box `orchestrator.py (Compose --profile agents)`; small dashed `k3s (optional)`; Grok `Grok Bot (external)`; pill `diagnose`; unused CIDRs on the VPC; `public_ingress` labeled `10.0.1.0/24`; Redis/Postgres arrows from order-service; pill `alerts` |
+| Figure put Red/Blue in k3s; caption said `PromQL · jsonl · k8s`; Grok title `local or AWS`; footer called the bot read-only; unused CIDRs sat in `public_ingress`; Redis arrows started detached; pill `firing alerts` | Agents box inside `Docker Compose on this host` as `Agents (--profile agents)`; small dashed `k3s (optional)` outside Compose; Grok `Grok Bot (external)`; pill `diagnose`; unused CIDRs on the VPC; `public_ingress` labeled `10.0.1.0/24`; Redis/Postgres arrows from order-service; pill `alerts` |
 
 ---
 
@@ -61,8 +61,8 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Public subnet group | Green, “public_ingress  10.0.1.0/24  ·  one EC2 host”, public-subnet icon | `terraform/main.tf` `aws_subnet.public_ingress` (only subnet with `map_public_ip_on_launch` and the only one associated with the public RT) |
 | SG around host | Dashed red “SG  ingress + internal” wrapping optional k3s + Compose | SGs `terraform/main.tf` `ingress_sg` / `internal_app_sg` |
 | k3s group | Small dashed “k3s (optional)” + `deploy_k8s_sandbox.py` | Optional path `deploy_k8s_sandbox.py`; k3s installed on the **same** EC2 `user_data` (`https://get.k3s.io`) |
-| Agents group | “Agents · orchestrator.py” + “(Compose --profile agents)” holds Red + Blue | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` `docker-compose.yml` |
-| Compose group | Nested “Compose lab on this host”, Docker icon | `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
+| Agents group | Inner “Agents (--profile agents)” holds Red + Blue, inside Docker Compose | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` `docker-compose.yml` |
+| Compose group | Outer “Docker Compose on this host” wrapping Agents and “App + observability (default)” | `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
 | Grok column | “Grok Bot (external)” | Imported template, not hosted in-repo. Bridge needs outbound HTTPS (`GROK_WEBHOOK_URL`); agents also call Anthropic |
 | Unused subnets | Caption on the **VPC** box: `app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused` | Created `terraform/main.tf`; **no** `aws_instance` / RT assoc / SG attachment uses them (instance `subnet_id` is `public_ingress`) |
 
@@ -116,7 +116,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 8 | Red Team → order-service **and** payment-service | `faults` | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic. One flyover + two ticks; pill sits above the shaft (`build_architecture.py:576-591`) instead of one arrow per endpoint |
 | 9 | Blue Team → api-gw, order-service, payment-service | `health ×3` and `reset ×2` | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** (api-gw has no `/fault/reset`). Three ticks; two pills off the bus (`build_architecture.py:593-606`) |
 | 10 | Blue Team → Prometheus | `query` | `monitor.py:15-25`, `:98-110` PromQL if `PROMETHEUS_URL` answers |
-| 11 | Services → Prometheus | `3 scrape jobs` | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s` `:2` |
+| 11 | Services → Prometheus | `3 scrape jobs` | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s` `:2`. Merge bar under the three service captions, then the Agents↔App gutter into Prometheus — not from the Blue health bus |
 | 12 | Prometheus → Alertmanager | `alerts` | `prometheus.yml` `alertmanager:9093`; rules `dashboards/alerts.yml` |
 | 13 | Alertmanager → incident-bridge | `webhook` | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
 | 14 | Prometheus → Grafana | `reads` | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml`. Host Grafana `:3000` (`docker-compose.yml:212`) |
@@ -258,7 +258,7 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | IAM has no arrow | Terraform creates the role + instance profile; drawing Terraform→IAM would cross the account strip |
 | One Red flyover + `faults` pill | Covers four order-service `/fault/*` plus two payment-service `tc netem` endpoints without six arrows |
 | Prometheus node has no caption | Space under the observability row is Grafana; scrape/rule detail is the `3 scrape jobs` / `alerts` pills |
-| One scrape arrow + `3 scrape jobs` | Three Prometheus jobs share one vertical |
+| One scrape edge + `3 scrape jobs` | Three Prometheus jobs share one merge bar under the service captions, then one gutter drop into Prometheus. Separate from Blue’s health/reset bus |
 | Grok `incident` label, duplicate-comment, owner ping | Implemented by the **imported** Grok template, not this repository. Samples #4/#5 show the behavior |
 | “Eliminates NAT ($32/mo) / EKS ($72/mo)” | Cost comparison: those resources are not in `main.tf`. Not a bill guarantee |
 | Teardown “under 60 seconds” / “100% protected” host daemons | Timing and absolute guarantees are not asserted by tests |

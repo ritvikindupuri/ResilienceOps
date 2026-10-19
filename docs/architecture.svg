@@ -148,27 +148,28 @@
 
   <rect x="430" y="60" width="1000" height="108" rx="8" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
   <text x="454" y="86" class="group">AWS account</text>
-  <rect x="16" y="176" width="1276" height="896" rx="6" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="2.4" stroke-dasharray="7 5"/>
+  <rect x="16" y="176" width="1276" height="888" rx="6" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="2.4" stroke-dasharray="7 5"/>
   <use href="#i-aws-vpc" xlink:href="#i-aws-vpc" x="28" y="184" width="24" height="24"/>
   <text x="58" y="202" class="group-vpc">VPC  sre-enterprise-vpc</text>
-  <rect x="26" y="212" width="1252" height="848" rx="6" fill="#F7FBEA" stroke="#7AA116" stroke-width="2.2"/>
+  <rect x="26" y="212" width="1252" height="840" rx="6" fill="#F7FBEA" stroke="#7AA116" stroke-width="2.2"/>
   <use href="#i-aws-subnet-public" xlink:href="#i-aws-subnet-public" x="38" y="220" width="24" height="24"/>
   <text x="68" y="238" class="group-subnet">public_ingress  10.0.1.0/24  ·  one EC2 host</text>
-  <rect x="36" y="246" width="1232" height="802" rx="8" fill="none" stroke="#DD344C" stroke-width="2.0" stroke-dasharray="5 3.5"/>
+  <rect x="36" y="246" width="1232" height="794" rx="8" fill="none" stroke="#DD344C" stroke-width="2.0" stroke-dasharray="5 3.5"/>
   <use href="#i-aws-sg" xlink:href="#i-aws-sg" x="48" y="254" width="24" height="24"/>
   <text x="78" y="272" class="group-sg">SG  ingress + internal</text>
-  <rect x="46" y="274" width="252" height="78" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
-  <use href="#i-k3s" xlink:href="#i-k3s" x="58" y="282" width="22" height="22"/>
-  <text x="88" y="300" class="group">k3s (optional)</text>
-  <rect x="46" y="362" width="252" height="676" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <text x="70" y="388" class="group">Agents · orchestrator.py</text>
-  <rect x="346" y="274" width="910" height="764" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <use href="#i-docker" xlink:href="#i-docker" x="358" y="282" width="22" height="22"/>
-  <text x="388" y="300" class="group">Compose lab on this host</text>
-  <rect x="1452" y="176" width="452" height="896" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <rect x="48" y="298" width="248" height="58" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <use href="#i-k3s" xlink:href="#i-k3s" x="60" y="306" width="22" height="22"/>
+  <text x="90" y="324" class="group">k3s (optional)</text>
+  <rect x="48" y="368" width="1208" height="662" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <use href="#i-docker" xlink:href="#i-docker" x="60" y="376" width="22" height="22"/>
+  <text x="90" y="394" class="group">Docker Compose on this host</text>
+  <rect x="58" y="408" width="268" height="612" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="82" y="434" class="group">Agents (--profile agents)</text>
+  <rect x="398" y="408" width="846" height="612" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="422" y="434" class="group">App + observability (default)</text>
+  <rect x="1452" y="176" width="452" height="888" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="1476" y="202" class="group">Grok Bot (external)</text>
-  <text x="88" y="318" class="cap">deploy_k8s_sandbox.py</text>
-  <text x="70" y="406" class="cap">(Compose --profile agents)</text>
+  <text x="90" y="342" class="cap">deploy_k8s_sandbox.py</text>
   <text x="1274" y="202" text-anchor="end" class="cap">app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused</text>
   <g transform="translate(84,118)">
     <use href="#i-terraform" xlink:href="#i-terraform" x="-22.0" y="-52.0" width="44" height="44"/>
@@ -210,62 +211,62 @@
     <text class="name" x="28" y="5" text-anchor="start" style="font-size:14px">IGW</text>
     <text class="cap" x="28" y="22" text-anchor="start" style="font-size:13px">public RT only</text>
   </g>
-  <g transform="translate(172,639)">
+  <g transform="translate(192,736)">
     <use href="#i-person-red" xlink:href="#i-person-red" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Red Team</text>
     <text class="cap" y="40" text-anchor="middle">Injects faults</text>
   </g>
-  <g transform="translate(172,869)">
+  <g transform="translate(192,904)">
     <use href="#i-person-blue" xlink:href="#i-person-blue" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Blue Team</text>
     <text class="cap" y="40" text-anchor="middle">Detects and resets</text>
   </g>
-  <g transform="translate(418,484)">
+  <g transform="translate(462,584)">
     <use href="#i-traffic" xlink:href="#i-traffic" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Traffic</text>
     <text class="cap" y="40" text-anchor="middle">Live load</text>
   </g>
-  <g transform="translate(598,484)">
+  <g transform="translate(628,584)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">api-gw</text>
     <text class="cap" y="40" text-anchor="middle">Gateway</text>
   </g>
-  <g transform="translate(838,484)">
+  <g transform="translate(848,584)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">order-service</text>
     <text class="cap" y="40" text-anchor="middle">Orders</text>
   </g>
-  <g transform="translate(1158,484)">
+  <g transform="translate(1118,584)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">payment-service</text>
     <text class="cap" y="40" text-anchor="middle">Payments</text>
   </g>
-  <g transform="translate(748,639)">
+  <g transform="translate(758,736)">
     <use href="#i-redis" xlink:href="#i-redis" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Redis</text>
     <text class="cap" y="40" text-anchor="middle">order-service cache</text>
   </g>
-  <g transform="translate(928,639)">
+  <g transform="translate(938,736)">
     <use href="#i-postgresql" xlink:href="#i-postgresql" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">PostgreSQL</text>
     <text class="cap" y="40" text-anchor="middle">orders_db</text>
   </g>
-  <g transform="translate(598,869)">
+  <g transform="translate(628,904)">
     <use href="#i-prometheus" xlink:href="#i-prometheus" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Prometheus</text>
   </g>
-  <g transform="translate(878,869)">
+  <g transform="translate(888,904)">
     <use href="#i-alertmanager" xlink:href="#i-alertmanager" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">Alertmanager</text>
     <text class="cap" y="40" text-anchor="middle">Groups alerts</text>
   </g>
-  <g transform="translate(1158,869)">
+  <g transform="translate(1118,904)">
     <use href="#i-document" xlink:href="#i-document" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">incident-bridge</text>
     <text class="cap" y="40" text-anchor="middle">PromQL · agent jsonl</text>
   </g>
-  <g transform="translate(598,990)">
-    <use href="#i-grafana" xlink:href="#i-grafana" x="-28.0" y="-64.0" width="56" height="56"/>
+  <g transform="translate(628,998)">
+    <use href="#i-grafana" xlink:href="#i-grafana" x="-26.0" y="-60.0" width="52" height="52"/>
     <text class="name" y="18" text-anchor="middle">Grafana</text>
   </g>
   <g transform="translate(1678,336)">
@@ -291,78 +292,78 @@
   <polyline points="84,170 84,171 400,171 400,176" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <line x1="394" y1="118" x2="580" y2="108" class="arrow" marker-end="url(#arr)"/>
   <polyline points="620,172 620,212" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <line x1="454" y1="446" x2="562" y2="446" class="arrow" marker-end="url(#arr)"/>
-  <line x1="634" y1="446" x2="802" y2="446" class="arrow" marker-end="url(#arr)"/>
-  <line x1="874" y1="446" x2="1122" y2="446" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(464.2,409)">
+  <line x1="498" y1="546" x2="592" y2="546" class="arrow" marker-end="url(#arr)"/>
+  <line x1="664" y1="546" x2="812" y2="546" class="arrow" marker-end="url(#arr)"/>
+  <line x1="884" y1="546" x2="1082" y2="546" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(501.2,509)">
     <rect width="87.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="43.8" y="16" text-anchor="middle" class="pill">requests</text>
   </g>
-  <g transform="translate(661.9,409)">
+  <g transform="translate(681.9,509)">
     <rect width="112.2" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="56.1" y="16" text-anchor="middle" class="pill">/api/orders</text>
   </g>
-  <g transform="translate(929.6,409)">
+  <g transform="translate(914.6,509)">
     <rect width="136.8" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="68.4" y="16" text-anchor="middle" class="pill">POST /payments</text>
   </g>
-  <polyline points="598,402 598,394 1158,394 1158,402" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <g transform="translate(653.7,359)">
+  <polyline points="628,502 628,490 1118,490 1118,502" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <g transform="translate(673.7,455)">
     <rect width="128.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="64.3" y="16" text-anchor="middle" class="pill">/api/payments</text>
   </g>
-  <polyline points="828,532 748,532 748,563" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <polyline points="848,532 928,532 928,563" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <polyline points="216,601 258,601 258,366 1140,366" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round"/>
-  <line x1="820" y1="366" x2="820" y2="384" class="arrow" marker-end="url(#arr)"/>
-  <line x1="1140" y1="366" x2="1140" y2="384" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(962.4,329)">
+  <polyline points="838,640 758,640 758,660" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <polyline points="858,640 938,640 938,660" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <polyline points="236,698 342,698 342,466 1100,466" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="830" y1="466" x2="830" y2="480" class="arrow" marker-end="url(#arr)"/>
+  <line x1="1100" y1="466" x2="1100" y2="480" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(947.4,429)">
     <rect width="71.2" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="35.6" y="16" text-anchor="middle" class="pill">faults</text>
   </g>
-  <polyline points="216,831 320,831 320,717 1176,717" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round"/>
-  <line x1="616" y1="717" x2="616" y2="536" class="arrow" marker-end="url(#arr)"/>
-  <line x1="856" y1="717" x2="856" y2="536" class="arrow" marker-end="url(#arr)"/>
-  <line x1="1176" y1="717" x2="1176" y2="536" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(670.1,724)">
+  <polyline points="236,866 382,866 382,808 1136,808" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="646" y1="808" x2="646" y2="650" class="arrow" marker-end="url(#arr)"/>
+  <line x1="866" y1="808" x2="866" y2="650" class="arrow" marker-end="url(#arr)"/>
+  <line x1="1136" y1="808" x2="1136" y2="650" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(470.1,797)">
     <rect width="95.8" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="47.9" y="16" text-anchor="middle" class="pill">health ×3</text>
   </g>
-  <g transform="translate(954.2,724)">
+  <g transform="translate(1024.2,797)">
     <rect width="87.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="43.8" y="16" text-anchor="middle" class="pill">reset ×2</text>
   </g>
-  <line x1="320" y1="831" x2="550" y2="831" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(406.5,792)">
+  <line x1="382" y1="866" x2="580" y2="866" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(450.5,855)">
     <rect width="63.0" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="31.5" y="16" text-anchor="middle" class="pill">query</text>
   </g>
-  <line x1="598" y1="753" x2="598" y2="793" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(433.7,762)">
+  <polyline points="1118,638 362,638 362,836 580,836" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <g transform="translate(480.7,647)">
     <rect width="128.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="64.3" y="16" text-anchor="middle" class="pill">3 scrape jobs</text>
   </g>
-  <line x1="642" y1="831" x2="834" y2="831" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(702.4,792)">
+  <line x1="672" y1="866" x2="844" y2="866" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(722.4,827)">
     <rect width="71.2" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="35.6" y="16" text-anchor="middle" class="pill">alerts</text>
   </g>
-  <line x1="922" y1="831" x2="1114" y2="831" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(978.3,792)">
+  <line x1="932" y1="866" x2="1074" y2="866" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(963.3,827)">
     <rect width="79.4" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="39.7" y="16" text-anchor="middle" class="pill">webhook</text>
   </g>
-  <line x1="598" y1="893" x2="598" y2="926" class="arrow" marker-end="url(#arr)"/>
-  <g transform="translate(466.5,898)">
+  <line x1="628" y1="928" x2="628" y2="938" class="arrow" marker-end="url(#arr)"/>
+  <g transform="translate(496.5,922)">
     <rect width="63.0" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="31.5" y="16" text-anchor="middle" class="pill">reads</text>
   </g>
-  <path d="M 1158,919 Q 878,947 670,883" fill="none" class="arrow" stroke-linecap="round" stroke-dasharray="6 5" marker-end="url(#arr)"/>
-  <g transform="translate(882.4,948)">
+  <path d="M 1118,962 Q 888,996 700,920" fill="none" class="arrow" stroke-linecap="round" stroke-dasharray="6 5" marker-end="url(#arr)"/>
+  <g transform="translate(902.4,997)">
     <rect width="71.2" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="35.6" y="16" text-anchor="middle" class="pill">PromQL</text>
   </g>
-  <polyline points="1198,831 1372,831 1372,304 1626,304" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <polyline points="1158,866 1372,866 1372,304 1626,304" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <g transform="translate(1483.7,261)">
     <rect width="128.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="64.3" y="16" text-anchor="middle" class="pill">enriched JSON</text>
@@ -374,23 +375,23 @@
     <rect width="87.6" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="43.8" y="16" text-anchor="middle" class="pill">diagnose</text>
   </g>
-  <rect x="16" y="1076" width="1888" height="36" rx="16" fill="#FFFFFF" stroke="#D1D5DB" stroke-dasharray="7 6"/>
-  <text x="960" y="1090" text-anchor="middle" class="gate">The bot has no control path into the lab: it only receives webhooks and writes GitHub issues.</text>
-  <text x="960" y="1106" text-anchor="middle" class="gate-sub">AWS/EC2 is optional: docker compose up runs the same lab (agents need --profile agents). The bridge needs outbound HTTPS to the bot; agents also call Anthropic.</text>
-  <g transform="translate(16,1116)">
-    <rect width="592" height="64" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+  <rect x="16" y="1078" width="1888" height="58" rx="16" fill="#FFFFFF" stroke="#D1D5DB" stroke-dasharray="7 6"/>
+  <text x="960" y="1106" text-anchor="middle" class="gate">The bot has no control path into the lab: it only receives webhooks and writes GitHub issues.</text>
+  <text x="960" y="1126" text-anchor="middle" class="gate-sub">AWS/EC2 is optional: docker compose up runs the same lab (agents need --profile agents). The bridge needs outbound HTTPS to the bot; agents also call Anthropic.</text>
+  <g transform="translate(16,1142)">
+    <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="26" class="card-n">1.</text>
     <text x="52" y="26" class="card-t">Held fault (~120s) or a real outage</text>
     <text x="52" y="48" class="card-t">trips a Prometheus alert rule.</text>
   </g>
-  <g transform="translate(664,1116)">
-    <rect width="592" height="64" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+  <g transform="translate(664,1142)">
+    <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="26" class="card-n">2.</text>
     <text x="52" y="26" class="card-t">Bridge adds PromQL + jsonl and posts</text>
     <text x="52" y="48" class="card-t">enriched JSON to the bot.</text>
   </g>
-  <g transform="translate(1312,1116)">
-    <rect width="592" height="64" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+  <g transform="translate(1312,1142)">
+    <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="26" class="card-n">3.</text>
     <text x="52" y="26" class="card-t">Bot diagnoses and files or</text>
     <text x="52" y="48" class="card-t">updates a GitHub issue.</text>

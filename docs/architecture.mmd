@@ -16,11 +16,12 @@ flowchart LR
         subgraph k3sopt ["k3s (optional) · deploy_k8s_sandbox.py"]
           K3S[k3s]
         end
-        subgraph lab ["Compose lab on this host"]
-          subgraph agents ["Agents · orchestrator.py (Compose --profile agents)"]
+        subgraph compose ["Docker Compose on this host"]
+          subgraph agents ["Agents (--profile agents)"]
             RED[Red Team]
             BLUE[Blue Team]
           end
+          subgraph app ["App + observability (default)"]
           TG[Traffic]
           GW[api-gw]
           OS[order-service]
@@ -42,6 +43,7 @@ flowchart LR
           PROM -->|"alerts"| AM
           AM -->|"webhook"| BR
           BR -.->|"PromQL"| PROM
+          end
         end
       end
     end
