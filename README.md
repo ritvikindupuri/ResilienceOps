@@ -10,7 +10,7 @@ Modern distributed systems require continuous resilience validation, yet convent
 
 The platform runs an authentic containerized stack under live traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (cgroup memory leaks, CPU CFS quota exhaustion, network delays, TCP drops). A **3-Agent Blue Team** watches Golden Signals, declares SLO breaches, runs RCA, executes recovery runbooks, and writes post-mortems. In-cluster model IDs are set in [`agents/config.py`](agents/config.py) (defaults: `claude-sonnet-4-6` and `claude-haiku-4-5-20251001`; override with env vars).
 
-In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). That path is **read-only**: the bot never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item. A labeled synthetic run of that path is in [Sample output: a real test run](#sample-output-a-real-test-run).
+In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). That path is **read-only**: the bot never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item. A real `/fault` run of that path (GitHub [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5)) is in [Sample output: a real test run](#sample-output-a-real-test-run); issue #4 is the synthetic check.
 
 All telemetry is streamed in **real time (1-second scrape)** to Grafana.
 
@@ -359,22 +359,22 @@ curl -sS -H 'Content-Type: application/json' \
 
 A recorded **synthetic** payload against the live bot (GitHub [issue #4](https://github.com/ritvikindupuri/ResilienceOps/issues/4)) is demoted under [Sample output](#sample-output-a-real-test-run). The primary sample is a real `/fault` run that opened [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5).
 
-**Full demo: trip a real alert** — optional. This is a test harness, not how production incidents start. Order-service must already be up (`curl -sS http://127.0.0.1:8001/ready`). Prometheus is host-local at `127.0.0.1:9090`.
+**Full demo: trip a real alert** — optional. This is a test harness, not how production incidents start. Real failures trip the same rules without `/fault`. Order-service must already be up (`curl -sS http://127.0.0.1:8001/ready`). Prometheus is host-local at `127.0.0.1:9090` (AWS publishes it only via SSM).
 
 ```bash
 curl -sS -X POST 'http://127.0.0.1:8001/fault/redis-starvation'
-# Watch the rule: RedisConnectionSaturation (critical, order-service, for: 5s, threshold >= 48).
-# Open http://127.0.0.1:9090/alerts (needs the stack on this host; AWS publishes Prometheus only via SSM).
+# Expect RedisConnectionSaturation (critical, order-service, for: 5s, >= 48).
+# RedisConnectionSaturationWarning is inhibited while the critical alert is firing.
+# Watch: http://127.0.0.1:9090/alerts
 ```
 
-On the 2026-10-19 live run, fault → webhook **200** took about **12 seconds**, and [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) appeared about **61 seconds** after firing. Then reset:
+On the recorded live run ([timeline](examples/live_run_issue5_timeline.md)): fault at 21:50:59 EDT → bot webhook **200** at 21:51:11 (**12.1 s**); [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) at 21:52:06 (**~61 s** after `startsAt`). Then:
 
 ```bash
 curl -sS -X POST 'http://127.0.0.1:8001/fault/reset'
-curl -sS -X POST 'http://127.0.0.1:8002/fault/reset'
 ```
 
-Alertmanager forwards `status: resolved` (`send_resolved: true`). The bot comments on the same issue; it does not reset the fault. Other order-service faults: `POST /fault/leak-memory`, `/fault/cpu-burn`, `/fault/crash`. Payment-service: `/fault/latency`, `/fault/drop-rate` (`tc netem`). Or `python3 orchestrator.py --cycles 1 --scenario REDIS_CONNECTION_STARVATION` (see the [step-by-step flow](#step-by-step-flow-matches-the-code)).
+Alertmanager forwards `status: resolved` (`send_resolved: true`). The bot comments on the same issue; it does not reset the fault. If you also injected payment-service `tc netem`, reset that too (`POST http://127.0.0.1:8002/fault/reset`). Other order-service faults: `POST /fault/leak-memory`, `/fault/cpu-burn`, `/fault/crash`. Or `python3 orchestrator.py --cycles 1 --scenario REDIS_CONNECTION_STARVATION` (see the [step-by-step flow](#step-by-step-flow-matches-the-code)).
 
 Stop the lab with `docker compose down -v`.
 
@@ -647,15 +647,19 @@ Back to the local lab: Docker Compose (including Alertmanager and incident-bridg
 
 ## Sample output: a real test run
 
-Primary sample: a **real Compose stack** on a separate Linux box, following this README, against `main` at `9253ea5`. The operator ran `POST /fault/redis-starvation` on order-service. Prometheus fired `RedisConnectionSaturation` (critical, `order-service`). Alertmanager posted to incident-bridge; the bridge POSTed the live bot webhook (**200**). The bot opened **[issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5)**. After `POST /fault/reset`, the resolved notice was POSTed (**200**) and the bot commented on #5. Timeline: [`examples/live_run_issue5_timeline.md`](examples/live_run_issue5_timeline.md).
+Primary sample: a **real Compose stack** on a separate Linux box, following this README as a new user would, against `main` at `9253ea5`. Default profile (**no `agents`**). The stack's own traffic-generator (`RPS_TARGET=20`). The operator ran `POST http://127.0.0.1:8001/fault/redis-starvation` (49 unclosed Redis clients of `maxclients` 50). Prometheus fired `RedisConnectionSaturation` (critical, `order-service`); the sibling warning was **inhibited**. Alertmanager posted to incident-bridge; the bridge POSTed the live bot webhook (**200**). The bot opened **[issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5)**. After `POST /fault/reset`, the resolved notice was POSTed (**200**) and the bot commented on #5.
 
-| Clock (UTC, 2026-10-19) | Event |
-|---|---|
-| 01:51:05Z | `RedisConnectionSaturation` firing |
-| ~12s later | webhook **200** (fault → bridge → bot) |
-| 01:52:06Z | issue #5 opened (~**61s** after firing), fingerprint `279c3ab8f16c75be` |
-| 01:55:05Z | resolved after `/fault/reset`; webhook **200** |
-| 01:55:39Z | bot **Resolved** comment (no action taken) |
+Full hop table (EDT): [`examples/live_run_issue5_timeline.md`](examples/live_run_issue5_timeline.md). Redacted bridge lines: [`examples/live_run_issue5_bridge.log`](examples/live_run_issue5_bridge.log).
+
+| EDT (2026-10-18) | UTC | Event |
+|---|---|---|
+| 21:50:59 | 01:50:59Z | `POST /fault/redis-starvation` → 49 connections |
+| 21:51:05 | 01:51:05Z | `RedisConnectionSaturation` `startsAt` (`for: 5s`) |
+| 21:51:11 | 01:51:11Z | bridge → bot webhook **200** (**12.1 s** after the fault) |
+| 21:52:06 | 01:52:06Z | issue #5 opened (**~61 s** after firing), fingerprint `279c3ab8f16c75be` |
+| 21:55:01 | 01:55:01Z | `POST /fault/reset` → `{"status":"clean"}` |
+| 21:55:11 | 01:55:11Z | resolved webhook **200** |
+| 21:55:39 | 01:55:39Z | bot **Resolved** comment (no action taken; ~4 min firing) |
 
 Agent activity on that issue is empty because the `agents` Compose profile was not running — the bridge only tails `logs/agent_activity.jsonl` when that file has rows. Screenshots below are the public issue page (no webhook key).
 

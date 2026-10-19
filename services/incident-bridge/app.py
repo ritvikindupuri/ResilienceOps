@@ -28,6 +28,8 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger("incident_bridge")
+# httpx INFO logs the full request URL. Do not print GROK_WEBHOOK_URL.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = Settings.from_env()
 dedupe = DedupeCache(ttl_seconds=settings.dedupe_ttl_seconds)

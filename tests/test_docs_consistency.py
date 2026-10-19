@@ -98,6 +98,7 @@ def test_readme_referenced_scripts_exist():
         "docs/images/sample-incident-issue-5-3.png",
         "examples/e2e_test_alert.json",
         "examples/live_run_issue5_timeline.md",
+        "examples/live_run_issue5_bridge.log",
         "docs/ResilienceOps_Technical_Documentation.pdf",
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
@@ -145,10 +146,36 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "RedisConnectionSaturation" in readme
     assert "forward FAILED after" in readme
     assert "POST /fault/reset" in readme
+    assert "12.1 s" in readme
+    assert "examples/live_run_issue5_timeline.md" in readme
+    assert "examples/live_run_issue5_bridge.log" in readme
+    assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
+        ROOT / "services" / "incident-bridge" / "app.py"
+    ).read_text(encoding="utf-8")
     assert "K8sToolKit.k8s_available" in readme
     assert "bounces the container" not in readme
     assert "MTTD: 2.14s" not in readme
     assert "MTTR: 3.42s" not in readme
+
+
+def test_live_run_artifacts_redact_webhook_url():
+    uuidish = re.compile(r"automations/webhook/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-")
+    for rel in (
+        "examples/live_run_issue5_timeline.md",
+        "examples/live_run_issue5_bridge.log",
+        "README.md",
+        "docs/ACCURACY.md",
+    ):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert uuidish.search(text) is None, f"webhook UUID leaked in {rel}"
+    timeline = (ROOT / "examples" / "live_run_issue5_timeline.md").read_text(encoding="utf-8")
+    log = (ROOT / "examples" / "live_run_issue5_bridge.log").read_text(encoding="utf-8")
+    assert "12.1 s" in timeline
+    assert "21:51:11.134" in timeline
+    assert "21:52:06" in timeline
+    assert "<redacted>" in log
+    assert "forwarded 1 alert(s) status=firing" in log
+    assert "ConnectTimeout" in log
 
 
 def test_architecture_png_is_nontrivial():

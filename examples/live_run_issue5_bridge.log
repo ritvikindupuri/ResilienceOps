@@ -1,0 +1,26 @@
+# Redacted incident-bridge lines from the 2026-10-18 live run
+# (ResilienceOps main @ 9253ea5, default compose profile).
+# The webhook URL path is redacted. The key never appeared in these lines
+# (Authorization values were already "***"). UTC timestamps.
+
+2026-10-19T01:46:25.110 INFO incident_bridge incident-bridge starting webhook_configured=True auth_header=Authorization auth_scheme_set=True prometheus=http://prometheus:9090
+
+# Side-effect blip (order-service restart while egress was still blocked).
+# Bridge accepted Alertmanager's POST (200) then exhausted retries with ConnectTimeout
+# and, on main @ 9253ea5, raised into ASGI. PR #3 logs forward FAILED instead of crashing.
+2026-10-19T01:48:18 INFO:     172.19.0.7 - "POST /webhook HTTP/1.1" 200 OK
+2026-10-19T01:48:33 INFO:     172.19.0.7 - "POST /webhook HTTP/1.1" 200 OK
+2026-10-19T01:48:48 WARNING incident_bridge webhook attempt 1/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+2026-10-19T01:49:03 WARNING incident_bridge webhook attempt 1/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+2026-10-19T01:49:18 WARNING incident_bridge webhook attempt 2/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+2026-10-19T01:49:33 WARNING incident_bridge webhook attempt 2/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+2026-10-19T01:49:49 WARNING incident_bridge webhook attempt 3/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+2026-10-19T01:50:04 WARNING incident_bridge webhook attempt 3/3 failed: ConnectTimeout (headers={'Authorization': '***'})
+
+# Live RedisConnectionSaturation path that opened GitHub issue #5.
+2026-10-19T01:51:10.894 INFO:     172.19.0.7 - "POST /webhook HTTP/1.1" 200 OK
+2026-10-19T01:51:11.134 INFO httpx HTTP Request: POST https://api2.cursor.sh/automations/webhook/<redacted> "HTTP/1.1 200 OK"
+2026-10-19T01:51:11.134 INFO incident_bridge forwarded 1 alert(s) status=firing source=resilienceops
+2026-10-19T01:55:10.904 INFO:     172.19.0.7 - "POST /webhook HTTP/1.1" 200 OK
+2026-10-19T01:55:11.218 INFO httpx HTTP Request: POST https://api2.cursor.sh/automations/webhook/<redacted> "HTTP/1.1 200 OK"
+2026-10-19T01:55:11.218 INFO incident_bridge forwarded 1 alert(s) status=resolved source=resilienceops

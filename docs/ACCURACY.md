@@ -34,6 +34,8 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Bridge forward failure raised into ASGI (`Exception in ASGI application`) | Log `forward FAILED after N attempts`, dead-letter JSONL, bounded retry queue, return `forward_failed` |
 | Host iptables FORWARD breakage undocumented | Troubleshooting: “Containers cannot reach each other” |
 | Sample output led with synthetic issue #4 | Primary sample is live issue #5; #4 demoted |
+| Live-run hops were reconstructed (~12s / ~61s) | Operator table `examples/live_run_issue5_timeline.md` (EDT): **12.1 s** fault→webhook (21:50:59 → 21:51:11.134), **~61 s** `startsAt`→issue #5 (21:51:05.886 → 21:52:06). Redacted bridge lines `examples/live_run_issue5_bridge.log` |
+| Live `httpx` INFO printed the full webhook URL | `app.py:31-32` sets httpx to WARNING. Committed sample log redacts `…/automations/webhook/<redacted>` |
 
 ---
 
@@ -100,7 +102,7 @@ No extra arrows were added for IAM/SSM/SG/IGW (satellites). Numbering matches co
 | 13 | Alertmanager → incident-bridge | `webhook` | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
 | 14 | Prometheus → Grafana | `reads` | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml`. Host Grafana `:3000` (`docker-compose.yml:212`) |
 | 15 | incident-bridge ⇢ Prometheus (dashed) | `PromQL` | `evidence.py:29-67` range queries; `app.py` `collect_evidence` |
-| 16 | incident-bridge → Grok avatar | `enriched JSON` | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}` (`:153-157`); HTTPS to `GROK_WEBHOOK_URL` |
+| 16 | incident-bridge → Grok avatar | `enriched JSON` | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}` (`:155-160`); HTTPS to `GROK_WEBHOOK_URL` |
 | 17–18 | Grok → GitHub / owner ping | `read-only` | Imported bot. Path B never restarts/scales/pushes (`README.md:13`, gate `build_architecture.py:581-587`) |
 
 ---
@@ -112,7 +114,7 @@ No extra arrows were added for IAM/SSM/SG/IGW (satellites). Numbering matches co
 | Gate line 1 | “Read-only: the bot never restarts, scales, or pushes” | `build_architecture.py:581-582`; bot template (not in-repo). Path A **does** reset/restart when k8s toolkit is available (`remediator.py:24-52`) — that is not the bot |
 | Gate line 2 | “AWS/EC2 is optional: docker compose up is the same lab. The bot only needs outbound HTTPS from the bridge.” | `build_architecture.py:585-587`; local Compose `docker-compose.yml`; bridge POST `forwarding.py:178-236`; no inbound listener on the bot from this repo |
 | Card 1 | “Fault or real outage trips a Prometheus alert rule.” | Fault injection is **optional**. Rules in `dashboards/alerts.yml`. Real `up==0` / SLO / Redis saturation fire without `/fault` |
-| Card 2 | “Bridge adds evidence and posts enriched JSON to your bot.” | `app.py:141-185` |
+| Card 2 | “Bridge adds evidence and posts enriched JSON to your bot.” | `app.py:143-187` |
 | Card 3 | “Bot diagnoses and files or updates a GitHub issue.” | Imported template; samples issues #4 (synthetic) and #5 (live) |
 
 ---
@@ -132,8 +134,9 @@ No extra arrows were added for IAM/SSM/SG/IGW (satellites). Numbering matches co
 | Fault CLI scenarios and substring dispatch | `orchestrator.py:69-74`; `infra_disruptor.py:8-17` |
 | Detection: `/health` ×3, p99/5xx PromQL, SLO 1200ms / 2%, HTTP >= 500, max 9 ticks of 1s | `monitor.py:52-145`; `orchestrator.py:80` `range(1, 10)` |
 | Alertmanager `group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`, compose target `alertmanager:9093`, host `127.0.0.1:9093` | `alertmanager.yml:7-9`; `prometheus.yml:20`; `docker-compose.yml:161` |
-| Bridge drop if URL empty; dedupe 300s; payload ~100KB; source `resilienceops` | `app.py:128-130`; `settings.py:56-58`; `forwarding.py:16-17,107` |
-| Forward failure: ERROR log, dead-letter, retry queue, no ASGI crash | `app.py:162-185`; `forwarding.py:242-310` |
+| Bridge drop if URL empty; dedupe 300s; payload ~100KB; source `resilienceops` | `app.py:130-132`; `settings.py:56-58`; `forwarding.py:16-17,107` |
+| Forward failure: ERROR log, dead-letter, retry queue, no ASGI crash | `app.py:164-187`; `forwarding.py:242-310`; ASGI wrapper `app.py:214-218` |
+| httpx must not log `GROK_WEBHOOK_URL` | `app.py:31-32` `logging.getLogger("httpx").setLevel(logging.WARNING)` |
 | `agent_activity` empty unless agents profile / host orchestrator | compose `agent-sandbox` `profiles: [agents]` `docker-compose.yml:232-234`; logger writes `logs/agent_activity.jsonl` `structured_logger.py:13-33` |
 | Path A verify_recovery max 5, latency < 800ms; always `reset_environment` | `remediator.py:24-83` |
 | Path A writes `reports/incident_*.md`; does not open GitHub issues | `orchestrator.py:112-115` |
@@ -180,11 +183,12 @@ No extra arrows were added for IAM/SSM/SG/IGW (satellites). Numbering matches co
 | Redis 6379 / Postgres 5432 published | `docker-compose.yml:93-94,104-105` |
 | `RPS_TARGET` compose 20 / module 25; `CONCURRENCY` compose 8 / module 10 | `docker-compose.yml:125-126`; `load_generator.py:9-10` |
 | `agent-sandbox` profile opt-in; CMD injects faults | `docker-compose.yml:232-234`; `Dockerfile.agent-sandbox` |
-| `curl 127.0.0.1:8088/healthz` → `webhook_configured` | `app.py:196-201` |
+| `curl 127.0.0.1:8088/healthz` → `webhook_configured` | `app.py:198-203` |
 | `send_test_alert.py --target alertmanager` → `127.0.0.1:9093/api/v2/alerts` | `scripts/send_test_alert.py:70-77` |
 | `--target bridge` → `127.0.0.1:8088/webhook` | `send_test_alert.py:72,79-80` |
 | Full demo `POST http://127.0.0.1:8001/fault/redis-starvation` then `/fault/reset` | `order-service/main.py:277,352`; alert `RedisConnectionSaturation` `alerts.yml:178-187` (`for: 5s`, `>= 48`) |
-| Live timing ~12s fault→webhook, ~61s to issue #5 | `examples/live_run_issue5_timeline.md`; public issue https://github.com/ritvikindupuri/ResilienceOps/issues/5 |
+| Live timing **12.1 s** fault→webhook, **~61 s** to issue #5 | Operator hops `examples/live_run_issue5_timeline.md` (21:50:59 fault → 21:51:11.134 webhook 200; 21:51:05.886 `startsAt` → 21:52:06 issue). Redacted bridge lines `examples/live_run_issue5_bridge.log`. Public issue https://github.com/ritvikindupuri/ResilienceOps/issues/5. Warning inhibited (`inhibit_rules`). Default compose: **no `agents`**, so `agent_activity` empty |
+| Issue #5 screenshots (public crops, no webhook key) | `docs/images/sample-incident-issue-5-{1,2,3}.png`; fingerprint `279c3ab8f16c75be`; “Agent activity: none attached” |
 | `orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | `orchestrator.py:9-10,118-123` |
 | `deploy_remote.py` zip omits `.env` | `deploy_remote.py:37-50`; `tests/test_deploy_archive.py` |
 | SSM session, no SSH | `terraform/main.tf:177-178`; README step 10 |
