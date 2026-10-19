@@ -7,7 +7,10 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Deque, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import httpx
 
@@ -234,3 +237,83 @@ def post_with_retry(
     finally:
         if owns_client:
             http.close()
+
+
+class FailedForwardQueue:
+    """Bounded in-memory retry list for webhook POSTs that exhausted post_with_retry.
+
+    Oldest entries drop first. Payloads must already be secret-stripped; the
+    webhook key is never stored.
+    """
+
+    def __init__(self, max_items: int = 16):
+        self.max_items = max_items
+        self._items: Deque[Dict[str, Any]] = deque()
+        self._lock = threading.Lock()
+
+    def push(self, payload: Mapping[str, Any], error_name: str) -> None:
+        item = {
+            "payload": json.loads(json.dumps(payload)),
+            "error": error_name,
+            "queued_at": time.time(),
+        }
+        with self._lock:
+            if len(self._items) >= self.max_items:
+                self._items.popleft()
+            self._items.append(item)
+
+    def pop(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            if not self._items:
+                return None
+            return self._items.popleft()
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._items)
+
+
+def dead_letter_path(agent_activity_log: str) -> Path:
+    parent = Path(agent_activity_log).expanduser().resolve().parent
+    return parent / "bridge_deadletter.jsonl"
+
+
+def write_dead_letter(
+    agent_activity_log: str,
+    payload: Mapping[str, Any],
+    error_name: str,
+    attempts: int,
+) -> Optional[Path]:
+    """Append a key-free JSONL record. Never write Authorization or GROK_WEBHOOK_KEY."""
+    path = dead_letter_path(agent_activity_log)
+    record = {
+        "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "error": error_name,
+        "attempts": attempts,
+        "status": payload.get("status"),
+        "alerts": payload.get("alerts"),
+        "source": payload.get("source"),
+        "evidence": payload.get("evidence"),
+    }
+    blob = json.dumps(record, separators=(",", ":"), ensure_ascii=True)
+    if "GROK_WEBHOOK" in blob or "Bearer " in blob:
+        logger.warning("refusing to write dead-letter record that looks like it contains a secret")
+        return None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(blob + "\n")
+        return path
+    except OSError as exc:
+        logger.warning("dead-letter write failed: %s", type(exc).__name__)
+        return None
+
+
+def alert_ids(alerts: Iterable[Mapping[str, Any]]) -> Tuple[str, str]:
+    names: List[str] = []
+    fingerprints: List[str] = []
+    for alert in alerts:
+        labels = alert.get("labels") or {}
+        names.append(str(labels.get("alertname") or "?"))
+        fingerprints.append(alert_fingerprint(alert))
+    return ",".join(names) or "?", ",".join(fingerprints) or "?"

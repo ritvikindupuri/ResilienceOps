@@ -88,11 +88,16 @@ def test_readme_referenced_scripts_exist():
         "dashboards/alertmanager.yml",
         "docs/architecture.svg",
         "docs/architecture.mmd",
+        "docs/ACCURACY.md",
         "docs/images/infraattack_platform_architecture.png",
         "docs/images/sample-incident-issue-1.png",
         "docs/images/sample-incident-issue-2.png",
         "docs/images/sample-incident-issue-3.png",
+        "docs/images/sample-incident-issue-5-1.png",
+        "docs/images/sample-incident-issue-5-2.png",
+        "docs/images/sample-incident-issue-5-3.png",
         "examples/e2e_test_alert.json",
+        "examples/live_run_issue5_timeline.md",
         "docs/ResilienceOps_Technical_Documentation.pdf",
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
@@ -136,6 +141,9 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "# Incident Post-Mortem Report: UNKNOWN_FAULT" not in readme
     assert "Example report" in sample
     assert "Incident Post-Mortem Report: MEMORY_EXHAUSTION" in sample
+    assert "issue #5" in readme or "issues/5" in readme
+    assert "RedisConnectionSaturation" in readme
+    assert "forward FAILED after" in readme
     assert "POST /fault/reset" in readme
     assert "K8sToolKit.k8s_available" in readme
     assert "bounces the container" not in readme

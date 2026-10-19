@@ -122,6 +122,11 @@ def generic_symbols() -> str:
     <symbol id="i-aws-sg" viewBox="0 0 40 40">
       <rect x="2.5" y="2.5" width="35" height="35" rx="6" fill="#FFF5F5"
             stroke="#DD344C" stroke-width="2.2" stroke-dasharray="5 3.5"/>
+    </symbol>
+    <symbol id="i-aws-igw" viewBox="0 0 40 40">
+      <rect fill="#8C4FFF" width="40" height="40"/>
+      <path fill="#FFFFFF"
+            d="M8 22h24v2H8zm4-4h16v2H12zm-2 8h20v2H10zm10-16l8 6H12z"/>
     </symbol>"""
 
 
@@ -353,7 +358,7 @@ def build() -> str:
     tf_x, ec2_node_x = 400, 590
     # IAM / SSM satellites hang off the EC2 node (no arrows — Terraform creates
     # the role and profile; deploy_remote.py uses SSM).
-    iam_x, ssm_x, sg_x = 680, 860, 1072
+    iam_x, ssm_x, sg_x, igw_x = 680, 860, 1048, 1238
 
     nested_y = aws_r + 70  # 234
     nested_h = col_bottom - nested_y - 14  # 746
@@ -391,6 +396,7 @@ def build() -> str:
         satellite(iam_x, aws_r - aws_icon / 2 + 6, "aws-iam", "IAM", "role + profile"),
         satellite(ssm_x, aws_r - aws_icon / 2 + 6, "aws-ssm", "SSM", "deploy_remote.py"),
         satellite(sg_x, aws_r - aws_icon / 2 + 6, "aws-sg", "SG", "ingress + internal"),
+        satellite(igw_x, aws_r - aws_icon / 2 + 6, "aws-igw", "IGW", "public RT only"),
         node(k3s_cx, k3s_node_y, "k3s", "k3s", "Agent sandbox"),
         node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
         node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
@@ -446,7 +452,7 @@ def build() -> str:
     # Unused subnets live in the VPC but have no workloads today — caption only.
     parts.append(
         f'  <text x="{vpc_x + vpc_w - 14:.0f}" y="{gy + 26:.0f}" text-anchor="end" '
-        f'class="cap">app_workloads · data_persistence unused</text>'
+        f'class="cap">unused: app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24</text>'
     )
     parts.extend(nodes)
 
@@ -517,7 +523,7 @@ def build() -> str:
         (os_x + 18, health_y),
     ], marked=False))
     parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
-    parts.append(pill((gw_x + os_x) / 2, health_y, "health / reset"))
+    parts.append(pill((gw_x + os_x) / 2, health_y, "health ×3 / reset"))
 
     # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
     # cross Red's spine. Stays under Redis/Postgres.
@@ -526,7 +532,7 @@ def build() -> str:
 
     # 11. Services → Prometheus. One vertical in the api-gw / Prometheus column.
     parts.append(arrow(gw_x, metrics_from, gw_x, prom_top))
-    parts.append(pill(gw_x + 52, (metrics_from + prom_top) / 2, "metrics"))
+    parts.append(pill(gw_x + 52, (metrics_from + prom_top) / 2, "3 scrape jobs"))
 
     # 12–13. Observability row, left → right, short straight arrows.
     parts.append(arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic))

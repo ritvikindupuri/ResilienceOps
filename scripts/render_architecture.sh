@@ -17,7 +17,7 @@ if [[ ! -f "$SVG" ]]; then
 fi
 
 if command -v rsvg-convert >/dev/null 2>&1; then
-  # Native SVG size (1920x1100). Do not squash into a different aspect ratio.
+  # Native SVG size (1920x1200). Do not squash into a different aspect ratio.
   rsvg-convert -w 1920 "$SVG" -o "$OUT"
   echo "wrote $OUT via rsvg-convert ($(wc -c < "$OUT") bytes)"
   exit 0

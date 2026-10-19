@@ -8,8 +8,22 @@ services:
       - ORDER_SERVICE_URL=http://order-service:8001
       - PAYMENT_SERVICE_URL=http://payment-service:8002
     depends_on:
-      - order-service
-      - payment-service
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   order-service:
     build:
@@ -32,8 +46,22 @@ services:
           cpus: '0.50'
           memory: 256M
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
 
   payment-service:
     build:
@@ -47,12 +75,29 @@ services:
         limits:
           cpus: '0.50'
           memory: 256M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--maxclients", "50"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   postgres:
     image: postgres:16-alpine
@@ -66,6 +111,11 @@ services:
       resources:
         limits:
           memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sre_user -d orders_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   traffic-generator:
     build:
@@ -75,7 +125,8 @@ services:
       - RPS_TARGET=${RPS_TARGET:-20}
       - CONCURRENCY=${CONCURRENCY:-8}
     depends_on:
-      - api-gw
+      api-gw:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -85,6 +136,18 @@ services:
     volumes:
       - ./dashboards/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./dashboards/alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on:
+      api-gw:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -99,7 +162,13 @@ services:
     volumes:
       - ./dashboards/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     depends_on:
-      - incident-bridge
+      incident-bridge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   incident-bridge:
     build:
@@ -121,8 +190,21 @@ services:
       - WEBHOOK_MAX_RETRIES=${WEBHOOK_MAX_RETRIES:-3}
       - LOG_TAIL_LINES=${LOG_TAIL_LINES:-40}
       - K8S_EVIDENCE_ENABLED=${K8S_EVIDENCE_ENABLED:-true}
+    # rw so failed webhook payloads can be dead-lettered under logs/ (never includes the key).
     volumes:
-      - ./logs:/app/logs:ro
+      - ./logs:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   grafana:
     image: grafana/grafana:10.4.2
@@ -135,7 +217,14 @@ services:
     volumes:
       - ./dashboards/provisioning:/etc/grafana/provisioning
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   # Autonomous Agent Sandbox Container (Runs Red Team vs Blue Team cycles in isolation).
   # Opt-in: `docker compose --profile agents up -d`. Default `docker compose up` is the
@@ -158,7 +247,11 @@ services:
       - ./reports:/app/reports
       - ./logs:/app/logs
     depends_on:
-      - api-gw
-      - order-service
-      - payment-service
-      - grafana
+      api-gw:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy

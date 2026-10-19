@@ -10,7 +10,15 @@ import httpx
 import pytest
 
 from evidence import collect_agent_activity, redact_secrets, summarize_matrix
-from forwarding import DedupeCache, build_auth_headers, cap_payload, post_with_retry, redact_headers
+from forwarding import (
+    DedupeCache,
+    FailedForwardQueue,
+    build_auth_headers,
+    cap_payload,
+    post_with_retry,
+    redact_headers,
+    write_dead_letter,
+)
 from settings import Settings
 
 import app as bridge
@@ -192,6 +200,7 @@ def test_process_webhook_forwards_enriched_payload(monkeypatch):
         dedupe_cache=cache,
         forward=fake_forward,
         evidence_fn=fake_evidence,
+        retry_queue=FailedForwardQueue(),
     )
     assert result == "forwarded"
     assert captured["url"] == "https://example.invalid/diagnose"
@@ -210,6 +219,7 @@ def test_process_webhook_forwards_enriched_payload(monkeypatch):
         dedupe_cache=cache,
         forward=fake_forward,
         evidence_fn=fake_evidence,
+        retry_queue=FailedForwardQueue(),
     )
     assert again == "dropped_duplicate"
 
@@ -227,6 +237,7 @@ def test_process_webhook_drops_when_url_unset():
         dedupe_cache=DedupeCache(),
         forward=boom,
         evidence_fn=lambda **kwargs: {},
+        retry_queue=FailedForwardQueue(),
     )
     assert result == "dropped_unconfigured"
     assert called["n"] == 0
@@ -244,6 +255,7 @@ def test_process_webhook_never_logs_key(caplog):
         dedupe_cache=DedupeCache(),
         forward=fake_forward,
         evidence_fn=lambda **kwargs: {"agent_activity": [{"note": "ok"}]},
+        retry_queue=FailedForwardQueue(),
     )
     joined = "\n".join(record.getMessage() for record in caplog.records)
     assert "test-webhook-key" not in joined
@@ -307,3 +319,105 @@ def test_healthz_and_webhook_accept(monkeypatch):
     posted = client.post("/webhook", json={"status": "firing", "alerts": []})
     assert posted.status_code == 200
     assert posted.json()["accepted"] is True
+
+
+def test_process_webhook_logs_forward_failed_and_does_not_raise(tmp_path: Path, caplog):
+    caplog.set_level(logging.ERROR)
+    attempts = {"n": 0}
+
+    def boom(url, payload, headers=None, **kwargs):
+        attempts["n"] += 1
+        raise httpx.ConnectTimeout("timed out", request=httpx.Request("POST", url))
+
+    queue = FailedForwardQueue(max_items=4)
+    log_path = tmp_path / "agent_activity.jsonl"
+    payload = {
+        "status": "firing",
+        "alerts": [
+            {
+                "status": "firing",
+                "labels": {"alertname": "RedisConnectionSaturation", "service": "order-service"},
+                "annotations": {"summary": "pool full"},
+                "fingerprint": "fp-fail",
+            }
+        ],
+    }
+    result = bridge.process_webhook(
+        payload,
+        settings_obj=_settings(agent_activity_log=str(log_path)),
+        dedupe_cache=DedupeCache(),
+        forward=boom,
+        evidence_fn=lambda **kwargs: {"agent_activity": []},
+        retry_queue=queue,
+    )
+    assert result == "forward_failed"
+    assert attempts["n"] == 1
+    assert len(queue) == 1
+    joined = "\n".join(record.getMessage() for record in caplog.records)
+    assert "forward FAILED after 3 attempts" in joined
+    assert "alertname=RedisConnectionSaturation" in joined
+    assert "fingerprint=fp-fail" in joined
+    assert "test-webhook-key" not in joined
+    dead = tmp_path / "bridge_deadletter.jsonl"
+    assert dead.is_file()
+    body = dead.read_text(encoding="utf-8")
+    assert "test-webhook-key" not in body
+    assert "RedisConnectionSaturation" in body
+    assert "Bearer " not in body
+
+
+def test_failed_forward_queue_is_bounded_and_retried(tmp_path: Path):
+    queue = FailedForwardQueue(max_items=2)
+    for i in range(5):
+        queue.push({"alerts": [{"fingerprint": str(i), "labels": {"alertname": f"A{i}"}}], "source": "resilienceops"}, "ConnectTimeout")
+    assert len(queue) == 2
+    first = queue.pop()
+    assert first["payload"]["alerts"][0]["fingerprint"] == "3"
+
+    forwarded = []
+
+    def succeed_then_noop(url, payload, headers=None, **kwargs):
+        forwarded.append(payload)
+        return httpx.Response(200, request=httpx.Request("POST", url))
+
+    # Next inbound webhook should drain the remaining queued item first.
+    result = bridge.process_webhook(
+        {
+            "status": "firing",
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {"alertname": "ServiceDown", "service": "api-gw"},
+                    "fingerprint": "fresh",
+                }
+            ],
+        },
+        settings_obj=_settings(agent_activity_log=str(tmp_path / "agent_activity.jsonl")),
+        dedupe_cache=DedupeCache(),
+        forward=succeed_then_noop,
+        evidence_fn=lambda **kwargs: {},
+        retry_queue=queue,
+    )
+    assert result == "forwarded"
+    assert any(item.get("alerts", [{}])[0].get("fingerprint") == "4" for item in forwarded)
+    assert any(item.get("alerts", [{}])[0].get("fingerprint") == "fresh" for item in forwarded)
+    assert len(queue) == 0
+
+
+def test_write_dead_letter_omits_webhook_key(tmp_path: Path):
+    path = write_dead_letter(
+        str(tmp_path / "agent_activity.jsonl"),
+        {
+            "status": "firing",
+            "alerts": [{"labels": {"alertname": "ServiceDown"}, "fingerprint": "x"}],
+            "evidence": {"note": "ok"},
+            "source": "resilienceops",
+        },
+        "ConnectTimeout",
+        3,
+    )
+    assert path is not None
+    text = path.read_text(encoding="utf-8")
+    assert "GROK_WEBHOOK" not in text
+    assert "Authorization" not in text
+    assert "ConnectTimeout" in text

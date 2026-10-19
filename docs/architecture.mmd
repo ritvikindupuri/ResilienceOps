@@ -7,10 +7,12 @@ flowchart LR
       IAM[IAM role + profile]
       SSM[SSM]
       SG[SG ingress + internal]
+      IGW[IGW + public RT]
       TF -->|provisions| EC2
       EC2 --- IAM
       EC2 --- SSM
       EC2 --- SG
+      EC2 --- IGW
 
       subgraph k3s ["k3s on this host"]
         K3S[k3s]
@@ -35,7 +37,7 @@ flowchart LR
         OS -->|"POST /payments"| PS
         OS --> RD
         OS --> PG
-        GW -->|"metrics"| PROM
+        GW -->|"3 scrape jobs"| PROM
         PROM -->|"reads"| GRAF
         PROM -->|"firing alerts"| AM
         AM -->|"webhook"| BR
@@ -53,6 +55,6 @@ flowchart LR
   end
 
   RED -->|"faults"| OS
-  BLUE -->|"health / reset"| OS
+  BLUE -->|"health ×3 / reset"| OS
   BLUE -->|"query"| PROM
   BR -->|"enriched JSON"| BOT

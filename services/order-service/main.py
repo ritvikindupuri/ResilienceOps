@@ -39,21 +39,7 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "sre_password")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "orders_db")
 pg_pool = None
 
-try:
-    pg_pool = pool.SimpleConnectionPool(
-        minconn=1,
-        maxconn=10,
-        host=POSTGRES_HOST,
-        port=POSTGRES_PORT,
-        user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD,
-        database=POSTGRES_DB,
-        connect_timeout=3
-    )
-    # Ensure orders table exists
-    conn = pg_pool.getconn()
-    with conn.cursor() as cur:
-        cur.execute("""
+_ORDERS_DDL = """
             CREATE TABLE IF NOT EXISTS orders (
                 order_id VARCHAR(64) PRIMARY KEY,
                 item_id VARCHAR(64),
@@ -63,11 +49,68 @@ try:
                 created_at DOUBLE PRECISION,
                 status VARCHAR(32)
             );
-        """)
-        conn.commit()
-    pg_pool.putconn(conn)
-except Exception:
+        """
+
+
+def _make_pg_pool():
+    return pool.SimpleConnectionPool(
+        minconn=1,
+        maxconn=10,
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        database=POSTGRES_DB,
+        connect_timeout=3,
+    )
+
+
+def _ensure_orders_table(candidate) -> None:
+    conn = candidate.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(_ORDERS_DDL)
+            conn.commit()
+    finally:
+        candidate.putconn(conn)
+
+
+def init_postgres(retries: int = 8, base_delay: float = 0.3):
+    """Connect with exponential backoff. Compose can start us before Postgres accepts sessions."""
+    global pg_pool
+    last_error = None
+    for attempt in range(1, retries + 1):
+        candidate = None
+        try:
+            candidate = _make_pg_pool()
+            _ensure_orders_table(candidate)
+            pg_pool = candidate
+            return pg_pool
+        except Exception as exc:
+            last_error = exc
+            if candidate is not None:
+                try:
+                    candidate.closeall()
+                except Exception:
+                    pass
+            time.sleep(min(base_delay * (2 ** (attempt - 1)), 2.0))
     pg_pool = None
+    sys.stderr.write(
+        f"[order-service] postgres connect failed after {retries} attempts: "
+        f"{type(last_error).__name__ if last_error else 'unknown'}\n"
+    )
+    return None
+
+
+def ensure_pg_pool():
+    """Lazy reconnect if startup raced Postgres or the pool was never established."""
+    global pg_pool
+    if pg_pool is not None:
+        return pg_pool
+    return init_postgres(retries=3, base_delay=0.2)
+
+
+init_postgres()
 
 PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://payment-service:8002")
 
@@ -103,12 +146,13 @@ async def health():
             redis_status = f"unreachable: {str(e)[:40]}"
             
     postgres_status = "disabled"
-    if pg_pool:
+    pool_obj = ensure_pg_pool()
+    if pool_obj:
         try:
-            conn = pg_pool.getconn()
+            conn = pool_obj.getconn()
             with conn.cursor() as cur:
                 cur.execute("SELECT 1;")
-            pg_pool.putconn(conn)
+            pool_obj.putconn(conn)
             postgres_status = "connected"
         except Exception as e:
             postgres_status = f"unreachable: {str(e)[:40]}"
@@ -121,6 +165,20 @@ async def health():
         "postgres_db": postgres_status,
         "redis_starvation_active": FAULT_STATE["redis_starvation_active"]
     }
+
+
+@app.get("/ready")
+async def ready():
+    """Compose/k8s readiness: fail until Redis and Postgres actually accept connections.
+
+    `/health` stays HTTP 200 during injected faults so Blue Team SLO probes still work.
+    """
+    snapshot = await health()
+    redis_ok = str(snapshot.get("redis_cache") or "").startswith("connected")
+    postgres_ok = snapshot.get("postgres_db") == "connected"
+    if not redis_ok or not postgres_ok:
+        raise HTTPException(status_code=503, detail=snapshot)
+    return snapshot
 
 @app.get("/metrics")
 async def metrics():
@@ -153,9 +211,10 @@ async def create_order(order_req: CreateOrderRequest):
     }
     
     # Persistence: Write directly to PostgreSQL database
-    if pg_pool:
+    pool_obj = ensure_pg_pool()
+    if pool_obj:
         try:
-            conn = pg_pool.getconn()
+            conn = pool_obj.getconn()
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -166,7 +225,7 @@ async def create_order(order_req: CreateOrderRequest):
                     (order_id, order_req.item_id, order_req.quantity, order_req.amount, order_req.user_id, order_data["created_at"], order_data["status"])
                 )
                 conn.commit()
-            pg_pool.putconn(conn)
+            pool_obj.putconn(conn)
         except Exception as pge:
             pass
 
