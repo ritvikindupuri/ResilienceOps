@@ -149,6 +149,17 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "12.1 s" in readme
     assert "examples/live_run_issue5_timeline.md" in readme
     assert "examples/live_run_issue5_bridge.log" in readme
+    assert "health ×3" in readme
+    assert "reset ×2" in readme
+    svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
+    assert "Your Grok bot" not in svg
+    assert "Your Grok bot" not in readme
+    assert "AWS account" in svg
+    assert "optional AWS" in svg
+    assert "health ×3" in svg
+    assert "reset ×2" in svg
+    assert "SG  ingress + internal" in svg
+    assert "public RT only" in svg
     assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
         ROOT / "services" / "incident-bridge" / "app.py"
     ).read_text(encoding="utf-8")

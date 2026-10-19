@@ -247,11 +247,27 @@ def group(
             "rx": "6",
             "cls": "group-subnet",
         },
+        "account": {
+            "fill": "#F8FAFC",
+            "stroke": "#94A3B8",
+            "sw": "1.6",
+            "dash": "",
+            "rx": "8",
+            "cls": "group",
+        },
+        "sg": {
+            "fill": "none",
+            "stroke": "#DD344C",
+            "sw": "2.0",
+            "dash": ' stroke-dasharray="5 3.5"',
+            "rx": "8",
+            "cls": "group-sg",
+        },
     }
     pal = palettes[style]
     icon_svg = ""
     text_x = x + 24
-    icon_size = 24 if style in {"vpc", "public_subnet"} else 22
+    icon_size = 24 if style in {"vpc", "public_subnet", "sg"} else 22
     if icon:
         icon_svg = (
             f'  <use href="#i-{icon}" xlink:href="#i-{icon}" '
@@ -302,12 +318,24 @@ def arc(
     )
 
 
-def satellite(x: float, y: float, icon: str, name: str, cap: str, size: float = 26) -> str:
-    """Small icon with the name to its right — an attachment, not a chained node."""
+def satellite(
+    x: float,
+    y: float,
+    icon: str,
+    name: str,
+    cap: str,
+    size: float = 26,
+    label_side: str = "right",
+) -> str:
+    """Small icon with the name beside it — an attachment, not a chained node."""
+    if label_side == "left":
+        tx, anchor = -(size / 2 + 8), "end"
+    else:
+        tx, anchor = size / 2 + 8, "start"
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{-size / 2:.1f}" width="{size:.0f}" height="{size:.0f}"/>
-    <text class="name" x="{size / 2 + 8:.0f}" y="5" text-anchor="start" style="font-size:14px">{name}</text>
-    <text class="cap" x="{size / 2 + 8:.0f}" y="22" text-anchor="start" style="font-size:13px">{cap}</text>
+    <text class="name" x="{tx:.0f}" y="5" text-anchor="{anchor}" style="font-size:14px">{name}</text>
+    <text class="cap" x="{tx:.0f}" y="22" text-anchor="{anchor}" style="font-size:13px">{cap}</text>
   </g>"""
 
 
@@ -330,73 +358,87 @@ def _icon_top(node_y: float) -> float:
 
 def build() -> str:
     W, H = 1920, 1200
-    gy = 52
-    main_h = 974
-    col_bottom = gy + main_h  # 1026
 
-    bot_x, bot_w = 1396, 504
-    vpc_x, vpc_w = 16, 1364
+    # Operator (Terraform, deploy_remote.py) and AWS-account services (IAM, SSM)
+    # sit ABOVE the VPC. The VPC starts lower so those nodes are never inside
+    # public_ingress. IGW sits on the VPC border; SG wraps the EC2 host only.
+    aws_icon = 44
+    tf_x, deploy_x, op_y = 96, 268, 82
+    acct_x, acct_y, acct_w, acct_h = 400, 42, 960, 96
+    iam_x, ssm_x, acct_node_y = 980, 620, 96
 
-    # AWS Architecture Icons groups: VPC (purple dashed) wraps the public subnet
-    # (green) which holds the EC2 host. Terraform still has the one provision arrow.
-    g_bot = group(bot_x, gy, bot_w, main_h, "Grok Bot  ·  local or AWS")
+    vpc_x, vpc_y, vpc_w, vpc_h = 16, 142, 1364, 888  # bottom 1030
+    bot_x, bot_y, bot_w, bot_h = 1396, 142, 504, 888
+    col_bottom = vpc_y + vpc_h
+
+    g_bot = group(bot_x, bot_y, bot_w, bot_h, "Grok Bot  ·  local or AWS")
     g_vpc = group(
-        vpc_x, gy, vpc_w, main_h, "VPC  sre-enterprise-vpc",
+        vpc_x, vpc_y, vpc_w, vpc_h, "VPC  sre-enterprise-vpc",
         icon="aws-vpc", style="vpc",
     )
-    subnet_x, subnet_y = vpc_x + 8, gy + 36
-    subnet_w, subnet_h = vpc_w - 16, main_h - 46
+    g_acct = group(
+        acct_x, acct_y, acct_w, acct_h,
+        "AWS account  ·  outside the VPC",
+        style="account",
+    )
+
+    # Green public subnet fills the VPC except a right gutter for the IGW on the border.
+    subnet_x, subnet_y = vpc_x + 10, vpc_y + 32
+    subnet_w, subnet_h = vpc_w - 92, vpc_h - 44
     g_subnet = group(
         subnet_x, subnet_y, subnet_w, subnet_h,
         "public_ingress  ·  one EC2 host",
         icon="aws-subnet-public", style="public_subnet",
     )
-    ec2_x, ec2_w = vpc_x, vpc_w
 
-    aws_icon = 48
-    aws_r = gy + LABEL_BAND + aws_icon + 8  # 164
-    tf_x, ec2_node_x = 400, 590
-    # IAM / SSM satellites hang off the EC2 node (no arrows — Terraform creates
-    # the role and profile; deploy_remote.py uses SSM).
-    iam_x, ssm_x, sg_x, igw_x = 680, 860, 1048, 1238
+    # Dashed SG around the host contents (k3s + Compose), not around the VPC.
+    sg_x, sg_y = subnet_x + 10, subnet_y + 34
+    sg_w, sg_h = subnet_w - 20, subnet_h - 46
+    g_sg = group(
+        sg_x, sg_y, sg_w, sg_h,
+        "SG  ingress + internal",
+        icon="aws-sg", style="sg",
+    )
 
-    nested_y = aws_r + 70  # 234
-    nested_h = col_bottom - nested_y - 14  # 746
-    k3s_x, k3s_w = 32, 228
-    lab_x = 308
-    lab_w = ec2_x + ec2_w - 16 - lab_x  # 1056
+    nested_y = sg_y + 28
+    nested_h = sg_y + sg_h - nested_y - 10
+    k3s_x, k3s_w = sg_x + 10, 228
+    lab_x = k3s_x + k3s_w + 48
+    lab_w = sg_x + sg_w - 12 - lab_x
     # Two alley spines. Red climbs inside k3s (left). Blue climbs in the
     # gutter (right). Horizontal segments never share an x with the other spine.
-    alley_blue = 282
-    alley_red = 220
+    alley_blue = k3s_x + k3s_w + 22
+    alley_red = k3s_x + k3s_w - 40
 
     g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s on this host")
     g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab on this host", icon="docker")
 
-    r1 = 420  # Traffic / api-gw / order / payment (room above for Red flyover)
-    r2 = 700  # Redis + Postgres under order-service; Red Team in k3s
-    r3 = 840  # Prometheus → Alertmanager → incident-bridge; Blue Team
-    graf_y = 978  # Grafana sits under Prometheus, not on the alert row
+    r1 = nested_y + 210  # Traffic / api-gw / order / payment (room above for Red flyover)
+    r2 = r1 + 268  # Redis + Postgres under order-service; Red Team in k3s
+    r3 = r2 + 148  # Prometheus → Alertmanager → incident-bridge; Blue Team
+    graf_y = nested_y + nested_h - 16  # Grafana under Prometheus, not on the alert row
 
-    k3s_cx = k3s_x + k3s_w / 2  # 146
-    k3s_node_y = nested_y + LABEL_BAND + ICON + 10  # 360
-    tg_x, gw_x, os_x, ps_x = 400, 580, 820, 1140
-    rd_x, pg_x = os_x - 90, os_x + 90  # 730, 910 — short verticals only
-    prom_x, am_x, br_x = gw_x, 860, 1140  # observability left → right
+    k3s_cx = k3s_x + k3s_w / 2
+    k3s_node_y = nested_y + LABEL_BAND + ICON + 10
+    tg_x, gw_x, os_x, ps_x = lab_x + 72, lab_x + 252, lab_x + 492, lab_x + 812
+    rd_x, pg_x = os_x - 90, os_x + 90
+    prom_x, am_x, br_x = gw_x, os_x + 40, ps_x
     graf_x = prom_x
 
-    bot_cx = bot_x + bot_w / 2  # 1648
-    bot_avatar_y = gy + 190
+    # IGW sits on the VPC top-right border (outside the green subnet).
+    igw_x, igw_y = vpc_x + vpc_w - 8, vpc_y + 2
+
+    bot_cx = bot_x + bot_w / 2
+    bot_avatar_y = bot_y + 160
     bot_row_y = bot_avatar_y + 360
     gh_x, ping_x = bot_cx - 155, bot_cx + 155
 
     nodes = [
-        node(tf_x, aws_r, "terraform", "Terraform", "optional AWS", size=aws_icon),
-        node(ec2_node_x, aws_r, "aws-ec2", "EC2", "compose + k3s", size=aws_icon),
-        satellite(iam_x, aws_r - aws_icon / 2 + 6, "aws-iam", "IAM", "role + profile"),
-        satellite(ssm_x, aws_r - aws_icon / 2 + 6, "aws-ssm", "SSM", "deploy_remote.py"),
-        satellite(sg_x, aws_r - aws_icon / 2 + 6, "aws-sg", "SG", "ingress + internal"),
-        satellite(igw_x, aws_r - aws_icon / 2 + 6, "aws-igw", "IGW", "public RT only"),
+        node(tf_x, op_y, "terraform", "Terraform", "optional AWS", size=aws_icon),
+        node(deploy_x, op_y, "document", "deploy_remote.py", "operator", size=aws_icon),
+        satellite(iam_x, acct_node_y, "aws-iam", "IAM", "role + instance profile"),
+        satellite(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command"),
+        satellite(igw_x, igw_y, "aws-igw", "IGW", "public RT only", size=28, label_side="left"),
         node(k3s_cx, k3s_node_y, "k3s", "k3s", "Agent sandbox"),
         node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
         node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
@@ -406,7 +448,7 @@ def build() -> str:
         node(ps_x, r1, "fastapi", "payment-service", "Payments"),
         node(rd_x, r2, "redis", "Redis", "order-service cache"),
         node(pg_x, r2, "postgresql", "PostgreSQL", "orders_db"),
-        node(prom_x, r3, "prometheus", "Prometheus", "Scrapes + rules"),
+        node(prom_x, r3, "prometheus", "Prometheus", ""),
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
         node(br_x, r3, "document", "incident-bridge", "PromQL · jsonl · k8s"),
         node(graf_x, graf_y, "grafana", "Grafana", ""),
@@ -426,6 +468,7 @@ def build() -> str:
       .group {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #6B7280; }}
       .group-vpc {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #5B3BB4; }}
       .group-subnet {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #5B7C10; }}
+      .group-sg {{ font: 600 15px Arial, Helvetica, sans-serif; fill: #9B1C2E; }}
       .name {{ font: 700 18px Arial, Helvetica, sans-serif; fill: #111827; }}
       .cap {{ font: 16px Arial, Helvetica, sans-serif; fill: #6B7280; }}
       .pill {{ font: 600 12px Arial, Helvetica, sans-serif; fill: #4B5563; }}
@@ -444,37 +487,54 @@ def build() -> str:
   <text x="{W / 2:.0f}" y="40" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
 '''
     ]
+    parts.append(g_acct)
     parts.append(g_vpc)
     parts.append(g_subnet)
+    parts.append(g_sg)
     parts.append(g_k3s)
     parts.append(g_lab)
     parts.append(g_bot)
     # Unused subnets live in the VPC but have no workloads today — caption only.
+    # Sits on the VPC title row, left of the IGW (which occupies the top-right border).
     parts.append(
-        f'  <text x="{vpc_x + vpc_w - 14:.0f}" y="{gy + 26:.0f}" text-anchor="end" '
-        f'class="cap">unused: app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24</text>'
+        f'  <text x="{subnet_x + subnet_w - 14:.0f}" y="{subnet_y + 26:.0f}" text-anchor="end" '
+        f'class="cap">unused: 10.0.10.0/24 · 10.0.20.0/24</text>'
     )
     parts.extend(nodes)
 
     svc_ic = _ic(r1)
     red_ic = _ic(r2)
     blue_ic = _ic(r3)
-    aws_ic = aws_r - aws_icon / 2 - 4
+    op_ic = op_y - aws_icon / 2 - 4
     k3s_right = k3s_cx + 32
     db_top = _icon_top(r2)
     prom_top = _icon_top(r3)
     graf_top = _icon_top(graf_y)
-    pay_y = nested_y + LABEL_BAND + 40  # 330, below Red ticks so they do not cross it
+    pay_y = nested_y + 108
     # Red flies over the services (above the /api/payments U-turn) and ticks
     # down into order-service and payment-service. Blue stays in the corridor
-    # under the captions and ticks up into order-service. The two never share y.
-    red_y = nested_y + LABEL_BAND + 10  # 300
+    # under the captions and ticks up into api-gw, order, and payment.
+    red_y = nested_y + 62
     svc_bottom = r1 + 52
     health_y = r1 + 100  # Blue horizontal under captions, above Redis/metrics
     metrics_from = r1 + 136
+    host_top = subnet_y
 
-    # 1. Terraform → EC2 host. IAM and SSM are attached badges, not a chain.
-    parts.append(arrow(tf_x + 40, aws_ic, ec2_node_x - 40, aws_ic))
+    # 1. Terraform (operator laptop, outside AWS) → public_ingress / EC2 host.
+    # Start below the "optional AWS" caption so the shaft does not run through type.
+    parts.append(poly([
+        (tf_x, op_y + 50),
+        (tf_x, host_top),
+    ]))
+
+    # 1b. deploy_remote.py → SSM (AWS account, outside the VPC) → EC2 host.
+    # Horizontal sits on the satellite baseline, below the account title and
+    # left of IAM (IAM is to the right of SSM).
+    parts.append(arrow(deploy_x + 70, acct_node_y, ssm_x - 22, acct_node_y))
+    parts.append(poly([
+        (ssm_x, acct_node_y + 28),
+        (ssm_x, host_top),
+    ]))
 
     # 2–4. Request path. Pills sit in the gaps above the icons.
     parts.append(arrow(tg_x + 36, svc_ic, gw_x - 36, svc_ic))
@@ -513,17 +573,20 @@ def build() -> str:
     parts.append(arrow(ps_x - 18, red_y, ps_x - 18, red_tick_end))
     parts.append(pill((tg_x + gw_x) / 2, red_y, "faults"))
 
-    # 9. Blue Team → FastAPI services (not Traffic). Climbs in the gutter
-    # (alley_blue, right of Red's spine). Horizontal runs under api-gw to
-    # order-service, then ticks up into the node.
+    # 9. Blue Team health-checks api-gw, order-service, and payment-service
+    # (monitor.py GET /health ×3). Reset POSTs /fault/reset on order-service
+    # and payment-service only (fault_catalog.py). Three ticks; two pills.
     parts.append(poly([
         (k3s_right, blue_ic),
         (alley_blue, blue_ic),
         (alley_blue, health_y),
-        (os_x + 18, health_y),
+        (ps_x + 18, health_y),
     ], marked=False))
+    parts.append(arrow(gw_x + 18, health_y, gw_x + 18, svc_bottom))
     parts.append(arrow(os_x + 18, health_y, os_x + 18, svc_bottom))
-    parts.append(pill((gw_x + os_x) / 2, health_y, "health ×3 / reset"))
+    parts.append(arrow(ps_x + 18, health_y, ps_x + 18, svc_bottom))
+    parts.append(pill((gw_x + os_x) / 2, health_y - 16, "health ×3"))
+    parts.append(pill((os_x + ps_x) / 2, health_y - 16, "reset ×2"))
 
     # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
     # cross Red's spine. Stays under Redis/Postgres.
@@ -542,19 +605,17 @@ def build() -> str:
 
     # 14. Prometheus → Grafana, directly below. Pill sits left of the drop
     # so it does not sit on the PromQL arc.
-    parts.append(arrow(prom_x, r3 + 52, prom_x, graf_top))
-    parts.append(pill(prom_x - 50, (r3 + 52 + graf_top) / 2, "reads"))
+    parts.append(arrow(prom_x, r3 + 24, prom_x, graf_top))
+    parts.append(pill(prom_x - 54, (r3 + 24 + graf_top) / 2, "reads"))
 
-    # 15. Bridge PromQL back to Prometheus: one shallow arc under the row.
-    # Dip sits under Alertmanager (empty), arriving at Prometheus from the
-    # right — not through Grafana, not along the canvas bottom.
-    pq_y = r3 + 82
-    parts.append(arc(br_x, r3 + 56, am_x, pq_y, prom_x + 52, r3 + 56, dashed=True))
-    parts.append(pill(am_x, pq_y + 16, "PromQL"))
+    # 15. Bridge PromQL back to Prometheus. Dip under Alertmanager's caption
+    # (empty), arrive at Prometheus from the right, above Grafana.
+    parts.append(arc(br_x, r3 + 50, am_x, r3 + 78, prom_x + 72, r3 + 14, dashed=True))
+    parts.append(pill(am_x + 88, r3 + 78, "PromQL"))
 
     # 16. Bridge → Grok avatar via the EC2/Grok gutter (orthogonal).
     hex_cy = bot_avatar_y - 32
-    gutter = (ec2_x + ec2_w + bot_x) / 2  # 1388
+    gutter = (vpc_x + vpc_w + bot_x) / 2  # 1388
     parts.append(poly([
         (br_x + 40, blue_ic),
         (gutter, blue_ic),
@@ -572,29 +633,29 @@ def build() -> str:
     parts.append(poly([(bot_cx, fork_y), (ping_x, fork_y), (ping_x, gh_top)]))
     parts.append(pill(bot_cx, fork_y - 16, "read-only"))
 
-    gate_y = col_bottom + 10
+    gate_y = col_bottom + 8
     parts.append(
-        f'  <rect x="16" y="{gate_y:.0f}" width="1888" height="56" rx="18" fill="#FFFFFF" '
+        f'  <rect x="16" y="{gate_y:.0f}" width="1888" height="48" rx="16" fill="#FFFFFF" '
         f'stroke="#D1D5DB" stroke-dasharray="7 6"/>'
     )
     parts.append(
-        f'  <text x="960" y="{gate_y + 22:.0f}" text-anchor="middle" class="gate">'
+        f'  <text x="960" y="{gate_y + 20:.0f}" text-anchor="middle" class="gate">'
         "Read-only: the bot never restarts, scales, or pushes</text>"
     )
     parts.append(
-        f'  <text x="960" y="{gate_y + 44:.0f}" text-anchor="middle" class="gate-sub">'
+        f'  <text x="960" y="{gate_y + 38:.0f}" text-anchor="middle" class="gate-sub">'
         "AWS/EC2 is optional: docker compose up is the same lab. "
         "The bot only needs outbound HTTPS from the bridge.</text>"
     )
 
-    card_y = gate_y + 68
+    card_y = gate_y + 56
 
     def card2(n: int, x: float, line1: str, line2: str) -> str:
         return f"""  <g transform="translate({x:.0f},{card_y:.0f})">
-    <rect width="592" height="96" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
-    <text x="24" y="40" class="card-n">{n}.</text>
-    <text x="52" y="40" class="card-t">{line1}</text>
-    <text x="52" y="68" class="card-t">{line2}</text>
+    <rect width="592" height="80" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="24" y="34" class="card-n">{n}.</text>
+    <text x="52" y="34" class="card-t">{line1}</text>
+    <text x="52" y="58" class="card-t">{line2}</text>
   </g>"""
 
     parts.append(card2(1, 16, "Fault or real outage trips a", "Prometheus alert rule."))
