@@ -156,3 +156,17 @@ spec:
   - ports:
     - port: 443
       protocol: TCP
+  # Compose lab on the EC2 host (AWS path). Apps are not in k3s; the
+  # orchestrator uses --target-ip <host private IP>. Scoped to the lab VPC.
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - port: 8000
+      protocol: TCP
+    - port: 8001
+      protocol: TCP
+    - port: 8002
+      protocol: TCP
+    - port: 9090
+      protocol: TCP

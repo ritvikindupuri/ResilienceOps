@@ -17,7 +17,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 |---|---|
 | Grafana default window described as a rolling 2-minute window | README + this table: dashboard `time.from` is `now-5m` (`sre-dashboard.json:20`) |
 | Tech stack listed k6, Compose `v2.24+`, “Certified k3s v1.29+”, Terraform `v1.7+` | Dropped k6 (load is `traffic-generator`). Compose is v2. k3s is `curl https://get.k3s.io` in `user_data` (unpinned). Terraform `required_version = ">= 1.5.0"` |
-| NetworkPolicy described as allowing the Grok webhook from the sandbox | Webhook is sent by **incident-bridge** on the Compose network. Sandbox egress is DNS 53, victim ns, TCP 443 (Anthropic/AWS; default k3s/flannel cannot FQDN-filter) |
+| NetworkPolicy described as allowing the Grok webhook from the sandbox | Webhook is sent by **incident-bridge** on the Compose network. Sandbox egress is DNS 53, victim ns, TCP 443 (Anthropic/AWS; default k3s/flannel cannot FQDN-filter), plus TCP 8000–8002/9090 to VPC `10.0.0.0/16` for Compose on the EC2 host |
 | Prometheus → Alertmanager documented as `127.0.0.1:9093` for in-compose traffic | Compose DNS `alertmanager:9093` (`prometheus.yml:20`). Host bind is `127.0.0.1:9093` |
 | IGW missing from the figure | IGW satellite `public RT only` (`build_architecture.py:399`) |
 | Unused subnets unlabeled | Caption `unused: app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24` (`build_architecture.py:455`) |
@@ -38,6 +38,10 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Live `httpx` INFO printed the full webhook URL | `app.py:31-32` sets httpx to WARNING. Committed sample log redacts `…/automations/webhook/<redacted>` |
 | Terraform / IAM / SSM / IGW drawn inside `public_ingress` | Terraform + `deploy_remote.py` are operator-side (above the VPC). IAM + SSM sit in an **AWS account** strip outside the VPC, with `deploy_remote.py → SSM → EC2`. IGW sits on the VPC border. Inside `public_ingress`: k3s, Compose, and a dashed SG around the host (`build_architecture.py:362-400,437-441`) |
 | Blue Team arrow landed on order-service only | Three ticks: `health ×3` into api-gw, order-service, payment-service (`monitor.py:52-95`); `reset ×2` into order-service and payment-service (`fault_catalog.py:122-132`) |
+| AWS README listed only `sts:GetCallerIdentity`; apply 403'd on a read-only principal | Checked-in operator policy `terraform/deployer-policy.json` (EC2/VPC create+delete, IAM CreateRole/DeleteRole/PassRole/instance-profile, SSM SendCommand/GetCommandInvocation/DescribeInstanceInformation/PutParameter, S3 deploy bucket, CW log groups) |
+| `deploy_remote.py` started a subset of Compose services (no alertmanager / incident-bridge); inline ~98 KB base64 vs 100 KB SSM limit; no `reports/`; printed CommandId only; no SSM Online wait; API-key check read empty SSM env | S3 + presigned GET; `docker compose up --build -d` (all default services) + `--profile agents`; archive includes `reports/`; `wait_for_ssm_online` + `cloud-init status --wait`; `GetCommandInvocation` fail-nonzero; host `.env` from Parameter Store SecureString (`scripts/put_lab_secrets.py`) |
+| `user_data` installed Compose v1; default `t3.small`; no `instance_id`/`region` outputs; IMDS hop 1; instance role SSM-only | Compose v2 plugin (`docker-compose-v2`); default `t3.medium` (~$0.0416/hr + ~$0.005/hr IPv4); outputs `instance_id`, `region`, `deploy_bucket`, `private_ip`; hop limit 2; inline GetParameter / S3 GetObject / `logs:PutLogEvents`; Terraform **log groups** (dashboards still helper scripts) |
+| k3s sandbox undocumented; `orchestrator.py` missing in the pod; `--target-ip` used k8s DNS for Compose apps; faults piled up when Blue did not declare in 9s | `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` + `agent-sandbox.yaml`, copies repo code, targets host private IP. Orchestrator `finally` always `FaultCatalog.reset_environment()`. Duplicate Path B fingerprint comments on the open GitHub issue |
 
 ---
 
@@ -50,11 +54,11 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | AWS account strip | “AWS account  ·  outside the VPC” holds IAM + SSM | `build_architecture.py:367-368,379-383,439-440` |
 | VPC group | Purple dashed, “VPC  sre-enterprise-vpc”, AWS VPC icon | `build_architecture.py:234-241`, `:375-378`; Name tag `terraform/main.tf:74-83` |
 | Public subnet group | Green, “public_ingress  ·  one EC2 host”, public-subnet icon | `build_architecture.py:242-249`, `:388-392`; `terraform/main.tf:93-104` (only subnet with `map_public_ip_on_launch` and the only one associated with the public RT `:144-147`) |
-| SG around host | Dashed red “SG  ingress + internal” wrapping k3s + Compose | `build_architecture.py:251-258,394-401`; SGs `terraform/main.tf:154-225` |
-| k3s group | Nested “k3s on this host” | `build_architecture.py:413`; k3s installed on the **same** EC2 `user_data` `terraform/main.tf:297-315` (`https://get.k3s.io` `:309`) |
-| Compose group | Nested “Compose lab on this host”, Docker icon | `build_architecture.py:414`; `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py:19-30`) |
+| SG around host | Dashed red “SG  ingress + internal” wrapping k3s + Compose | `build_architecture.py:251-258,394-401`; SGs `terraform/main.tf:168-239` |
+| k3s group | Nested “k3s on this host” | `build_architecture.py:413`; k3s installed on the **same** EC2 `user_data` `terraform/main.tf:437-456` (`https://get.k3s.io`) |
+| Compose group | Nested “Compose lab on this host”, Docker icon | `build_architecture.py:414`; `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
 | Grok column | “Grok Bot  ·  local or AWS” | `build_architecture.py:374`. Bot is imported, not hosted in-repo. Works on laptop Compose or AWS as long as the bridge can POST HTTPS (`README.md:150`, `GROK_WEBHOOK_URL` in `docker-compose.yml:180`) |
-| Unused subnets | Caption only (no empty boxes), top-right of `public_ingress`: `unused: 10.0.10.0/24 · 10.0.20.0/24` | `build_architecture.py` unused caption; created `terraform/main.tf:107-128`; **no** `aws_instance` / RT assoc / SG attachment uses them (instance `subnet_id` is `public_ingress` `:281`) |
+| Unused subnets | Caption only (no empty boxes), top-right of `public_ingress`: `unused: 10.0.10.0/24 · 10.0.20.0/24` | `build_architecture.py` unused caption; created `terraform/main.tf:121-142`; **no** `aws_instance` / RT assoc / SG attachment uses them (instance `subnet_id` is `public_ingress` `:413`) |
 
 ---
 
@@ -63,10 +67,10 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Node | Caption on figure | Evidence |
 |---|---|---|
 | Terraform | “optional AWS” (outside the VPC) | `build_architecture.py:437`. AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
-| deploy_remote.py | “operator” (outside the VPC) | `build_architecture.py:438`; `deploy_remote.py:83-111` builds a zip and `ssm.send_command` |
-| IAM satellite | “role + instance profile” in the AWS account strip | `build_architecture.py:439`; `aws_iam_role.sre_host_role` name `sre-platform-host-role` `terraform/main.tf:231-248`; instance profile `sre-platform-instance-profile` `:256-259` |
-| SSM satellite | “send_command” in the AWS account strip | `build_architecture.py:440`; `AmazonSSMManagedInstanceCore` `terraform/main.tf:250-254`; `deploy_remote.py:90-111` `ssm.send_command` / `AWS-RunShellScript` |
-| SG box | “ingress + internal” around the host, not a satellite in the subnet | `build_architecture.py:397-401`; `aws_security_group.ingress_sg` `sre-ingress-sg` `terraform/main.tf:154-191`; `internal_app_sg` `sre-internal-app-sg` `:194-225` |
+| deploy_remote.py | “operator” (outside the VPC) | `build_architecture.py:438`; `deploy_remote.py` builds a zip, uploads to S3, `ssm.send_command` |
+| IAM satellite | “role + instance profile” in the AWS account strip | `build_architecture.py:439`; `aws_iam_role.sre_host_role` name `sre-platform-host-role` `terraform/main.tf:245-262`; instance profile `sre-platform-instance-profile` `:323-326` |
+| SSM satellite | “send_command” in the AWS account strip | `build_architecture.py:440`; `AmazonSSMManagedInstanceCore` `terraform/main.tf:265-267`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
+| SG box | “ingress + internal” around the host, not a satellite in the subnet | `build_architecture.py:397-401`; `aws_security_group.ingress_sg` `sre-ingress-sg` `terraform/main.tf:168-205`; `internal_app_sg` `sre-internal-app-sg` `:208-239` |
 | IGW satellite | “public RT only”, on the VPC border (outside the green subnet) | `build_architecture.py:429,441`; `aws_internet_gateway.igw` Name `sre-enterprise-igw` `terraform/main.tf:85-91`; public RT `0.0.0.0/0` via IGW `:131-137`; association **only** `public_ingress` `:144-147` |
 | k3s | “Agent sandbox” | `k8s/agents/agent-sandbox.yaml:8-11` namespace `sre-agent-sandbox`; README step 10 |
 | Red Team | “Injects faults” | `orchestrator.py:41-44`, `:64-74`; `agents/fault_injector/infra_disruptor.py:31-47`; `agents/fault_injector/network_adversary.py` |
@@ -93,8 +97,8 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 
 | # | Arrow | Pill | Evidence |
 |---|---|---|---|
-| 1 | Terraform → public_ingress / EC2 host | (none) | Operator laptop, outside AWS. `terraform/main.tf:278-321`. `build_architecture.py:522-527` |
-| 1b | deploy_remote.py → SSM → EC2 host | (none) | `deploy_remote.py:90-111`. `build_architecture.py:529-536` |
+| 1 | Terraform → public_ingress / EC2 host | (none) | Operator laptop, outside AWS. `terraform/main.tf:410-476`. `build_architecture.py:522-527` |
+| 1b | deploy_remote.py → SSM → EC2 host | (none) | `deploy_remote.py` `send_and_wait`. `build_architecture.py:529-536` |
 | 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:124` |
 | 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
 | 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
@@ -144,8 +148,8 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Forward failure: ERROR log, dead-letter, retry queue, no ASGI crash | `app.py:164-187`; `forwarding.py:242-310`; ASGI wrapper `app.py:214-218` |
 | httpx must not log `GROK_WEBHOOK_URL` | `app.py:31-32` `logging.getLogger("httpx").setLevel(logging.WARNING)` |
 | `agent_activity` empty unless agents profile / host orchestrator | compose `agent-sandbox` `profiles: [agents]` `docker-compose.yml:232-234`; logger writes `logs/agent_activity.jsonl` `structured_logger.py:13-33` |
-| Path A verify_recovery max 5, latency < 800ms; always `reset_environment` | `remediator.py:24-83` |
-| Path A writes `reports/incident_*.md`; does not open GitHub issues | `orchestrator.py:112-115` |
+| Path A verify_recovery max 5, latency < 800ms; always `reset_environment` | `remediator.py:24-83`; orchestrator also resets in `finally` (`orchestrator.py` cycle cleanup) so no-incident cycles cannot pile faults |
+| Path A writes `reports/incident_*.md`; does not open GitHub issues | `orchestrator.py` phase 7 writes `reports/` |
 | Bot read-only; duplicate fingerprint comments; resolved comments; critical owner ping | Imported template (not in this repo). Documented as template behavior. Samples: issues #4 and #5 |
 
 ---
@@ -154,23 +158,27 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 
 | Claim | Evidence |
 |---|---|
-| Terraform `>= 1.5.0`, AWS provider `~> 5.0` | `terraform/main.tf:14-19` |
-| VPC `aws_vpc.sre_vpc` Name `sre-enterprise-vpc` CIDR default `10.0.0.0/16` | `terraform/main.tf:54-57,74-83` |
-| IGW `sre-enterprise-igw` | `terraform/main.tf:85-91` |
-| Public RT `sre-public-route-table`, `0.0.0.0/0` via IGW, assoc **only** `public_ingress` | `terraform/main.tf:131-147` |
-| Subnet `public_ingress` `10.0.1.0/24` **used** (`map_public_ip_on_launch`, EC2 `subnet_id`) | `terraform/main.tf:93-104,281` |
-| Subnet `app_workloads` `10.0.10.0/24` created unused | `terraform/main.tf:107-116` |
-| Subnet `data_persistence` `10.0.20.0/24` created unused | `terraform/main.tf:119-128` |
-| SG `ingress_sg` / `sre-ingress-sg`: Grafana 3000 + API 8000 from `allowed_cidr` | `terraform/main.tf:154-175` |
-| SG `internal_app_sg` / `sre-internal-app-sg`: 8001–8002 from ingress SG; self scrape | `terraform/main.tf:194-213` |
-| No SSH/22; no Prometheus 9090 on ingress SG | Comments `terraform/main.tf:177-178`; no `from_port = 22` / `9090` ingress rules |
-| `allowed_cidr` rejects `0.0.0.0/0` | `terraform/main.tf:60-67` |
-| IAM `sre-platform-host-role` + `AmazonSSMManagedInstanceCore` + instance profile | `terraform/main.tf:231-259` |
-| EC2 `sre-enterprise-platform-host` default `t3.small` (`instance_type` variable) | `terraform/main.tf:48-51,278-318` |
-| user_data: docker + k3s (`https://get.k3s.io`) | `terraform/main.tf:297-315` |
-| Outputs `api_gateway_url` `:8000`, `grafana_url` `:3000`, Prometheus host-local | `terraform/main.tf:327-345` |
+| Terraform `>= 1.5.0`, AWS provider `~> 5.0` | `terraform/main.tf:14-21` |
+| VPC `aws_vpc.sre_vpc` Name `sre-enterprise-vpc` CIDR default `10.0.0.0/16` | `terraform/main.tf:62-65,88-96` |
+| IGW `sre-enterprise-igw` | `terraform/main.tf:99-104` |
+| Public RT `sre-public-route-table`, `0.0.0.0/0` via IGW, assoc **only** `public_ingress` | `terraform/main.tf:145-160` |
+| Subnet `public_ingress` `10.0.1.0/24` **used** (`map_public_ip_on_launch`, EC2 `subnet_id`) | `terraform/main.tf:108-118,413` |
+| Subnet `app_workloads` `10.0.10.0/24` created unused | `terraform/main.tf:121-130` |
+| Subnet `data_persistence` `10.0.20.0/24` created unused | `terraform/main.tf:133-142` |
+| SG `ingress_sg` / `sre-ingress-sg`: Grafana 3000 + API 8000 from `allowed_cidr` | `terraform/main.tf:168-189` |
+| SG `internal_app_sg` / `sre-internal-app-sg`: 8001–8002 from ingress SG; self scrape | `terraform/main.tf:208-227` |
+| No SSH/22; no Prometheus 9090 on ingress SG | Comments `terraform/main.tf:191-192`; no `from_port = 22` / `9090` ingress rules |
+| `allowed_cidr` rejects `0.0.0.0/0` | `terraform/main.tf:68-75` |
+| IAM `sre-platform-host-role` + `AmazonSSMManagedInstanceCore` + instance profile + inline GetParameter/S3/logs | `terraform/main.tf:245-326` |
+| EC2 `sre-enterprise-platform-host` default `t3.medium` (`instance_type` variable; t3.small optional) | `terraform/main.tf:52-59,410-412` |
+| user_data: Docker Compose **v2** (`docker-compose-v2`) + awscli + unzip + 2G swap + k3s (`https://get.k3s.io`) | `terraform/main.tf:437-456` |
+| IMDS hop limit 2, IMDSv2 required | `terraform/main.tf:423-428` |
+| S3 deploy bucket `sre-resilienceops-deploy-<account>-<region>`, 1-day expiry | `terraform/main.tf:336-380` |
+| Outputs `instance_id`, `region`, `deploy_bucket`, `private_ip`, `api_gateway_url` `:8000`, `grafana_url` `:3000`, Prometheus host-local | `terraform/main.tf:482-520` |
+| Operator IAM: `terraform/deployer-policy.json` | File + README prerequisites |
+| Host `.env` from Parameter Store SecureString, not SendCommand | `scripts/put_lab_secrets.py`; `deploy_remote.py` `build_host_env_script` (`get-parameter --with-decryption`) |
 | No NAT Gateway / no EKS in this Terraform | No `aws_nat_gateway` / `aws_eks_cluster` resources in `terraform/main.tf` |
-| CloudWatch dashboards are **not** Terraform resources | Helpers `create_cw_dashboard.py:63-64` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py:5,102` name `SRE-fault-Vectors-Live-Telemetry`. Log group default `/sre/autonomous-agent-audit` `agents/config.py:18-19`; `structured_logger.py:84-88` |
+| CloudWatch **log groups** are Terraform; **dashboards** are not | Groups `terraform/main.tf:383-390`. Helpers `create_cw_dashboard.py:63-64` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py:5,102` name `SRE-fault-Vectors-Live-Telemetry`. Logger `structured_logger.py:84-88` |
 | Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`. Console “Subnets (5)” ≠ Terraform’s 3 subnets — prefer `main.tf` |
 
 ---
@@ -196,9 +204,10 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Live timing **12.1 s** fault→webhook, **~61 s** to issue #5 | Operator hops `examples/live_run_issue5_timeline.md` (21:50:59 fault → 21:51:11.134 webhook 200; 21:51:05.886 `startsAt` → 21:52:06 issue). Redacted bridge lines `examples/live_run_issue5_bridge.log`. Public issue https://github.com/ritvikindupuri/ResilienceOps/issues/5. Warning inhibited (`inhibit_rules`). Default compose: **no `agents`**, so `agent_activity` empty |
 | Issue #5 screenshots (public crops, no webhook key) | `docs/images/sample-incident-issue-5-{1,2,3}.png`; fingerprint `279c3ab8f16c75be`; “Agent activity: none attached” |
 | `orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | `orchestrator.py:9-10,118-123` |
-| `deploy_remote.py` zip omits `.env` | `deploy_remote.py:37-50`; `tests/test_deploy_archive.py` |
-| SSM session, no SSH | `terraform/main.tf:177-178`; README step 10 |
-| `teardown.sh` → `terraform destroy -auto-approve` | `teardown.sh:28-29` |
+| `deploy_remote.py` zip omits `.env`; includes `reports/` | `deploy_remote.py` `should_exclude` / `INCLUDE_PATHS`; `tests/test_deploy_archive.py` |
+| SSM session, no SSH | `terraform/main.tf:191-192`; README step 10 (`--region`) |
+| `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
+| k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
 | Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` 1920×1200 | `scripts/render_architecture.sh:19-21`; `build_architecture.py:360` |
 
@@ -211,7 +220,7 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | Claim | Evidence |
 |---|---|
 | Namespace `sre-agent-sandbox`, limits `500m` / `512Mi` | `k8s/agents/agent-sandbox.yaml:8-11,75-78,121-124` |
-| NetworkPolicy: DNS 53, victim ns `arena.sre.io/role=victim`, TCP 443 | `k8s/agents/agent-sandbox.yaml:129-158`; victim label `k8s/base/namespace-rbac.yaml:3-6` |
+| NetworkPolicy: DNS 53, victim ns `arena.sre.io/role=victim`, TCP 443, VPC Compose 8000–8002/9090 | `k8s/agents/agent-sandbox.yaml:129-172`; victim label `k8s/base/namespace-rbac.yaml:3-6` |
 | Red Role `get/list/watch` on `pods` + `pods/exec` in `sre-target-apps` | `k8s/agents/agent-sandbox.yaml:23-31` |
 | Blue Role pods/logs/events/deployments in `sre-target-apps` | `k8s/base/namespace-rbac.yaml:32-51` |
 | Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README step 10; Role has no `create` on `pods/exec` |

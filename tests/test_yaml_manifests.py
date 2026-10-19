@@ -20,6 +20,13 @@ def test_network_policy_targets_victim_namespace():
     ]
     assert any(sel.get("arena.sre.io/role") == "victim" for sel in selectors)
     assert all(sel.get("platform.sre.io/role") != "workload" for sel in selectors)
+    vpc_rule = next(
+        rule
+        for rule in policy["spec"]["egress"]
+        if (rule.get("to") or [{}])[0].get("ipBlock", {}).get("cidr") == "10.0.0.0/16"
+    )
+    ports = {item["port"] for item in vpc_rule["ports"]}
+    assert ports == {8000, 8001, 8002, 9090}
 
 
 def test_blue_team_sa_is_in_sandbox_namespace():

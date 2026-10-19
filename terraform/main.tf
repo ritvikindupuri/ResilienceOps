@@ -4,10 +4,11 @@
 #
 # Designed for:
 #   1. Enterprise Realism: Multi-tier VPC, Segregated Security Groups, IAM Roles.
-#   2. Zero Surprise Billing: Cost-optimized compute (t3.small/t4g.small ~$0.02/hr).
+#   2. Zero Surprise Billing: default t3.medium (~$0.0416/hr + ~$0.005/hr public IPv4)
+#      for Compose + k3s + agents. Optional t3.small (~$0.0208/hr + IPv4) is tight.
 #   3. Single-Command Lifecycle:
-#        Deploy:  terraform init && terraform apply -auto-approve
-#        Destroy: terraform destroy -auto-approve
+#        Deploy:  terraform init && terraform apply
+#        Destroy: terraform destroy
 # ==============================================================================
 
 terraform {
@@ -32,11 +33,14 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # --- Variables ---
 variable "aws_region" {
   type        = string
   default     = "us-east-1"
-  description = "Target AWS deployment region"
+  description = "Target AWS deployment region. Export AWS_REGION to the same value in your shell."
 }
 
 variable "environment" {
@@ -47,8 +51,12 @@ variable "environment" {
 
 variable "instance_type" {
   type        = string
-  default     = "t3.small" # 2 vCPU, 2GB RAM (~$0.02/hr) - runs microservices, k3s/docker, Prometheus, Grafana
-  description = "Cost-optimized EC2 instance type with 0 NAT Gateway overhead"
+  # 2 vCPU / 4 GiB. Compose (Postgres, Redis, Prometheus 1s scrape, Grafana, 5 Python
+  # services, Alertmanager, incident-bridge) + k3s + optional agent-sandbox needs
+  # more than t3.small's 2 GiB. On-demand us-east-1 Linux ~$0.0416/hr plus public
+  # IPv4 ~$0.005/hr (~$1.12/day). Override to t3.small for a Compose-only tight lab.
+  default     = "t3.medium"
+  description = "EC2 instance type. Default t3.medium for Compose+k3s+agents; t3.small is optional and tight."
 }
 
 variable "vpc_cidr" {
@@ -59,12 +67,18 @@ variable "vpc_cidr" {
 
 variable "allowed_cidr" {
   type        = string
-  description = "CIDR allowed to reach Grafana (3000) and the API Gateway (8000). Must not be 0.0.0.0/0. SSH/22 is not opened; use AWS SSM for host access."
+  description = "CIDR allowed to reach Grafana (3000) and the API Gateway (8000). Must not be 0.0.0.0/0. SSH/22 is not opened; use AWS SSM for host access. SSM does not replace this CIDR for browser access to Grafana/API unless you SSM port-forward."
 
   validation {
     condition     = var.allowed_cidr != "0.0.0.0/0" && can(cidrhost(var.allowed_cidr, 0))
     error_message = "allowed_cidr must be a specific CIDR block; 0.0.0.0/0 is not permitted."
   }
+}
+
+variable "ssm_param_prefix" {
+  type        = string
+  default     = "/resilienceops"
+  description = "SSM Parameter Store prefix the instance may read (SecureString secrets written by scripts/put_lab_secrets.py)."
 }
 
 # ==============================================================================
@@ -253,9 +267,127 @@ resource "aws_iam_role_policy_attachment" "ssm_attach" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "host_inline" {
+  name = "sre-platform-host-inline"
+  role = aws_iam_role.sre_host_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SsmParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.ssm_param_prefix}/*"
+      },
+      {
+        Sid    = "DecryptSsmSecureString"
+        Effect = "Allow"
+        Action = ["kms:Decrypt"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ssm.${var.aws_region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid      = "DeployBucketRead"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.deploy.arn}/*"
+      },
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = [
+          aws_cloudwatch_log_group.audit.arn,
+          "${aws_cloudwatch_log_group.audit.arn}:*",
+          aws_cloudwatch_log_group.incidents.arn,
+          "${aws_cloudwatch_log_group.incidents.arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "sre_instance_profile" {
   name = "sre-platform-instance-profile"
   role = aws_iam_role.sre_host_role.name
+}
+
+# ==============================================================================
+# 3b. DEPLOY BUCKET + CLOUDWATCH LOG GROUPS
+# Zip payloads go here so SSM SendCommand stays under the 100 KB document limit.
+# Presigned GET is generated by deploy_remote.py; objects expire after 1 day.
+# Log groups match agents/config.py defaults (README CloudWatch best-effort path).
+# Dashboards are still created by helper scripts, not Terraform.
+# ==============================================================================
+
+resource "aws_s3_bucket" "deploy" {
+  bucket        = "sre-resilienceops-deploy-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+  force_destroy = true
+
+  tags = {
+    Name = "sre-resilienceops-deploy"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "deploy" {
+  bucket = aws_s3_bucket.deploy.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "deploy" {
+  bucket                  = aws_s3_bucket.deploy.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "deploy" {
+  bucket = aws_s3_bucket.deploy.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "deploy" {
+  bucket = aws_s3_bucket.deploy.id
+  rule {
+    id     = "expire-payloads"
+    status = "Enabled"
+    filter {
+      prefix = ""
+    }
+    expiration {
+      days = 1
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_group" "audit" {
+  name              = "/sre/autonomous-agent-audit"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "incidents" {
+  name              = "/sre/autonomous-agent-incidents"
+  retention_in_days = 7
 }
 
 # ==============================================================================
@@ -288,22 +420,38 @@ resource "aws_instance" "sre_host" {
 
   associate_public_ip_address = true
 
+  # Containers/agents need hop_limit >= 2 to reach IMDSv2 from docker/k3s.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   root_block_device {
     volume_size           = 25 # 25 GB gp3 (Free-tier eligible / under $2/mo)
     volume_type           = "gp3"
     delete_on_termination = true
   }
 
-  # Production SRE Bootstrapping: Docker, K8s (k3s), and Platform Environment
+  # Production SRE Bootstrapping: Docker Compose v2, k3s, awscli, swap
   user_data = <<-EOF
               #!/bin/bash
               set -e
               apt-get update -y
-              apt-get install -y docker.io docker-compose git curl python3-pip jq htop
+              apt-get install -y docker.io docker-compose-v2 awscli unzip git curl python3-pip jq htop
 
               systemctl enable docker
               systemctl start docker
               usermod -aG docker ubuntu
+
+              # 2G swap as a safety net if Compose + k3s spike memory
+              if [ ! -f /swapfile ]; then
+                fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+                chmod 600 /swapfile
+                mkswap /swapfile
+                swapon /swapfile
+                echo '/swapfile none swap sw 0 0' >> /etc/fstab
+              fi
 
               # Install k3s (Lightweight Production Kubernetes distribution)
               curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
@@ -311,13 +459,20 @@ resource "aws_instance" "sre_host" {
               cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
               chown -R ubuntu:ubuntu /home/ubuntu/.kube
 
-              echo "[*] SRE Platform Node initialization complete." > /var/log/sre-init.log
+              docker compose version > /var/log/sre-init.log 2>&1 || true
+              echo "[*] SRE Platform Node initialization complete." >> /var/log/sre-init.log
               EOF
 
   tags = {
     Name = "sre-enterprise-platform-host"
     Role = "Kubernetes-Node-And-Workload-Runner"
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.ssm_attach,
+    aws_iam_role_policy.host_inline,
+    aws_iam_instance_profile.sre_instance_profile
+  ]
 }
 
 # ==============================================================================
@@ -327,6 +482,26 @@ resource "aws_instance" "sre_host" {
 output "public_ip" {
   description = "Public IP address of the AWS SRE Platform Host"
   value       = aws_instance.sre_host.public_ip
+}
+
+output "private_ip" {
+  description = "Private IP of the host. Use as orchestrator --target-ip from the k3s sandbox (Compose apps are not in-cluster)."
+  value       = aws_instance.sre_host.private_ip
+}
+
+output "instance_id" {
+  description = "EC2 instance id for EC2_INSTANCE_ID / deploy_remote.py / SSM"
+  value       = aws_instance.sre_host.id
+}
+
+output "region" {
+  description = "AWS region. Export as AWS_REGION / AWS_DEFAULT_REGION before CLI calls."
+  value       = var.aws_region
+}
+
+output "deploy_bucket" {
+  description = "S3 bucket for deploy_remote.py zip payloads (avoids the 100 KB SSM SendCommand limit)"
+  value       = aws_s3_bucket.deploy.bucket
 }
 
 output "grafana_url" {
@@ -346,5 +521,5 @@ output "prometheus_url" {
 
 output "deployment_instructions" {
   description = "Commands to deploy and destroy cleanly without extra charges"
-  value       = "To deploy: 'terraform apply -auto-approve' | To destroy: 'terraform destroy -auto-approve'"
+  value       = "export AWS_REGION=$(terraform output -raw region); python3 scripts/put_lab_secrets.py --region $AWS_REGION; python3 deploy_remote.py --region $AWS_REGION | To destroy: terraform destroy"
 }

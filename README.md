@@ -45,7 +45,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   - Agents run inside an isolated `sre-agent-sandbox` namespace constrained by Kubernetes resource limits (`cpu: 500m`, `memory: 512Mi`), audited RBAC roles, and egress NetworkPolicies.
   - Interactive operator shell access via `kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash` with direct cluster connectivity to microservice targets.
 - **Enterprise Cost-Optimized Cloud Deployment**:
-  - Single-file Terraform architecture (`terraform/main.tf`) deploying `aws_vpc.sre_vpc` (`sre-enterprise-vpc`, default `10.0.0.0/16`) with internet gateway `sre-enterprise-igw`, a public route table on `public_ingress` only, three subnets (`public_ingress` `10.0.1.0/24` used; `app_workloads` `10.0.10.0/24` and `data_persistence` `10.0.20.0/24` created unused), security groups `ingress_sg` (`sre-ingress-sg`) and `internal_app_sg` (`sre-internal-app-sg`), IAM role + `AmazonSSMManagedInstanceCore` + instance profile, and an EC2 host in `public_ingress` (default `t3.small`; `instance_type` is a variable).
+  - Single-file Terraform architecture (`terraform/main.tf`) deploying `aws_vpc.sre_vpc` (`sre-enterprise-vpc`, default `10.0.0.0/16`) with internet gateway `sre-enterprise-igw`, a public route table on `public_ingress` only, three subnets (`public_ingress` `10.0.1.0/24` used; `app_workloads` `10.0.10.0/24` and `data_persistence` `10.0.20.0/24` created unused), security groups `ingress_sg` (`sre-ingress-sg`) and `internal_app_sg` (`sre-internal-app-sg`), IAM role + `AmazonSSMManagedInstanceCore` + instance inline policy (SSM parameters, S3 GetObject, CloudWatch `PutLogEvents`) + instance profile, an S3 deploy bucket, CloudWatch log groups `/sre/autonomous-agent-audit` and `/sre/autonomous-agent-incidents`, and an EC2 host in `public_ingress` (default **`t3.medium`** ~$0.0416/hr + ~$0.005/hr public IPv4; override `instance_type` to `t3.small` for a Compose-only tight lab). IMDSv2 hop limit is **2** so containers can reach instance credentials.
   - Eliminates AWS NAT Gateways (\$32/mo) and EKS control plane fees (\$72/mo).
   - 1-command deploy and 1-command clean teardown ensuring zero orphan charges.
 
@@ -67,11 +67,11 @@ Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TAR
 After a fault, **two code paths** run. Path A is `orchestrator.py`. Path B is Prometheus → Alertmanager → incident-bridge → Grok Bot. Stages below are what the code actually does.
 
 1. **Fault injection** (`orchestrator.py` phases 2–3) — `faultStrategistAgent.plan_campaign` then either `InfraDisruptorAgent.execute_fault` (order-service `POST /fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`) or `NetworkAdversaryAgent.execute_fault` (payment-service `tc netem` via `/fault/latency` or `/fault/drop-rate`). `--scenario` strings the CLI documents: `MEMORY_EXHAUSTION`, `REDIS_CONNECTION_STARVATION`, `CPU_SATURATION`, `NETWORK_LATENCY`, `PACKET_LOSS`. Dispatch is substring-based: `NETWORK` / `PACKET` / `LATENCY` → network agent; `REDIS` / `CPU` / `CRASH` → infra agent; anything else → memory leak. The catalog records network faults as `KERNEL_TC_NETEM_LATENCY` / `KERNEL_TC_NETEM_PACKET_LOSS` (those names also work as `--scenario` because they contain `LATENCY` / `PACKET`).
-2. **Detection** (phase 4, in parallel with Prometheus) — `IncidentMonitor.inspect_telemetry` `GET`s `/health` on api-gw (4s timeout), order-service, and payment-service. If `PROMETHEUS_URL` answers, it also queries p99 of `http_request_duration_seconds` and the 5xx share of `http_requests_total`. `evaluate_slos` declares an incident when p99/probe latency > `SLO_MAX_P99_LATENCY_MS` (1200), error rate > `SLO_MAX_ERROR_RATE_PERCENT` (2), or a service returns HTTP >= 500. The loop is at most **9 ticks of 1s** (`for tick in range(1, 10)`). Prometheus evaluates the same SLO/infra/payment rules in `dashboards/alerts.yml` every 1s independently of the orchestrator.
+2. **Detection** (phase 4, in parallel with Prometheus) — `IncidentMonitor.inspect_telemetry` `GET`s `/health` on api-gw (4s timeout), order-service, and payment-service. If `PROMETHEUS_URL` answers, it also queries p99 of `http_request_duration_seconds` and the 5xx share of `http_requests_total`. `evaluate_slos` declares an incident when p99/probe latency > `SLO_MAX_P99_LATENCY_MS` (1200), error rate > `SLO_MAX_ERROR_RATE_PERCENT` (2), or a service returns HTTP >= 500. The loop is at most **9 ticks of 1s** (`for tick in range(1, 10)`). If no incident is declared, the cycle still runs `FaultCatalog.reset_environment()` in a `finally` block so leaks / `tc netem` / Redis starvation cannot pile up across `--cycles`. Path B that needs the fault to stay up should `POST /fault/*` **without** the orchestrator. Prometheus evaluates the same SLO/infra/payment rules in `dashboards/alerts.yml` every 1s independently of the orchestrator.
 3. **Alert** — when a rule stays true for its `for:` window, Prometheus sends it to Alertmanager at compose DNS `alertmanager:9093` (`dashboards/prometheus.yml`). Alertmanager is published on the host as `127.0.0.1:9093`. Alertmanager groups (`group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`) and POSTs to `http://incident-bridge:8080/webhook` with `send_resolved: true`.
 4. **Enrichment** — `incident-bridge` (`services/incident-bridge/app.py`) builds an evidence bundle (PromQL range summaries for `EVIDENCE_WINDOW_SECONDS` default 600, tailed `AGENT_ACTIVITY_LOG`, optional k8s events), caps the payload at `PAYLOAD_MAX_BYTES` (~100KB), and POSTs `{status, alerts, evidence, source: "resilienceops"}` using `GROK_WEBHOOK_*`. Same `fingerprint`+`status` is forwarded at most once per `DEDUPE_TTL_SECONDS` (300). If `GROK_WEBHOOK_URL` is empty, the bridge logs `GROK_WEBHOOK_URL is unset; dropping alert payload` and returns `"dropped_unconfigured"` — the rest of the lab keeps running. If the outbound POST fails after `WEBHOOK_MAX_RETRIES`, the bridge logs `forward FAILED after N attempts alertname=… fingerprint=…`, writes `logs/bridge_deadletter.jsonl` (no key), queues a bounded in-memory retry, and does **not** crash the ASGI app. The webhook key is never logged. **`agent_activity` is empty unless something is writing `logs/agent_activity.jsonl`** — that is the opt-in `agents` Compose profile or a host `orchestrator.py` run, not the default `docker compose up`.
 5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` uses telemetry plus optional k8s events and `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) to pick a root cause and runbook (e.g. `MEMORY_EXHAUSTION_OOM` → `EVICT_CONTAINER_AND_PURGE_LEAK`). Path B: the imported Grok Bot template **AI Incident Diagnosis** diagnoses from the evidence bundle **plus recent commits** in the watched GitHub repo. The bot is read-only (no restart/scale/rollback/push).
-6. **Issue** — the Grok Bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate. Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
+6. **Issue** — the Grok Bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate (a repeat Redis-starvation run against an open `RedisConnectionSaturation` issue comments instead of opening a new issue). Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
 7. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service) and may restart/scale via k8s if the toolkit is available. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch. Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The bot comments on the GitHub issue. The bot does not reset the fault.
 
 ```mermaid
@@ -106,11 +106,11 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 |:---|:---|:---|
 | **1. Agent Resource Limits (CPU / RAM)** | Hard cgroup limits enforced per pod: `0.5 CPU (500m)` and `512 MiB RAM`. | If an agent experiences a runaway loop or memory leak, the Linux kernel cgroup OOMKiller immediately terminates the sandbox container (`Exit 137`). **Host node stability and system daemons are 100% protected**. Importantly, sandbox resource constraints cap agent compute—they do not limit or dampen the authentic fault impact injected into target microservices. |
 | **2. API Permissions (ServiceAccount + RBAC)** | Namespaced Roles on `sre-target-apps` only (no ClusterRole). Red Team (`k8s/agents/agent-sandbox.yaml`): `get`/`list`/`watch` on `pods` and `pods/exec`. Blue Team (`k8s/base/namespace-rbac.yaml`): `get`/`list`/`watch`/`delete` on pods, `get` on `pods/log`, `get`/`list` on events, and `get`/`list`/`watch`/`patch`/`update` on `deployments` / `deployments/scale`. | Agents have **no cluster-admin**. They cannot inspect `kube-system` or cluster secrets through these Roles. `kubectl exec` into the sandbox from the host uses the operator kubeconfig, not the sandbox ServiceAccount. |
-| **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Egress allows DNS (`TCP/UDP 53`), pods in namespaces labeled `arena.sre.io/role=victim` (`sre-target-apps`), and outbound TCP `443` (Anthropic and AWS APIs; default k3s/flannel cannot FQDN-filter). The Grok Bot webhook is sent by **incident-bridge** on the Compose network, not by the sandbox NetworkPolicy. |
+| **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Egress allows DNS (`TCP/UDP 53`), pods in namespaces labeled `arena.sre.io/role=victim` (`sre-target-apps`), outbound TCP `443` (Anthropic and AWS APIs; default k3s/flannel cannot FQDN-filter), and TCP `8000`/`8001`/`8002`/`9090` to the lab VPC CIDR (`10.0.0.0/16`) so the sandbox can reach Compose on the EC2 host private IP. The Grok Bot webhook is sent by **incident-bridge** on the Compose network, not by the sandbox NetworkPolicy. |
 
 ### How the Sandbox Operates During Incident Cycles
 
-1. **Operator Trigger**: An SRE engineer launches a resilience test cycle remotely via `kubectl exec` into the sandbox pod (`python3 orchestrator.py`).
+1. **Operator Trigger**: Deploy the sandbox with `python3 deploy_k8s_sandbox.py --region "$AWS_REGION"` (applies `namespace-rbac.yaml` + `agent-sandbox.yaml`, copies repo code, sets `API_*` to the host private IP). Then `kubectl exec` and run `python3 orchestrator.py --target-ip <EC2 private IP>` — Compose apps are **not** at `*.svc.cluster.local` on the default AWS path. Easier Path A on AWS: `python3 deploy_remote.py --region "$AWS_REGION" --profile agents`.
 2. **Sandbox Pod Execution**:
    - **Red Team Agents**: Select and trigger surgical faults against target services (e.g., cgroup memory leaks on `order-service`, Linux kernel `tc netem` latency on `payment-service`).
    - **Blue Team Agents**: Continuously monitor golden signals, check service health, invoke the configured diagnostic model over outbound HTTPS (port 443) for root-cause analysis, and execute automated runbook resets.
@@ -155,7 +155,20 @@ AWS/EC2 is **optional**. `docker compose up` on a laptop is the same Compose lab
 - Commands below use **`python3`**. Ubuntu/Debian typically have no `python` alias; if `python3` is missing, install it (`sudo apt-get install python3 python3-pip`).
 - **Anthropic API key** for the in-cluster Red/Blue agents (models listed in `agents/config.py`).
 - **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template (GitHub must be connected to the bot).
-- For AWS: **AWS CLI** (`aws sts get-caller-identity`) and **Terraform 1.5+**.
+- For AWS: **AWS CLI v2**, **Terraform 1.5+**, and an identity that can **create** the lab (read-only principals 403 on `ec2:CreateVpc` / `iam:CreateRole`). Attach the checked-in operator policy after substituting your account id:
+  ```bash
+  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION:-us-east-1}")
+  sed "s/ACCOUNT_ID/${ACCOUNT_ID}/g" terraform/deployer-policy.json > /tmp/resilienceops-deployer-policy.json
+  # Attach /tmp/resilienceops-deployer-policy.json to the IAM user/role you use for terraform apply
+  aws sts get-caller-identity --region "${AWS_REGION:-us-east-1}"
+  ```
+  That policy covers EC2/VPC create+delete, `iam:CreateRole` / `DeleteRole` / `PassRole` (to `ec2.amazonaws.com` on `sre-platform-host-role` only) / instance-profile, `ssm:SendCommand` / `GetCommandInvocation` / `DescribeInstanceInformation` / `PutParameter` / `GetParameter`, S3 on `sre-resilienceops-deploy-*` (zip upload), and CloudWatch log-group create/delete. The EC2 instance role is separate (`AmazonSSMManagedInstanceCore` + inline GetParameter / S3 GetObject / `logs:PutLogEvents`).
+- Export the region in every shell (Terraform, AWS CLI, and the Python deploy scripts default independently; a CLI default of `us-east-2` will miss a `us-east-1` stack):
+  ```bash
+  export AWS_REGION=us-east-1
+  export AWS_DEFAULT_REGION="$AWS_REGION"
+  ```
+  After apply, prefer `export AWS_REGION=$(terraform -chdir=terraform output -raw region)`. Pass `--region "$AWS_REGION"` on AWS CLI commands.
 - Regenerating the architecture PNG: `librsvg2-bin` (`rsvg-convert`) or Google Chrome; then `./scripts/render_architecture.sh`.
 
 ### 2. Clone the repository
@@ -185,9 +198,12 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `GRAFANA_ADMIN_PASSWORD` | compose Grafana | **Required.** No `admin`/`admin` default |
 | `ANTHROPIC_API_KEY` | `agents/common/llm_engine.py`, compose `agent-sandbox` | Required for in-cluster Claude calls. Compose uses `${ANTHROPIC_API_KEY:-}` so an empty value still starts the sandbox |
 | `POSTGRES_PASSWORD` | compose postgres + order-service | `${POSTGRES_PASSWORD:-sre_password}` |
-| `EC2_INSTANCE_ID` | `agents.config.require_ec2_instance_id`, `deploy_remote.py` | Required before remote deploy; no default |
+| `EC2_INSTANCE_ID` | `agents.config.require_ec2_instance_id`, `deploy_remote.py` | Required before remote deploy; use `terraform -chdir=terraform output -raw instance_id` |
 | `SRE_EC2_INSTANCE_ID` | same helper | Alias for `EC2_INSTANCE_ID` |
-| `AWS_REGION` | `agents/config.py` | Default `us-east-1` |
+| `AWS_REGION` | `agents/config.py`, deploy scripts | Default `us-east-1`. Export it; pass `--region` on AWS CLI |
+| `AWS_DEFAULT_REGION` | AWS CLI / boto3 / deploy scripts | Set to the same value as `AWS_REGION` |
+| `DEPLOY_BUCKET` | `deploy_remote.py` | Terraform output `deploy_bucket`. Zip is uploaded here (SSM 100 KB limit) |
+| `SSM_PARAM_PREFIX` | `scripts/put_lab_secrets.py`, `deploy_remote.py` | Default `/resilienceops` |
 | `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally (`webhook_configured: false`) |
 | `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the routine in the bot info pane |
 | `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
@@ -228,7 +244,7 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `REDIS_HOST` / `REDIS_PORT` | order-service | Compose sets `redis` / `6379` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_DB` | order-service | Compose sets `postgres` / `5432` / `sre_user` / `orders_db` |
 
-Terraform ingress is **not** an env var. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set `allowed_cidr` to your `/32` or office CIDR. `0.0.0.0/0` is rejected.
+Terraform ingress is **not** an env var. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set `allowed_cidr` to your `/32` or office CIDR. `0.0.0.0/0` is rejected. Find your public IP with `curl -sS https://checkip.amazonaws.com` (append `/32`). Rotating NAT/VPN egress may need a wider office CIDR. **SSM Session Manager does not need inbound SSH** — port 22 is closed. Grafana `:3000` and API `:8000` still use `allowed_cidr` unless you SSM port-forward those ports.
 
 `orchestrator.py` loads `.env` via `python-dotenv` in `agents/common/llm_engine.py` (`load_dotenv()` does not override variables already in the process environment). Compose interpolates `.env` itself.
 
@@ -380,14 +396,22 @@ Stop the lab with `docker compose down -v`.
 
 ### 8. Deploy AWS infrastructure (Terraform)
 
+Confirm the identity can create the lab (see [Prerequisites](#1-prerequisites) / `terraform/deployer-policy.json`). Then:
+
 ```bash
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_DEFAULT_REGION="$AWS_REGION"
 cd terraform
 cp terraform.tfvars.example terraform.tfvars   # set allowed_cidr to YOUR /32 or office CIDR
+# optional: instance_type = "t3.small"  # tight; default is t3.medium
 terraform init
+terraform plan
 terraform apply
 ```
 
-`terraform/main.tf` creates a dedicated VPC `aws_vpc.sre_vpc` (Name `sre-enterprise-vpc`, CIDR `var.vpc_cidr` default `10.0.0.0/16`) with an internet gateway (`sre-enterprise-igw`), three subnets, a public route table associated only with `public_ingress`, two security groups, an IAM role + `AmazonSSMManagedInstanceCore` + instance profile, and the EC2 host in `public_ingress`:
+Default instance is **`t3.medium`** (2 vCPU / 4 GiB, on-demand us-east-1 Linux about **$0.0416/hr** plus public IPv4 about **$0.005/hr**, ~$1.12/day). `t3.small` (2 GiB, ~$0.0208/hr + IPv4) is optional and tight for Compose + k3s + agents. `user_data` installs **Docker Compose v2** (`docker compose`, so `deploy.resources.limits` apply), `awscli`, unzip, 2G swap, and k3s. IMDSv2 hop limit is 2.
+
+`terraform/main.tf` creates a dedicated VPC `aws_vpc.sre_vpc` (Name `sre-enterprise-vpc`, CIDR `var.vpc_cidr` default `10.0.0.0/16`) with an internet gateway (`sre-enterprise-igw`), three subnets, a public route table associated only with `public_ingress`, two security groups, an IAM role + `AmazonSSMManagedInstanceCore` + instance inline policy + instance profile, an S3 deploy bucket, two CloudWatch log groups, and the EC2 host in `public_ingress`:
 
 | Resource | Terraform name | AWS Name / CIDR | What runs there |
 | --- | --- | --- | --- |
@@ -399,8 +423,10 @@ terraform apply
 | Data subnet | `aws_subnet.data_persistence` | `sre-subnet-data-persistence` `10.0.20.0/24` | Created; nothing is deployed into it |
 | Ingress SG | `aws_security_group.ingress_sg` | `sre-ingress-sg` | Grafana `3000` and API `8000` from `allowed_cidr` |
 | Internal SG | `aws_security_group.internal_app_sg` | `sre-internal-app-sg` | `8001–8002` from `ingress_sg`; self scrape |
-| IAM | `aws_iam_role.sre_host_role` + SSM attach + instance profile | `sre-platform-host-role` | `AmazonSSMManagedInstanceCore`; no SSH/22 |
-| Host | `aws_instance.sre_host` | `sre-enterprise-platform-host` | Compose + k3s via `user_data`; both SGs attached |
+| IAM | `aws_iam_role.sre_host_role` + SSM attach + inline + instance profile | `sre-platform-host-role` | SSM core; GetParameter `/resilienceops/*`; S3 GetObject; `logs:PutLogEvents`; no SSH/22 |
+| S3 | `aws_s3_bucket.deploy` | `sre-resilienceops-deploy-<account>-<region>` | Zip payloads for `deploy_remote.py` (1-day expiry; not inline in SSM) |
+| Logs | `aws_cloudwatch_log_group.audit` / `.incidents` | `/sre/autonomous-agent-audit`, `/sre/autonomous-agent-incidents` | Groups only. Dashboards still come from helper scripts |
+| Host | `aws_instance.sre_host` | `sre-enterprise-platform-host` | Compose v2 + k3s via `user_data`; default `t3.medium`; both SGs; IMDS hop 2 |
 
 Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`). The architecture figure shows the VPC group, IGW marker, `public_ingress` around the single EC2 host (Compose + k3s), SG + IAM/SSM markers, and captions for the unused `app_workloads` / `data_persistence` CIDRs.
 
@@ -408,12 +434,22 @@ Typical outputs:
 
 ```text
 api_gateway_url = "http://54.xxx.xxx.xxx:8000"
+deploy_bucket   = "sre-resilienceops-deploy-123456789012-us-east-1"
 grafana_url     = "http://54.xxx.xxx.xxx:3000"
+instance_id     = "i-xxxxxxxxxxxxxxxxx"
+private_ip      = "10.0.1.x"
 prometheus_url  = "http://127.0.0.1:9090 (host-local; AWS SSM port forwarding)"
 public_ip       = "54.xxx.xxx.xxx"
+region          = "us-east-1"
 ```
 
-Save `public_ip` / `grafana_url`. Put the instance id in `.env` as `EC2_INSTANCE_ID`.
+```bash
+export AWS_REGION=$(terraform output -raw region)
+export AWS_DEFAULT_REGION="$AWS_REGION"
+export EC2_INSTANCE_ID=$(terraform output -raw instance_id)
+export DEPLOY_BUCKET=$(terraform output -raw deploy_bucket)
+# also put EC2_INSTANCE_ID / DEPLOY_BUCKET / AWS_REGION into the laptop .env
+```
 
 <p align="center">
   <img src="docs/images/aws_vpc_resource_map.png" alt="AWS Enterprise VPC Resource Map" width="950" />
@@ -421,26 +457,40 @@ Save `public_ip` / `grafana_url`. Put the instance id in `.env` as `EC2_INSTANCE
 <p align="center"><b>Figure 3: Dated AWS console resource map of <code>sre-enterprise-vpc</code></b></p>
 <p align="center">Console chrome may show a different subnet count than Terraform. <code>terraform/main.tf</code> creates exactly three subnets: only <code>public_ingress</code> is used. Prefer the table above when this screenshot disagrees.</p>
 
-### 9. Push the app to the host (`deploy_remote.py`)
+### 9. Secrets, then push the app (`put_lab_secrets.py` + `deploy_remote.py`)
 
-`deploy_remote.py` builds a payload zip from the current tree (compose services, dashboards, agents, incident-bridge) **without** `.env`, then sends it with AWS SSM.
+Grafana interpolation is `:?` required, so the host **must** have `/opt/sre-colosseum/.env` before `docker compose up`. Do **not** put secret values in an SSM `SendCommand` document (that history is visible). Write them as Parameter Store **SecureString**s from your laptop, then let the instance role `GetParameter` them:
 
 ```bash
-export EC2_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
-export AWS_REGION=us-east-1
-# On the host, set ANTHROPIC_API_KEY, GRAFANA_ADMIN_*, POSTGRES_PASSWORD,
-# and GROK_WEBHOOK_* via SSM Parameter Store, Secrets Manager, or instance env.
-python3 deploy_remote.py
+# Laptop .env already has GRAFANA_ADMIN_*, optional ANTHROPIC_API_KEY, GROK_WEBHOOK_*, POSTGRES_PASSWORD
+python3 scripts/put_lab_secrets.py --region "$AWS_REGION"
+# prints parameter names + character lengths only — never values
 ```
+
+`deploy_remote.py` then: waits for SSM agent **Online** and `cloud-init status --wait`; uploads the zip to `DEPLOY_BUCKET` (avoids the **100 KB SSM SendCommand** limit; a ~74 KB zip is already ~98 KB base64); has the instance `curl` a presigned GET; writes `/opt/sre-colosseum/.env` from `/resilienceops/<KEY>`; runs **`docker compose up --build -d`** (all default services, including **alertmanager** and **incident-bridge**); polls `GetCommandInvocation` and **exits non-zero** on failure. The archive includes `reports/` (required by `Dockerfile.agent-sandbox`). API-key warnings read the **written host `.env`**, not the empty SSM shell env.
+
+```bash
+python3 deploy_remote.py --region "$AWS_REGION"
+# Opt-in Red/Blue Compose sandbox (needs ANTHROPIC_API_KEY in Parameter Store):
+python3 deploy_remote.py --region "$AWS_REGION" --profile agents
+```
+
+`--profile agents` is the easiest AWS Path A (agents share the Compose network with api-gw). The k3s sandbox in step 10 is the quarantined alternative.
 
 ### 10. k3s agent sandbox
 
-Red and Blue agents run in `sre-agent-sandbox` on the AWS host (`500m` CPU, `512Mi` RAM, egress NetworkPolicy).
+The default AWS apps run in **Compose**, not in `k8s/apps/microservices.yaml` (that YAML is an alternate in-cluster deploy of `sre-arena/*` images — pass `--apply-microservices` only if you built those images). Wire the quarantined sandbox with:
+
+```bash
+python3 deploy_k8s_sandbox.py --region "$AWS_REGION"
+```
+
+That applies `k8s/base/namespace-rbac.yaml` then `k8s/agents/agent-sandbox.yaml`, waits until the pod is Ready, copies `agents/`, `orchestrator.py`, and `reports/` into `/app`, and sets `API_GATEWAY_URL` / `ORDER_SERVICE_URL` / `PAYMENT_SERVICE_URL` / `PROMETHEUS_URL` to the **EC2 private IP** (Compose is not at `api-gw.sre-target-apps.svc.cluster.local`). `copy_code_to_sandbox.py` is the copy-only follow-up if the pod was recreated.
 
 Connect with SSM (no SSH / port 22):
 
 ```bash
-aws ssm start-session --target "$EC2_INSTANCE_ID"
+aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION"
 ```
 
 Or: AWS Systems Manager → Fleet Manager → instance `sre-enterprise-platform-host` → Start terminal session.
@@ -453,19 +503,24 @@ k3s kubectl logs -f deployment/red-team-sandbox -n sre-agent-sandbox
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash
 ```
 
-Example cycle:
+Example cycle (use the private IP from `terraform output -raw private_ip`):
 
 ```bash
+PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
+aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION"
+# then on the host:
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
+
+Each orchestrator cycle **always** `POST /fault/reset` in a `finally` block, even if Blue never declares an incident, so 150 MB leaks cannot stack across `--cycles`. To leave a fault up for Path B (Prometheus → Grok), `POST /fault/*` on the Compose service instead of running the orchestrator. A repeat firing alert whose fingerprint already has an **open** GitHub `incident` issue gets a **comment**, not a new issue.
 
 ---
 
 
 ## Operating the lab on AWS
 
-Do [Installation and quick start](#installation-and-quick-start) first. Local Compose (including Alertmanager, incident-bridge, and Grafana on `:3000`) is steps 3–7 of that section. This walkthrough assumes the AWS host and `sre-agent-sandbox` are already deployed and you want to watch Grafana, CloudWatch, and in-cluster cycles.
+Do [Installation and quick start](#installation-and-quick-start) first. Local Compose (including Alertmanager, incident-bridge, and Grafana on `:3000`) is steps 3–7 of that section. This walkthrough assumes Terraform apply, `put_lab_secrets.py`, `deploy_remote.py`, and (for k3s Path A) `deploy_k8s_sandbox.py` already ran. Prefer `--profile agents` on AWS if you do not need the k3s quarantine.
 
 > [!TIP]
 > **Dashboard screenshots**:  
@@ -498,7 +553,7 @@ Agent command lines are best-effort `put_log_events` to log group `/sre/autonomo
 - `python3 create_cw_dashboard.py` → dashboard **`SRE-Autonomous-Agent-Security-Audit`** (Red/Blue command tables + unified stream).
 - `python3 test_grafana_proxy.py` → dashboard **`SRE-fault-Vectors-Live-Telemetry`** (per-vector log widgets).
 
-1. Open the **AWS Console** in your browser and switch to `us-east-1` (`AWS_REGION` default).
+1. Open the **AWS Console** in your browser and switch to **`$AWS_REGION`** (Terraform output `region`; default `us-east-1`).
 2. Navigate to **CloudWatch** -> **Dashboards** and open those names if you ran the helpers, **or** **Logs** → log group `/sre/autonomous-agent-audit`.
 3. Dated screenshots in [RESULTS.md](RESULTS.md) used console titles `Agent-Command-Log` and `System-Fault-Metrics`; treat those as a snapshot, not the Terraform resource list.
 
@@ -511,11 +566,12 @@ Agent command lines are best-effort `put_log_events` to log group `/sre/autonomo
 All Red Team and Blue Team agents execute inside the hardened **Kubernetes Agent Sandbox Pod** (`sre-agent-sandbox` namespace) on AWS. This enforces strict cgroup resource isolation (`500m` CPU, `512Mi` RAM) and least-privilege RBAC controls:
 
 #### 1. Execute the Resilience Cycle Inside the Sandbox Pod:
-Run the orchestrator directly inside the quarantined Kubernetes pod over AWS Systems Manager or terminal:
+Run the orchestrator directly inside the quarantined Kubernetes pod over AWS Systems Manager. Target the **EC2 private IP** (Compose apps are not in k3s DNS). Each cycle **always** resets faults in a `finally` block so leaks cannot pile up across `--cycles`.
 
 ```bash
+PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario MEMORY_EXHAUSTION
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
 #### What you will observe in the terminal (illustrative; timings are not guaranteed):
@@ -525,7 +581,7 @@ Printed MTTD/MTTR vary with load, scrape lag, and whether Prometheus is reachabl
 - **Phase 1**: **Health & Uptime Monitor** probes `GET /health` on api-gw, order-service, and payment-service. A healthy baseline is usually HTTP 200 with probe latency well under the 1200ms SLO.
 - **Phase 2**: Red Team **Resilience Attack Planner** (`claude-sonnet-4-6`) evaluates topology and formulates a campaign.
 - **Phase 3**: Red Team **Server Resource Stresser** POSTs `order-service /fault/leak-memory` (this `--scenario MEMORY_EXHAUSTION` path).
-- **Phase 4**: Blue Team **Health & Uptime Monitor** loops up to 9 ticks of 1s. It declares an incident when p99/probe latency > 1200ms, error rate > 2%, or a probe returns HTTP >= 500 (`INCIDENT DECLARED | MTTD: …` — MTTD is that loop duration).
+- **Phase 4**: Blue Team **Health & Uptime Monitor** loops up to 9 ticks of 1s. It declares an incident when p99/probe latency > 1200ms, error rate > 2%, or a probe returns HTTP >= 500 (`INCIDENT DECLARED | MTTD: …` — MTTD is that loop duration). If no incident is declared, the cycle still resets in `finally`.
 - **Phase 5**: Blue Team **Root Cause Investigator** (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) plus rule-based heuristics. `MEMORY_EXHAUSTION_OOM` is used when order-service is 5xx **and** recent k8s events mention oom; otherwise you may see `ORDER_PROCESS_FAILURE` or another cause. The OOM runbook is `EVICT_CONTAINER_AND_PURGE_LEAK`.
 - **Phase 6**: Blue Team **Automated Recovery Fixer** (`RemediatorAgent.execute_runbook`) **always** calls `FaultCatalog.reset_environment()` — `POST /fault/reset` on order-service and payment-service. It restarts `order-service` (or scales it to 3 replicas on CPU runbooks) **only if** `K8sToolKit.k8s_available`. It does not unconditionally bounce the container. `verify_recovery` GETs api-gw `/health` up to 5 times; success is HTTP 200 and probe latency < 800ms. Printed MTTR is measured there.
 - **Phase 7**: Blue Team **Incident Report Writer** writes `reports/incident_*.md` (title from `resolve_fault_title()`, e.g. `MEMORY_EXHAUSTION`).
@@ -546,28 +602,32 @@ Keep the AWS Grafana dashboard open while running the cycle. The following times
 Target different failure mechanisms on your AWS cluster using the `--scenario` argument directly through the sandbox pod:
 
 ```bash
+PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
+
 # Test Linux Kernel tc netem Packet Latency on eth0 (Inside Sandbox Pod).
 # CLI name NETWORK_LATENCY; catalog records KERNEL_TC_NETEM_LATENCY.
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario NETWORK_LATENCY
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario NETWORK_LATENCY
 
 # Test Linux Kernel tc netem Packet Loss (35% frame drops on eth0).
 # CLI name PACKET_LOSS; catalog records KERNEL_TC_NETEM_PACKET_LOSS.
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario PACKET_LOSS
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario PACKET_LOSS
 
 # Test Redis Connection Pool Starvation (saturating maxclients limit):
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario REDIS_CONNECTION_STARVATION
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario REDIS_CONNECTION_STARVATION
 
 # Test CPU CFS Quota Saturation & Thread Starvation:
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 1 --scenario CPU_SATURATION
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario CPU_SATURATION
 
-# Run multiple back-to-back resilience rounds:
+# Run multiple back-to-back resilience rounds (each cycle resets in `finally`):
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
-  python3 orchestrator.py --target-ip api-gw.sre-target-apps.svc.cluster.local --cycles 3 --delay 5
+  python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 3 --delay 5
 ```
+
+A repeat Redis-starvation (or any firing alert with the same fingerprint) **comments on the open GitHub `incident` issue** instead of opening a new one. To leave a fault up for Path B, `POST /fault/*` on the Compose service; do not use the orchestrator.
 
 ---
 
@@ -618,11 +678,12 @@ Files named `reports/incident_*_unknown_fault.md` are **pre-fix historical sampl
 
 ### Step 7: Clean Teardown (Zero Lingering Cost)
 
-When you are finished testing, cleanly destroy all AWS cloud resources to guarantee zero ongoing charges.
-
-You can use the automated root teardown scripts:
+When you are finished testing, destroy the stack so the EC2 host, public IPv4, EBS volume, S3 deploy bucket, and CloudWatch log groups stop billing.
 
 ```bash
+export AWS_REGION="${AWS_REGION:-$(terraform -chdir=terraform output -raw region 2>/dev/null || echo us-east-1)}"
+export AWS_DEFAULT_REGION="$AWS_REGION"
+
 # On Linux / macOS:
 ./teardown.sh
 
@@ -630,14 +691,30 @@ You can use the automated root teardown scripts:
 .\teardown.ps1
 ```
 
-Or execute directly with Terraform:
+Or:
 
 ```bash
 cd terraform
-terraform destroy -auto-approve
+terraform destroy
 ```
 
-*This cleanly purges 100% of the AWS VPC, subnets, route tables, security groups, IAM roles, and EC2 host in under 60 seconds, guaranteeing zero ongoing charges.*
+Then verify (expect terminated / not found / empty):
+
+```bash
+aws ec2 describe-instances --region "$AWS_REGION" \
+  --filters "Name=tag:Name,Values=sre-enterprise-platform-host" \
+  --query "Reservations[].Instances[].{id:InstanceId,state:State.Name}" --output table
+aws s3 ls --region "$AWS_REGION" | grep sre-resilienceops-deploy || echo "(no deploy bucket)"
+aws logs describe-log-groups --region "$AWS_REGION" \
+  --log-group-name-prefix "/sre/autonomous-agent" \
+  --query "logGroups[].logGroupName" --output text
+aws ssm get-parameters-by-path --region "$AWS_REGION" --path /resilienceops \
+  --query "Parameters[].Name" --output text
+# Optional: delete leftover SecureStrings so they are not reused on the next lab
+# aws ssm delete-parameters --region "$AWS_REGION" --names /resilienceops/GRAFANA_ADMIN_PASSWORD ...
+```
+
+SSM parameters are **not** in Terraform state (`put_lab_secrets.py` creates them). Delete them if you do not want the secrets to persist.
 
 ---
 

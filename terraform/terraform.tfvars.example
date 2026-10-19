@@ -1,3 +1,10 @@
 # Copy to terraform.tfvars and set your operator CIDR. 0.0.0.0/0 is rejected.
+# Find your public IP: curl -sS https://checkip.amazonaws.com
+# Dynamic / rotating NAT IPs may need a wider office CIDR. SSM Session Manager
+# does not need inbound SSH (port 22 is closed). Grafana :3000 and API :8000
+# still use this CIDR unless you SSM port-forward those ports.
 allowed_cidr = "x.x.x.x/32"
 aws_region   = "us-east-1"
+# Default in main.tf is t3.medium (~$0.0416/hr + ~$0.005/hr public IPv4).
+# t3.small (~$0.0208/hr + IPv4) is tight for Compose + k3s + agents.
+# instance_type = "t3.small"

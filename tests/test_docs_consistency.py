@@ -80,6 +80,10 @@ def test_readme_referenced_scripts_exist():
         "scripts/build_architecture.py",
         "orchestrator.py",
         "deploy_remote.py",
+        "deploy_k8s_sandbox.py",
+        "copy_code_to_sandbox.py",
+        "scripts/put_lab_secrets.py",
+        "terraform/deployer-policy.json",
         "teardown.sh",
         "teardown.ps1",
         ".env.example",
@@ -158,6 +162,14 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "optional AWS" in svg
     assert "health ×3" in svg
     assert "reset ×2" in svg
+    assert "terraform/deployer-policy.json" in readme
+    assert "put_lab_secrets.py" in readme
+    assert "deploy_k8s_sandbox.py" in readme
+    assert "--profile agents" in readme
+    assert "export AWS_REGION" in readme
+    assert "output -raw instance_id" in readme
+    assert "docker compose up --build -d" in readme
+    assert "FaultCatalog.reset_environment" in readme or "finally" in readme
     assert "SG  ingress + internal" in svg
     assert "public RT only" in svg
     assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
