@@ -183,6 +183,11 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
     """
     path = _rounded_hexagon_path()
     # Capsules 6 x 13.2 → 1:2.2. Pair midpoint is left of and above hex center.
+    cap_svg = (
+        f'    <text class="cap" y="58" text-anchor="middle">{cap}</text>\n'
+        if cap
+        else ""
+    )
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <g transform="translate(0,-32) rotate(23)">
       <path d="{path}" fill="{GROK_RED}"/>
@@ -192,8 +197,7 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
       <rect x="1.2" y="-6.6" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
     <text class="name" y="36" text-anchor="middle">{name}</text>
-    <text class="cap" y="58" text-anchor="middle">{cap}</text>
-  </g>"""
+{cap_svg}  </g>"""
 
 
 def group(x: float, y: float, w: float, h: float, label: str, icon: str | None = None) -> str:
@@ -284,7 +288,7 @@ def build() -> str:
     ec2_x, ec2_w = 16, 1364
 
     # Group title is the host box; the AWS EC2 mark is the node Terraform points at.
-    g_bot = group(bot_x, gy, bot_w, main_h, "Your Grok bot")
+    g_bot = group(bot_x, gy, bot_w, main_h, "Grok Bot")
     g_ec2 = group(ec2_x, gy, ec2_w, main_h, "EC2 host")
 
     aws_icon = 48
@@ -342,7 +346,7 @@ def build() -> str:
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
         node(br_x, r3, "document", "incident-bridge", "PromQL · jsonl · k8s"),
         node(graf_x, graf_y, "grafana", "Grafana", ""),
-        grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", "Your Grok bot"),
+        grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", ""),
         node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
         node(ping_x, bot_row_y, "bell", "Owner ping", "Firing critical"),
     ]

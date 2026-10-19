@@ -113,7 +113,7 @@
   <use href="#i-docker" xlink:href="#i-docker" x="324" y="244" width="22" height="22"/>
   <text x="352" y="262" class="group">Compose lab</text>
   <rect x="1396" y="52" width="504" height="974" rx="22" fill="#F8FAFC" stroke="#E5E7EB"/>
-  <text x="1420" y="80" class="group">Your Grok bot</text>
+  <text x="1420" y="80" class="group">Grok Bot</text>
   <g transform="translate(400,164)">
     <use href="#i-terraform" xlink:href="#i-terraform" x="-24.0" y="-56.0" width="48" height="48"/>
     <text class="name" y="18" text-anchor="middle">Terraform</text>
@@ -207,7 +207,6 @@
       <rect x="1.2" y="-6.6" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
     <text class="name" y="36" text-anchor="middle">AI Incident Diagnosis</text>
-    <text class="cap" y="58" text-anchor="middle">Your Grok bot</text>
   </g>
   <g transform="translate(1493,602)">
     <use href="#i-github" xlink:href="#i-github" x="-34.0" y="-76.0" width="68" height="68"/>
