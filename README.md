@@ -185,7 +185,7 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `SRE_EC2_INSTANCE_ID` | same helper | Alias for `EC2_INSTANCE_ID` |
 | `AWS_REGION` | `agents/config.py` | Default `us-east-1` |
 | `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally (`webhook_configured: false`) |
-| `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the bot routine panel |
+| `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the routine in the bot info pane |
 | `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
 | `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`. Compose uses `${GROK_WEBHOOK_AUTH_SCHEME-Bearer}` so a present-but-empty value sends the raw key |
 | `API_GATEWAY_URL` | `agents/config.py` | Host default `http://localhost:8000`. Compose sandbox sets `http://api-gw:8000` |
@@ -241,8 +241,11 @@ python3 -m pip install -r services/incident-bridge/requirements.txt
 
 1. Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**.
 2. The bot's first conversation asks for the **GitHub repo** to file incidents in (GitHub must already be connected), the **alert source**, and the **ping preference**.
-3. Open the bot's **routine panel**. Copy the **webhook URL**, the **webhook key**, and the **authorization header format**.
-4. Paste them into `.env` as `GROK_WEBHOOK_URL`, `GROK_WEBHOOK_KEY`, `GROK_WEBHOOK_AUTH_HEADER`, and `GROK_WEBHOOK_AUTH_SCHEME`, matching the header format the panel shows (scheme may be empty).
+3. Open the bot's chat. Click the bot's name in the chat header (or press **Cmd+Shift+I**) to open its info pane.
+4. Under **Routines**, open **ResilienceOps incident diagnosis** (or whatever routine the template created).
+5. Copy **Webhook URL** into `GROK_WEBHOOK_URL` and **Webhook key** into `GROK_WEBHOOK_KEY`. Check the **Authorization** header setting — that maps to `GROK_WEBHOOK_AUTH_HEADER` / `GROK_WEBHOOK_AUTH_SCHEME` (scheme may be empty).
+
+<!-- screenshot: bot chat header → info pane → Routines → ResilienceOps incident diagnosis (Webhook URL, Webhook key, Authorization) -->
 
 Details: [AI incident diagnosis](#ai-incident-diagnosis).
 
@@ -642,12 +645,12 @@ The webhook key is never logged. Evidence is secret-stripped. Payloads are cappe
 
 1. Import the template: https://x.ai/bot/feQpDSeSki7HVgkDCBUaY
 2. Complete the first conversation: GitHub repo (GitHub connected), alert source, ping preference.
-3. In the bot's routine panel, copy webhook URL, webhook key, and authorization header format.
+3. Copy webhook credentials from the routine as in [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials) (info pane → **Routines** → **ResilienceOps incident diagnosis**).
 4. Put them in `.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GROK_WEBHOOK_URL` | empty (drop) | Bot webhook URL from the routine panel |
+| `GROK_WEBHOOK_URL` | empty (drop) | Bot webhook URL from the routine in the bot info pane |
 | `GROK_WEBHOOK_KEY` | empty | Webhook key; never committed or logged |
 | `GROK_WEBHOOK_AUTH_HEADER` | `Authorization` | Header **name** from the panel |
 | `GROK_WEBHOOK_AUTH_SCHEME` | `Bearer` | Scheme prefix. Empty string sends the raw key as the header value |
@@ -675,10 +678,14 @@ docker compose up -d --build incident-bridge alertmanager prometheus
 
 1. `curl -sS http://127.0.0.1:8088/healthz` — `webhook_configured` should be `true`.
 2. Bridge logs: `docker compose logs incident-bridge`. If URL is unset you will see a drop message. The key is never printed.
-3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine panel (no trailing whitespace).
-4. Confirm `GROK_WEBHOOK_AUTH_HEADER` and `GROK_WEBHOOK_AUTH_SCHEME` match the panel's authorization format. Wrong scheme or header name yields 401 from the bot.
+3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine (no trailing whitespace). See [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials).
+4. Confirm `GROK_WEBHOOK_AUTH_HEADER` and `GROK_WEBHOOK_AUTH_SCHEME` match the routine's Authorization setting. See [Webhook 401 / 403](#webhook-401--403).
 5. Confirm **GitHub is connected** in the Grok Bot and the first-run conversation named the repo that should receive issues.
 6. Confirm Alertmanager is up (`curl -sS http://127.0.0.1:9093/-/healthy`) and the synthetic alert returned HTTP 200.
+
+### Webhook 401 / 403
+
+The bot rejected the request. The usual cause is a wrong `GROK_WEBHOOK_KEY`, or `GROK_WEBHOOK_AUTH_HEADER` / `GROK_WEBHOOK_AUTH_SCHEME` that does not match the **Authorization** setting on the routine. Re-open **ResilienceOps incident diagnosis** (install step 5), copy URL, key, and header/scheme again, then recreate the bridge: `docker compose up -d incident-bridge`.
 
 ### Duplicate issues vs comments
 
