@@ -334,7 +334,7 @@ def build() -> str:
 
     # AWS Architecture Icons groups: VPC (purple dashed) wraps the public subnet
     # (green) which holds the EC2 host. Terraform still has the one provision arrow.
-    g_bot = group(bot_x, gy, bot_w, main_h, "Grok Bot")
+    g_bot = group(bot_x, gy, bot_w, main_h, "Grok Bot  ·  local or AWS")
     g_vpc = group(
         vpc_x, gy, vpc_w, main_h, "VPC  sre-enterprise-vpc",
         icon="aws-vpc", style="vpc",
@@ -343,7 +343,7 @@ def build() -> str:
     subnet_w, subnet_h = vpc_w - 16, main_h - 46
     g_subnet = group(
         subnet_x, subnet_y, subnet_w, subnet_h,
-        "public_ingress  10.0.1.0/24",
+        "public_ingress  ·  one EC2 host",
         icon="aws-subnet-public", style="public_subnet",
     )
     ec2_x, ec2_w = vpc_x, vpc_w
@@ -365,8 +365,8 @@ def build() -> str:
     alley_blue = 282
     alley_red = 220
 
-    g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s sandbox")
-    g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab", icon="docker")
+    g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s on this host")
+    g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab on this host", icon="docker")
 
     r1 = 420  # Traffic / api-gw / order / payment (room above for Red flyover)
     r2 = 700  # Redis + Postgres under order-service; Red Team in k3s
@@ -386,7 +386,7 @@ def build() -> str:
     gh_x, ping_x = bot_cx - 155, bot_cx + 155
 
     nodes = [
-        node(tf_x, aws_r, "terraform", "Terraform", "provisions host", size=aws_icon),
+        node(tf_x, aws_r, "terraform", "Terraform", "optional AWS", size=aws_icon),
         node(ec2_node_x, aws_r, "aws-ec2", "EC2", "compose + k3s", size=aws_icon),
         satellite(iam_x, aws_r - aws_icon / 2 + 6, "aws-iam", "IAM", "role + profile"),
         satellite(ssm_x, aws_r - aws_icon / 2 + 6, "aws-ssm", "SSM", "deploy_remote.py"),
@@ -443,6 +443,11 @@ def build() -> str:
     parts.append(g_k3s)
     parts.append(g_lab)
     parts.append(g_bot)
+    # Unused subnets live in the VPC but have no workloads today — caption only.
+    parts.append(
+        f'  <text x="{vpc_x + vpc_w - 14:.0f}" y="{gy + 26:.0f}" text-anchor="end" '
+        f'class="cap">app_workloads · data_persistence unused</text>'
+    )
     parts.extend(nodes)
 
     svc_ic = _ic(r1)
@@ -572,8 +577,8 @@ def build() -> str:
     )
     parts.append(
         f'  <text x="960" y="{gate_y + 44:.0f}" text-anchor="middle" class="gate-sub">'
-        "Path A (Red/Blue on k3s) may reset faults. The Grok bot only diagnoses and files issues. "
-        "Compose + k3s run on the EC2 host in public_ingress.</text>"
+        "AWS/EC2 is optional: docker compose up is the same lab. "
+        "The bot only needs outbound HTTPS from the bridge.</text>"
     )
 
     card_y = gate_y + 68

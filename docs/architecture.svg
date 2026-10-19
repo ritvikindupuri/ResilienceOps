@@ -126,18 +126,19 @@
   <text x="58" y="78" class="group-vpc">VPC  sre-enterprise-vpc</text>
   <rect x="24" y="88" width="1348" height="928" rx="6" fill="#F7FBEA" stroke="#7AA116" stroke-width="2.2"/>
   <use href="#i-aws-subnet-public" xlink:href="#i-aws-subnet-public" x="36" y="96" width="24" height="24"/>
-  <text x="66" y="114" class="group-subnet">public_ingress  10.0.1.0/24</text>
+  <text x="66" y="114" class="group-subnet">public_ingress  ·  one EC2 host</text>
   <rect x="32" y="234" width="228" height="778" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <text x="56" y="260" class="group">k3s sandbox</text>
+  <text x="56" y="260" class="group">k3s on this host</text>
   <rect x="308" y="234" width="1056" height="778" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <use href="#i-docker" xlink:href="#i-docker" x="320" y="242" width="22" height="22"/>
-  <text x="350" y="260" class="group">Compose lab</text>
+  <text x="350" y="260" class="group">Compose lab on this host</text>
   <rect x="1396" y="52" width="504" height="974" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <text x="1420" y="78" class="group">Grok Bot</text>
+  <text x="1420" y="78" class="group">Grok Bot  ·  local or AWS</text>
+  <text x="1366" y="78" text-anchor="end" class="cap">app_workloads · data_persistence unused</text>
   <g transform="translate(400,164)">
     <use href="#i-terraform" xlink:href="#i-terraform" x="-24.0" y="-56.0" width="48" height="48"/>
     <text class="name" y="18" text-anchor="middle">Terraform</text>
-    <text class="cap" y="40" text-anchor="middle">provisions host</text>
+    <text class="cap" y="40" text-anchor="middle">optional AWS</text>
   </g>
   <g transform="translate(590,164)">
     <use href="#i-aws-ec2" xlink:href="#i-aws-ec2" x="-24.0" y="-56.0" width="48" height="48"/>
@@ -323,7 +324,7 @@
   </g>
   <rect x="16" y="1036" width="1888" height="56" rx="18" fill="#FFFFFF" stroke="#D1D5DB" stroke-dasharray="7 6"/>
   <text x="960" y="1058" text-anchor="middle" class="gate">Read-only: the bot never restarts, scales, or pushes</text>
-  <text x="960" y="1080" text-anchor="middle" class="gate-sub">Path A (Red/Blue on k3s) may reset faults. The Grok bot only diagnoses and files issues. Compose + k3s run on the EC2 host in public_ingress.</text>
+  <text x="960" y="1080" text-anchor="middle" class="gate-sub">AWS/EC2 is optional: docker compose up is the same lab. The bot only needs outbound HTTPS from the bridge.</text>
   <g transform="translate(16,1104)">
     <rect width="592" height="96" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="40" class="card-n">1.</text>

@@ -57,7 +57,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps + AI Incident Diagnosis works" width="950" />
 </p>
 <p align="center"><b>Figure 1: How ResilienceOps + AI Incident Diagnosis works</b></p>
-<p align="center">The bottom cards are Path B (alert → bridge → bot → GitHub). Red/Blue on k3s is Path A. Compose lab and k3s run on the EC2 host in subnet <code>public_ingress</code> of VPC <code>sre-enterprise-vpc</code>. Grafana only <em>reads</em> Prometheus. order-service owns Redis and <code>orders_db</code>. The figure uses one Red arrow (<em>faults</em>) and one Blue arrow (<em>health / reset</em>); endpoint details (<code>POST /fault/*</code>, <code>tc netem</code>, <code>GET /health</code>, reset) are in the step-by-step below.</p>
+<p align="center">The bottom cards are Path B (alert → bridge → bot → GitHub). Red/Blue on k3s is Path A. AWS/EC2 is <em>optional</em>: local <code>docker compose up</code> is the same Compose lab, and the Grok bot works in both (the bridge only needs outbound HTTPS to the webhook). On AWS, Compose and k3s run on the <em>single</em> EC2 host in <code>public_ingress</code> (<code>sre-enterprise-vpc</code>); <code>app_workloads</code> and <code>data_persistence</code> are created but unused. Grafana only <em>reads</em> Prometheus. order-service owns Redis and <code>orders_db</code>. The figure uses one Red arrow (<em>faults</em>) and one Blue arrow (<em>health / reset</em>); endpoint details (<code>POST /fault/*</code>, <code>tc netem</code>, <code>GET /health</code>, reset) are in the step-by-step below.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
 
 ### Step-by-step flow (matches the code)
@@ -144,6 +144,10 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 ## Installation and quick start
 
 Follow these steps in order: **local lab first** (clone, `.env`, Docker Compose, Grok Bot), then AWS + k3s if you want the cloud host (steps 8–10). After Terraform and the sandbox are up, use [Operating the lab on AWS](#operating-the-lab-on-aws) for Grafana, CloudWatch, `orchestrator.py` cycles, and teardown. Skip that section if you are only running Compose on your laptop.
+
+### Local or AWS?
+
+AWS/EC2 is **optional**. `docker compose up` on a laptop is the same Compose lab (api-gw, order/payment, Prometheus, Alertmanager, incident-bridge, Grafana). The Grok bot works in both places: the incident-bridge only needs **outbound HTTPS** to the webhook (`GROK_WEBHOOK_URL`). Steps 8–10 add VPC `sre-enterprise-vpc` and a **single** EC2 host in `public_ingress`; Compose and k3s run on that instance. Terraform also creates `app_workloads` and `data_persistence`, but nothing is deployed there today.
 
 ### 1. Prerequisites
 
@@ -299,7 +303,13 @@ Optional local agent cycle on the host (needs `ANTHROPIC_API_KEY` in `.env`; `ll
 python3 orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
-### 7. Fire a synthetic alert and confirm a GitHub issue
+### 7. Confirm the bot path (fault injection is optional)
+
+Injecting a fault is **optional and only for testing**. In real use, real failures trip the Prometheus alert rules; the incident-bridge and Grok bot run the same way whether the alert came from a live outage or from a test.
+
+Two ways to prove the path:
+
+**Quick check** — post a synthetic alert with `scripts/send_test_alert.py`. No `/fault` endpoints, no Red Team.
 
 ```bash
 python3 scripts/send_test_alert.py --target alertmanager
@@ -336,6 +346,8 @@ curl -sS -H 'Content-Type: application/json' \
   -d '[{"labels":{"alertname":"SyntheticTestAlert","severity":"warning","service":"api-gw"},"annotations":{"summary":"Synthetic test alert"},"startsAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}]' \
   http://127.0.0.1:9093/api/v2/alerts
 ```
+
+**Full demo** — inject a real fault so Prometheus fires on its own. Order-service exposes `POST /fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`; payment-service exposes `/fault/latency` and `/fault/drop-rate` (`tc netem`). Reset with `POST /fault/reset` on both. Or run `python3 orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` (see the [step-by-step flow](#step-by-step-flow-matches-the-code)). This is a test harness, not how production incidents start.
 
 Stop the lab with `docker compose down -v`.
 

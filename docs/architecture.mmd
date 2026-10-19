@@ -1,9 +1,9 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  subgraph vpc ["VPC sre-enterprise-vpc"]
-    TF[Terraform]
-    subgraph pub ["public_ingress 10.0.1.0/24"]
-      EC2[EC2 host]
+  subgraph vpc ["VPC sre-enterprise-vpc — app_workloads and data_persistence unused"]
+    TF[Terraform optional AWS]
+    subgraph pub ["public_ingress — one EC2 host"]
+      EC2[EC2: compose + k3s on this host]
       IAM[IAM role + profile]
       SSM[SSM]
       SG[SG ingress + internal]
@@ -12,13 +12,13 @@ flowchart LR
       EC2 --- SSM
       EC2 --- SG
 
-      subgraph k3s ["k3s sandbox"]
+      subgraph k3s ["k3s on this host"]
         K3S[k3s]
         RED[Red Team]
         BLUE[Blue Team]
       end
 
-      subgraph lab ["Compose lab"]
+      subgraph lab ["Compose lab on this host"]
         TG[Traffic]
         GW[api-gw]
         OS[order-service]
@@ -44,7 +44,7 @@ flowchart LR
     end
   end
 
-  subgraph grok ["Grok Bot"]
+  subgraph grok ["Grok Bot — local or AWS"]
     BOT["AI Incident Diagnosis"]
     GH[GitHub issue]
     PING[Owner ping]
