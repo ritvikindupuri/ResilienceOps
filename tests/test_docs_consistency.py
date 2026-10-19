@@ -175,7 +175,9 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Docker Compose on this host" in svg
     assert "App + observability (default)" in svg
     assert "Compose lab on this host" not in svg
-    assert "k3s (optional)" in svg
+    assert "k3s sandbox (optional)" in svg
+    assert "Runs the agents in isolated pods" in svg
+    assert "k3s (optional)" not in svg
     assert "diagnose" in svg
     assert "read-only" not in svg.lower()
     assert "Your Grok bot" not in svg
