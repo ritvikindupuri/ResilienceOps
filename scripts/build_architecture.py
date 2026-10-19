@@ -231,8 +231,34 @@ def poly(points: list[tuple[float, float]], dashed: bool = False, marked: bool =
     )
 
 
+def arc(
+    x1: float,
+    y1: float,
+    cx: float,
+    cy: float,
+    x2: float,
+    y2: float,
+    dashed: bool = False,
+) -> str:
+    """One quadratic bezier — used for the PromQL query under the observability row."""
+    dash = ' stroke-dasharray="6 5"' if dashed else ""
+    return (
+        f'  <path d="M {x1:.0f},{y1:.0f} Q {cx:.0f},{cy:.0f} {x2:.0f},{y2:.0f}" '
+        f'fill="none" class="arrow" stroke-linecap="round"{dash} marker-end="url(#arr)"/>'
+    )
+
+
+def satellite(x: float, y: float, icon: str, name: str, cap: str, size: float = 26) -> str:
+    """Small icon with the name to its right — an attachment, not a chained node."""
+    return f"""  <g transform="translate({x:.0f},{y:.0f})">
+    <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{-size / 2:.1f}" width="{size:.0f}" height="{size:.0f}"/>
+    <text class="name" x="{size / 2 + 8:.0f}" y="5" text-anchor="start" style="font-size:14px">{name}</text>
+    <text class="cap" x="{size / 2 + 8:.0f}" y="22" text-anchor="start" style="font-size:13px">{cap}</text>
+  </g>"""
+
+
 def pill(x: float, y: float, text: str) -> str:
-    w = max(92, 8.4 * len(text) + 24)
+    w = max(56, 8.2 * len(text) + 22)
     return f"""  <g transform="translate({x - w / 2:.1f},{y - 11:.0f})">
     <rect width="{w:.1f}" height="22" rx="11" fill="#FFFFFF" stroke="#D1D5DB"/>
     <text x="{w / 2:.1f}" y="16" text-anchor="middle" class="pill">{text}</text>
@@ -249,45 +275,49 @@ def _icon_top(node_y: float) -> float:
 
 
 def build() -> str:
-    W, H = 1920, 1100
+    W, H = 1920, 1160
     gy = 52
-    main_h = 856
-    col_bottom = gy + main_h  # 908
+    main_h = 934
+    col_bottom = gy + main_h  # 986
 
     bot_x, bot_w = 1396, 504
     ec2_x, ec2_w = 16, 1364
 
+    # Group title is the host box; the AWS EC2 mark is the node Terraform points at.
     g_bot = group(bot_x, gy, bot_w, main_h, "Your Grok bot")
-    g_ec2 = group(ec2_x, gy, ec2_w, main_h, "EC2 host", icon="aws-ec2")
+    g_ec2 = group(ec2_x, gy, ec2_w, main_h, "EC2 host")
 
-    # AWS control-plane row sits above Compose (not above k3s) so captions
-    # cannot collide with the k3s group label.
     aws_icon = 48
-    aws_r = gy + LABEL_BAND + aws_icon + 6  # 162
-    tf_x, iam_x, ssm_x = 520, 720, 930
+    aws_r = gy + LABEL_BAND + aws_icon + 8  # 164
+    tf_x, ec2_node_x = 400, 590
+    # IAM / SSM satellites hang off the EC2 node (no arrows — Terraform creates
+    # the role and profile; deploy_remote.py uses SSM).
+    iam_x, ssm_x = 680, 860
 
-    nested_y = aws_r + 58  # 220
-    nested_h = col_bottom - nested_y - 14  # 674
+    nested_y = aws_r + 70  # 234
+    nested_h = col_bottom - nested_y - 14  # 746
     k3s_x, k3s_w = 32, 228
     lab_x = 308
     lab_w = ec2_x + ec2_w - 16 - lab_x  # 1056
-    alley_blue = 272  # vertical corridor between k3s and compose
-    alley_red = 294
+    # Two alley spines. Red climbs inside k3s (left). Blue climbs in the
+    # gutter (right). Horizontal segments never share an x with the other spine.
+    alley_blue = 282
+    alley_red = 220
 
     g_k3s = group(k3s_x, nested_y, k3s_w, nested_h, "k3s sandbox")
     g_lab = group(lab_x, nested_y, lab_w, nested_h, "Compose lab", icon="docker")
 
-    # Rows: services, data stores, observability. Corridors between them
-    # hold orthogonal rails so arrows never run through nodes.
-    r1 = nested_y + LABEL_BAND + ICON + 50  # 394  (band above icons for /api/payments)
-    r2 = r1 + 300  # 694  Redis / Postgres / Red
-    r3 = r2 + 124  # 818  Prom / Grafana / AM / bridge / Blue
+    r1 = 390  # Traffic / api-gw / order / payment
+    r2 = 615  # Redis + Postgres under order-service; Red Team in k3s
+    r3 = 760  # Prometheus → Alertmanager → incident-bridge; Blue Team
+    graf_y = 920  # Grafana sits under Prometheus, not on the alert row
 
     k3s_cx = k3s_x + k3s_w / 2  # 146
-    tg_x, gw_x, os_x, ps_x = 380, 560, 840, 1180
-    rd_x, pg_x = 700, 1000
-    # Grafana sits between Prom and AM on the same row but is NOT on the alert path.
-    prom_x, graf_x, am_x, br_x = gw_x, 760, 1000, 1220
+    k3s_node_y = nested_y + LABEL_BAND + ICON + 10  # 360
+    tg_x, gw_x, os_x, ps_x = 400, 580, 820, 1140
+    rd_x, pg_x = os_x - 90, os_x + 90  # 730, 910 — short verticals only
+    prom_x, am_x, br_x = gw_x, 860, 1140  # observability left → right
+    graf_x = prom_x
 
     bot_cx = bot_x + bot_w / 2  # 1648
     bot_avatar_y = gy + 190
@@ -296,9 +326,10 @@ def build() -> str:
 
     nodes = [
         node(tf_x, aws_r, "terraform", "Terraform", "provisions host", size=aws_icon),
-        node(iam_x, aws_r, "aws-iam", "IAM", "role + profile", size=aws_icon),
-        node(ssm_x, aws_r, "aws-ssm", "SSM", "deploy_remote.py", size=aws_icon),
-        node(k3s_cx, r1, "k3s", "k3s", "Agent sandbox"),
+        node(ec2_node_x, aws_r, "aws-ec2", "EC2", "compose + k3s", size=aws_icon),
+        satellite(iam_x, aws_r - aws_icon / 2 + 6, "aws-iam", "IAM", "role + profile"),
+        satellite(ssm_x, aws_r - aws_icon / 2 + 6, "aws-ssm", "SSM", "deploy_remote.py"),
+        node(k3s_cx, k3s_node_y, "k3s", "k3s", "Agent sandbox"),
         node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
         node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
         node(tg_x, r1, "traffic", "Traffic", "Live load"),
@@ -308,9 +339,9 @@ def build() -> str:
         node(rd_x, r2, "redis", "Redis", "order-service cache"),
         node(pg_x, r2, "postgresql", "PostgreSQL", "orders_db"),
         node(prom_x, r3, "prometheus", "Prometheus", "Scrapes + rules"),
-        node(graf_x, r3, "grafana", "Grafana", ""),
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
         node(br_x, r3, "document", "incident-bridge", "PromQL · jsonl · k8s"),
+        node(graf_x, graf_y, "grafana", "Grafana", ""),
         grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", "Your Grok bot"),
         node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
         node(ping_x, bot_row_y, "bell", "Owner ping", "Firing critical"),
@@ -354,23 +385,17 @@ def build() -> str:
     blue_ic = _ic(r3)
     aws_ic = aws_r - aws_icon / 2 - 4
     k3s_right = k3s_cx + 32
-    # Stop below-node ticks under the caption box so arrows never cross labels.
-    svc_label_clear = r1 + 54
     db_top = _icon_top(r2)
     prom_top = _icon_top(r3)
-    pay_y = nested_y + LABEL_BAND + 18  # 294, between Compose label and service icons
-    health_y = r1 + 80   # below service captions (~434)
-    fault_y = r1 + 128
-    metrics_y = r1 + 176
-    db_rail_y = r1 + 214  # just above Redis icon tops (~r2-76)
-    db_drop_x = (os_x + 80 + ps_x - 80) / 2  # order↔payment gap, rails break around this x
-    pq_y = r3 + 88
+    graf_top = _icon_top(graf_y)
+    pay_y = nested_y + LABEL_BAND + 18  # 300, between Compose label and service icons
+    health_y = r1 + 72  # below service captions; stays left of Redis/Postgres
+    metrics_from = r1 + 56
 
-    # Terraform → IAM role/instance profile → SSM (deploy_remote.py).
-    parts.append(arrow(tf_x + 36, aws_ic, iam_x - 36, aws_ic))
-    parts.append(arrow(iam_x + 36, aws_ic, ssm_x - 36, aws_ic))
+    # 1. Terraform → EC2 host. IAM and SSM are attached badges, not a chain.
+    parts.append(arrow(tf_x + 40, aws_ic, ec2_node_x - 40, aws_ic))
 
-    # Request path (icon-center row). Pills sit in the gaps between icons.
+    # 2–4. Request path. Pills sit in the gaps above the icons.
     parts.append(arrow(tg_x + 36, svc_ic, gw_x - 36, svc_ic))
     parts.append(arrow(gw_x + 36, svc_ic, os_x - 36, svc_ic))
     parts.append(arrow(os_x + 36, svc_ic, ps_x - 36, svc_ic))
@@ -378,7 +403,7 @@ def build() -> str:
     parts.append(pill((gw_x + os_x) / 2, svc_ic - 20, "/api/orders"))
     parts.append(pill((os_x + ps_x) / 2, svc_ic - 20, "POST /payments"))
 
-    # api-gw → payment /api/payments: U-turn above the icons, below the group label.
+    # 5. api-gw → payment-service proxy. U-turn above the icons, below the group label.
     parts.append(poly([
         (gw_x, _icon_top(r1) - 6),
         (gw_x, pay_y),
@@ -387,86 +412,60 @@ def build() -> str:
     ]))
     parts.append(pill((gw_x + os_x) / 2, pay_y - 16, "/api/payments"))
 
-    # Blue GET /health + POST /fault/reset. Spine in the k3s↔compose alley.
-    # Rails break around db_drop_x so the DB vertical does not cross them.
-    parts.append(poly([(k3s_right, blue_ic), (alley_blue, blue_ic), (alley_blue, health_y)], marked=False))
-    parts.append(poly([(alley_blue, health_y), (db_drop_x - 20, health_y)], marked=False))
-    parts.append(poly([(db_drop_x + 20, health_y), (ps_x - 16, health_y)], marked=False))
-    parts.append(arrow(gw_x, health_y, gw_x, svc_label_clear))
-    parts.append(arrow(os_x - 16, health_y, os_x - 16, svc_label_clear))
-    parts.append(arrow(ps_x - 16, health_y, ps_x - 16, svc_label_clear))
-    parts.append(pill((gw_x + os_x) / 2 - 20, health_y + 16, "GET /health · reset"))
+    # 6–7. order-service → Redis and PostgreSQL. Two short straight drops.
+    # Nothing else is routed through this column.
+    parts.append(arrow(rd_x, metrics_from, rd_x, db_top))
+    parts.append(arrow(pg_x, metrics_from, pg_x, db_top))
 
-    # Red: order-service POST /fault/* and payment-service tc netem.
+    # 8. Red Team → services row. Climbs inside k3s (alley_red), then one
+    # rightward arrow at service-icon height. Does not cross Blue's spine.
     parts.append(poly([
         (k3s_right, red_ic),
         (alley_red, red_ic),
-        (alley_red, fault_y),
-        (db_drop_x - 20, fault_y),
-    ], marked=False))
-    parts.append(poly([(db_drop_x + 20, fault_y), (ps_x + 16, fault_y)], marked=False))
-    parts.append(arrow(os_x + 16, fault_y, os_x + 16, svc_label_clear))
-    parts.append(arrow(ps_x + 16, fault_y, ps_x + 16, svc_label_clear))
-    parts.append(pill((gw_x + os_x) / 2 - 20, fault_y + 16, "POST /fault/*"))
-    parts.append(pill(ps_x - 100, fault_y + 16, "tc netem"))
-
-    # Metrics bracket above Redis (no ticks through the health/fault rails),
-    # then a vertical in the api-gw column into Prometheus.
-    parts.append(poly([(gw_x, metrics_y), (os_x + 24, metrics_y)], marked=False))
-    parts.append(arrow(gw_x, metrics_y, gw_x, prom_top))
-    parts.append(pill(gw_x - 56, (metrics_y + prom_top) / 2, "metrics"))
-
-    # order-service → Redis / Postgres. Drop in the rail gap (order↔payment).
-    parts.append(poly([
-        (os_x + 40, r1 + 56),
-        (db_drop_x, r1 + 56),
-        (db_drop_x, db_rail_y),
-        (rd_x, db_rail_y),
-        (rd_x, db_top),
+        (alley_red, svc_ic),
+        (tg_x - 40, svc_ic),
     ]))
-    parts.append(poly([
-        (db_drop_x, db_rail_y),
-        (pg_x, db_rail_y),
-        (pg_x, db_top),
-    ]))
+    parts.append(pill(k3s_cx, (svc_ic + red_ic) / 2 - 28, "faults"))
 
-    # Prometheus → Grafana (reads). Short hop; Grafana is not on the alert path.
-    parts.append(arrow(prom_x + 40, blue_ic, graf_x - 40, blue_ic))
-    parts.append(pill((prom_x + graf_x) / 2, blue_ic + 20, "reads"))
-    # Prometheus → Alertmanager → bridge. U-turn under Grafana so the alert
-    # line does not run through the Grafana icon.
-    fire_y = r3 + 50
-    # U-turn under Grafana, then into AM from the left at icon-center (x is
-    # left of the "Groups alerts" caption).
-    parts.append(poly([
-        (prom_x, r3 + 52),
-        (prom_x, fire_y),
-        (am_x - 70, fire_y),
-        (am_x - 70, blue_ic),
-        (am_x - 40, blue_ic),
-    ]))
-    parts.append(arrow(am_x + 40, blue_ic, br_x - 40, blue_ic))
-    parts.append(pill((graf_x + am_x) / 2 + 20, fire_y + 16, "firing alerts"))
-
-    # Bridge PromQL: dashed U under the firing rail, arrowhead below the
-    # Prometheus caption so the line does not run through "Scrapes + rules".
-    parts.append(poly([
-        (br_x, r3 + 52),
-        (br_x, pq_y),
-        (prom_x - 36, pq_y),
-        (prom_x - 36, r3 + 52),
-    ], dashed=True))
-    parts.append(pill((am_x + br_x) / 2, pq_y - 16, "PromQL"))
-
-    # Blue instant query → Prometheus (gutter, then into Prometheus).
+    # 9. Blue Team → services row. Climbs in the k3s↔compose gutter
+    # (alley_blue, to the right of Red's spine). Lands left of api-gw so
+    # the Redis/Postgres column stays empty.
     parts.append(poly([
         (k3s_right, blue_ic),
         (alley_blue, blue_ic),
-        (prom_x - 40, blue_ic),
-    ], dashed=True))
-    parts.append(pill((k3s_right + alley_blue + prom_x - 40) / 3 + 40, blue_ic + 20, "query"))
+        (alley_blue, health_y),
+        (gw_x - 40, health_y),
+    ]))
+    parts.append(pill((alley_blue + gw_x - 40) / 2 + 30, health_y + 18, "health / reset"))
 
-    # Bridge → Grok avatar via the EC2/Grok gutter (orthogonal).
+    # 10. Blue Team → Prometheus (query). T-junction at alley_blue; does not
+    # cross Red's spine. Stays under Redis/Postgres.
+    parts.append(arrow(alley_blue, blue_ic, prom_x - 48, blue_ic))
+    parts.append(pill(tg_x + 20, blue_ic - 20, "query"))
+
+    # 11. Services → Prometheus. One vertical in the api-gw / Prometheus column.
+    parts.append(arrow(gw_x, metrics_from, gw_x, prom_top))
+    parts.append(pill(gw_x + 52, (metrics_from + prom_top) / 2, "metrics"))
+
+    # 12–13. Observability row, left → right, short straight arrows.
+    parts.append(arrow(prom_x + 44, blue_ic, am_x - 44, blue_ic))
+    parts.append(pill((prom_x + am_x) / 2, blue_ic - 20, "firing alerts"))
+    parts.append(arrow(am_x + 44, blue_ic, br_x - 44, blue_ic))
+    parts.append(pill((am_x + br_x) / 2, blue_ic - 20, "webhook"))
+
+    # 14. Prometheus → Grafana, directly below. Pill sits left of the drop
+    # so it does not sit on the PromQL arc.
+    parts.append(arrow(prom_x, r3 + 52, prom_x, graf_top))
+    parts.append(pill(prom_x - 50, (r3 + 52 + graf_top) / 2, "reads"))
+
+    # 15. Bridge PromQL back to Prometheus: one shallow arc under the row.
+    # Dip sits under Alertmanager (empty), arriving at Prometheus from the
+    # right — not through Grafana, not along the canvas bottom.
+    pq_y = r3 + 82
+    parts.append(arc(br_x, r3 + 56, am_x, pq_y, prom_x + 52, r3 + 56, dashed=True))
+    parts.append(pill(am_x, pq_y + 16, "PromQL"))
+
+    # 16. Bridge → Grok avatar via the EC2/Grok gutter (orthogonal).
     hex_cy = bot_avatar_y - 32
     gutter = (ec2_x + ec2_w + bot_x) / 2  # 1388
     parts.append(poly([
@@ -477,7 +476,7 @@ def build() -> str:
     ]))
     parts.append(pill(gutter + 90, hex_cy - 18, "enriched JSON"))
 
-    # Grok → GitHub / owner ping: stem down, then orthogonal split.
+    # 17–18. Grok → GitHub / owner ping: stem down, then orthogonal split.
     out_y = bot_avatar_y + 78
     fork_y = out_y + 36
     gh_top = _icon_top(bot_row_y)

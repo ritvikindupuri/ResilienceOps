@@ -1,10 +1,13 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  subgraph aws ["EC2 host — Terraform creates IAM role + instance profile; SSM via deploy_remote.py"]
+  subgraph aws ["EC2 host — Terraform provisions the instance; IAM role + profile and SSM are attached, not a chain"]
     TF[Terraform]
-    IAM[IAM role + instance profile]
+    EC2[EC2 host]
+    IAM[IAM role + profile]
     SSM[SSM]
-    TF --> IAM --> SSM
+    TF -->|provisions| EC2
+    EC2 --- IAM
+    EC2 --- SSM
 
     subgraph k3s ["k3s sandbox"]
       K3S[k3s]
@@ -29,12 +32,10 @@ flowchart LR
       OS -->|"POST /payments"| PS
       OS --> RD
       OS --> PG
-      GW -.->|"metrics"| PROM
-      OS -.-> PROM
-      PS -.-> PROM
+      GW -->|"metrics"| PROM
       PROM -->|"reads"| GRAF
       PROM -->|"firing alerts"| AM
-      AM --> BR
+      AM -->|"webhook"| BR
       BR -.->|"PromQL"| PROM
     end
   end
@@ -47,12 +48,7 @@ flowchart LR
     BOT -->|"firing critical"| PING
   end
 
-  RED -->|"POST /fault/*"| OS
-  RED -->|"tc netem"| PS
-  BLUE -->|"GET /health"| GW
-  BLUE -->|"GET /health"| OS
-  BLUE -->|"GET /health"| PS
+  RED -->|"faults"| lab
+  BLUE -->|"health / reset"| lab
   BLUE -->|"query"| PROM
-  BLUE -->|"POST /fault/reset"| OS
-  BLUE -->|"POST /fault/reset"| PS
   BR -->|"enriched JSON"| BOT
