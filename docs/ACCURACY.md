@@ -36,12 +36,13 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Sample output led with synthetic issue #4 | Primary sample is live issue #5; #4 demoted |
 | Live-run hops were reconstructed (~12s / ~61s) | Operator table `examples/live_run_issue5_timeline.md` (EDT): **12.1 s** fault→webhook (21:50:59 → 21:51:11.134), **~61 s** `startsAt`→issue #5 (21:51:05.886 → 21:52:06). Redacted bridge lines `examples/live_run_issue5_bridge.log` |
 | Live `httpx` INFO printed the full webhook URL | `app.py:31-32` sets httpx to WARNING. Committed sample log redacts `…/automations/webhook/<redacted>` |
-| Terraform / IAM / SSM / IGW drawn inside `public_ingress` | Terraform + `deploy_remote.py` are operator-side (above the VPC). IAM + SSM sit in an **AWS account** strip outside the VPC, with `deploy_remote.py → SSM → EC2`. IGW sits on the VPC border. Inside `public_ingress`: k3s, Compose, and a dashed SG around the host (`build_architecture.py:362-400,437-441`) |
+| Terraform / IAM / SSM / IGW drawn inside `public_ingress` | Terraform + `deploy_remote.py` are operator-side (above the VPC). IAM + SSM sit in an **AWS account** strip outside the VPC, with `deploy_remote.py → SSM → EC2`. IGW straddles the VPC **right** border. Inside `public_ingress`: k3s, Compose, and a dashed SG around the host (`build_architecture.py:366-408,435-449`) |
 | Blue Team arrow landed on order-service only | Three ticks: `health ×3` into api-gw, order-service, payment-service (`monitor.py:52-95`); `reset ×2` into order-service and payment-service (`fault_catalog.py:122-132`) |
 | AWS README listed only `sts:GetCallerIdentity`; apply 403'd on a read-only principal | Checked-in operator policy `terraform/deployer-policy.json` (EC2/VPC create+delete, IAM CreateRole/DeleteRole/PassRole/instance-profile, SSM SendCommand/GetCommandInvocation/DescribeInstanceInformation/PutParameter, S3 deploy bucket, CW log groups) |
 | `deploy_remote.py` started a subset of Compose services (no alertmanager / incident-bridge); inline ~98 KB base64 vs 100 KB SSM limit; no `reports/`; printed CommandId only; no SSM Online wait; API-key check read empty SSM env | S3 + presigned GET; `docker compose up --build -d` (all default services) + `--profile agents`; archive includes `reports/`; `wait_for_ssm_online` + `cloud-init status --wait`; `GetCommandInvocation` fail-nonzero; host `.env` from Parameter Store SecureString (`scripts/put_lab_secrets.py`) |
 | `user_data` installed Compose v1; default `t3.small`; no `instance_id`/`region` outputs; IMDS hop 1; instance role SSM-only | Compose v2 plugin (`docker-compose-v2`); default `t3.medium` (~$0.0416/hr + ~$0.005/hr IPv4); outputs `instance_id`, `region`, `deploy_bucket`, `private_ip`; hop limit 2; inline GetParameter / S3 GetObject / `logs:PutLogEvents`; Terraform **log groups** (dashboards still helper scripts) |
 | k3s sandbox undocumented; `orchestrator.py` missing in the pod; `--target-ip` used k8s DNS for Compose apps; faults piled up when Blue did not declare in 9s | `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` + `agent-sandbox.yaml`, copies repo code, targets host private IP. Orchestrator `finally` always `FaultCatalog.reset_environment()`. Duplicate Path B fingerprint comments on the open GitHub issue |
+| 2× review: title clipped by the AWS-account strip; Terraform shaft bisected `VPC sre-enterprise-vpc`; deploy→SSM started on `deploy_remote.py`; IGW labels sat on the dashed VPC stroke; `health ×3` / `reset ×2` / `faults` / `PromQL` / `enriched JSON` sat on lines | Title reserved in a top band (baseline `y=34`). Terraform L-routes just above the VPC stroke and lands **right of** the VPC title. deploy→SSM starts past the name. IGW icon straddles the **right** border; labels live in the VPC–Grok gutter. Pills sit off their shafts (`build_architecture.py:366-377,435-449,531-548,591,605`) |
 
 ---
 
@@ -49,15 +50,15 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1920×1200, title “How ResilienceOps + AI Incident Diagnosis works” | `scripts/build_architecture.py:360`, title in `build()` |
-| Operator (outside AWS) | Terraform + `deploy_remote.py` above the VPC | `build_architecture.py:366,437-438`; Terraform is IaC on the operator laptop, not an ENI |
-| AWS account strip | “AWS account  ·  outside the VPC” holds IAM + SSM | `build_architecture.py:367-368,379-383,439-440` |
-| VPC group | Purple dashed, “VPC  sre-enterprise-vpc”, AWS VPC icon | `build_architecture.py:234-241`, `:375-378`; Name tag `terraform/main.tf:74-83` |
-| Public subnet group | Green, “public_ingress  ·  one EC2 host”, public-subnet icon | `build_architecture.py:242-249`, `:388-392`; `terraform/main.tf:93-104` (only subnet with `map_public_ip_on_launch` and the only one associated with the public RT `:144-147`) |
-| SG around host | Dashed red “SG  ingress + internal” wrapping k3s + Compose | `build_architecture.py:251-258,394-401`; SGs `terraform/main.tf:168-239` |
-| k3s group | Nested “k3s on this host” | `build_architecture.py:413`; k3s installed on the **same** EC2 `user_data` `terraform/main.tf:437-456` (`https://get.k3s.io`) |
-| Compose group | Nested “Compose lab on this host”, Docker icon | `build_architecture.py:414`; `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
-| Grok column | “Grok Bot  ·  local or AWS” | `build_architecture.py:374`. Bot is imported, not hosted in-repo. Works on laptop Compose or AWS as long as the bridge can POST HTTPS (`README.md:150`, `GROK_WEBHOOK_URL` in `docker-compose.yml:180`) |
+| Canvas | 1920×1200, title “How ResilienceOps + AI Incident Diagnosis works” (top band, baseline `y=34`) | `scripts/build_architecture.py:366`, title in `build()` |
+| Operator (outside AWS) | Terraform + `deploy_remote.py` above the VPC | `build_architecture.py:372,445-446`; Terraform is IaC on the operator laptop, not an ENI |
+| AWS account strip | “AWS account  ·  outside the VPC” holds IAM + SSM, below the title band | `build_architecture.py:373-374,385-389,447-448` |
+| VPC group | Purple dashed, “VPC  sre-enterprise-vpc”, AWS VPC icon | `build_architecture.py:234-241`, `:376-383`; Name tag `terraform/main.tf:74-83` |
+| Public subnet group | Green, “public_ingress  ·  one EC2 host”, public-subnet icon | `build_architecture.py:242-249`, `:393-399`; `terraform/main.tf:93-104` (only subnet with `map_public_ip_on_launch` and the only one associated with the public RT `:144-147`) |
+| SG around host | Dashed red “SG  ingress + internal” wrapping k3s + Compose | `build_architecture.py:258-265,404-408`; SGs `terraform/main.tf:168-239` |
+| k3s group | Nested “k3s on this host” | `build_architecture.py:420`; k3s installed on the **same** EC2 `user_data` `terraform/main.tf:437-456` (`https://get.k3s.io`) |
+| Compose group | Nested “Compose lab on this host”, Docker icon | `build_architecture.py:421`; `docker-compose.yml` entire file; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
+| Grok column | “Grok Bot  ·  local or AWS” | `build_architecture.py:377,380`. Bot is imported, not hosted in-repo. Works on laptop Compose or AWS as long as the bridge can POST HTTPS (`README.md:150`, `GROK_WEBHOOK_URL` in `docker-compose.yml:180`) |
 | Unused subnets | Caption only (no empty boxes), top-right of `public_ingress`: `unused: 10.0.10.0/24 · 10.0.20.0/24` | `build_architecture.py` unused caption; created `terraform/main.tf:121-142`; **no** `aws_instance` / RT assoc / SG attachment uses them (instance `subnet_id` is `public_ingress` `:413`) |
 
 ---
@@ -66,12 +67,12 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Node | Caption on figure | Evidence |
 |---|---|---|
-| Terraform | “optional AWS” (outside the VPC) | `build_architecture.py:437`. AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
-| deploy_remote.py | “operator” (outside the VPC) | `build_architecture.py:438`; `deploy_remote.py` builds a zip, uploads to S3, `ssm.send_command` |
-| IAM satellite | “role + instance profile” in the AWS account strip | `build_architecture.py:439`; `aws_iam_role.sre_host_role` name `sre-platform-host-role` `terraform/main.tf:245-262`; instance profile `sre-platform-instance-profile` `:323-326` |
-| SSM satellite | “send_command” in the AWS account strip | `build_architecture.py:440`; `AmazonSSMManagedInstanceCore` `terraform/main.tf:265-267`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
-| SG box | “ingress + internal” around the host, not a satellite in the subnet | `build_architecture.py:397-401`; `aws_security_group.ingress_sg` `sre-ingress-sg` `terraform/main.tf:168-205`; `internal_app_sg` `sre-internal-app-sg` `:208-239` |
-| IGW satellite | “public RT only”, on the VPC border (outside the green subnet) | `build_architecture.py:429,441`; `aws_internet_gateway.igw` Name `sre-enterprise-igw` `terraform/main.tf:85-91`; public RT `0.0.0.0/0` via IGW `:131-137`; association **only** `public_ingress` `:144-147` |
+| Terraform | “optional AWS” (outside the VPC) | `build_architecture.py:445`. AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
+| deploy_remote.py | “operator” (outside the VPC) | `build_architecture.py:446`; `deploy_remote.py` builds a zip, uploads to S3, `ssm.send_command` |
+| IAM satellite | “role + instance profile” in the AWS account strip | `build_architecture.py:447`; `aws_iam_role.sre_host_role` name `sre-platform-host-role` `terraform/main.tf:245-262`; instance profile `sre-platform-instance-profile` `:323-326` |
+| SSM satellite | “send_command” in the AWS account strip | `build_architecture.py:448`; `AmazonSSMManagedInstanceCore` `terraform/main.tf:265-267`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
+| SG box | “ingress + internal” around the host, not a satellite in the subnet | `build_architecture.py:404-408`; `aws_security_group.ingress_sg` `sre-ingress-sg` `terraform/main.tf:168-205`; `internal_app_sg` `sre-internal-app-sg` `:208-239` |
+| IGW satellite | “public RT only”, straddling the VPC **right** border (labels in the gutter, outside the green subnet) | `build_architecture.py:437,449`; `aws_internet_gateway.igw` Name `sre-enterprise-igw` `terraform/main.tf:85-91`; public RT `0.0.0.0/0` via IGW `:131-137`; association **only** `public_ingress` `:144-147` |
 | k3s | “Agent sandbox” | `k8s/agents/agent-sandbox.yaml:8-11` namespace `sre-agent-sandbox`; README step 10 |
 | Red Team | “Injects faults” | `orchestrator.py:41-44`, `:64-74`; `agents/fault_injector/infra_disruptor.py:31-47`; `agents/fault_injector/network_adversary.py` |
 | Blue Team | “Detects and resets” | `orchestrator.py:46-50`, `:76-114`; `monitor.py`; `remediator.py:24-49` always `FaultCatalog.reset_environment()` |
@@ -97,15 +98,15 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 
 | # | Arrow | Pill | Evidence |
 |---|---|---|---|
-| 1 | Terraform → public_ingress / EC2 host | (none) | Operator laptop, outside AWS. `terraform/main.tf:410-476`. `build_architecture.py:522-527` |
-| 1b | deploy_remote.py → SSM → EC2 host | (none) | `deploy_remote.py` `send_and_wait`. `build_architecture.py:529-536` |
+| 1 | Terraform → VPC border (right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf:410-476`. `build_architecture.py:531-542` |
+| 1b | deploy_remote.py → SSM → EC2 host | (none) | `deploy_remote.py` `send_and_wait`. Starts past the `deploy_remote.py` name. `build_architecture.py:544-552` |
 | 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:124` |
 | 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
 | 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
 | 5 | api-gw → payment-service U-turn | `/api/payments` | `api-gw/main.py:113-132`; generator `/api/payments/payments` `load_generator.py:78` |
 | 6–7 | order-service → Redis / Postgres | (none; short drops) | Redis `setex` and Postgres INSERT in `order-service/main.py` create-order path; compose env `REDIS_HOST=redis`, `POSTGRES_DB=orders_db` |
-| 8 | Red Team → order-service **and** payment-service | `faults` | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic. One flyover + two ticks (`build_architecture.py:548-560`) instead of one arrow per endpoint |
-| 9 | Blue Team → api-gw, order-service, payment-service | `health ×3` and `reset ×2` | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** (api-gw has no `/fault/reset`). Three ticks; two pills (`build_architecture.py:572-589`) |
+| 8 | Red Team → order-service **and** payment-service | `faults` | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic. One flyover + two ticks; pill sits above the shaft (`build_architecture.py:576-591`) instead of one arrow per endpoint |
+| 9 | Blue Team → api-gw, order-service, payment-service | `health ×3` and `reset ×2` | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** (api-gw has no `/fault/reset`). Three ticks; two pills off the bus (`build_architecture.py:593-606`) |
 | 10 | Blue Team → Prometheus | `query` | `monitor.py:15-25`, `:98-110` PromQL if `PROMETHEUS_URL` answers |
 | 11 | Services → Prometheus | `3 scrape jobs` | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s` `:2` |
 | 12 | Prometheus → Alertmanager | `firing alerts` | `prometheus.yml:14-20` `alertmanager:9093`; rules `dashboards/alerts.yml` |
@@ -113,7 +114,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 14 | Prometheus → Grafana | `reads` | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml`. Host Grafana `:3000` (`docker-compose.yml:212`) |
 | 15 | incident-bridge ⇢ Prometheus (dashed) | `PromQL` | `evidence.py:29-67` range queries; `app.py` `collect_evidence` |
 | 16 | incident-bridge → Grok avatar | `enriched JSON` | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}` (`:155-160`); HTTPS to `GROK_WEBHOOK_URL` |
-| 17–18 | Grok → GitHub / owner ping | `read-only` | Imported bot. Path B never restarts/scales/pushes (`README.md:13`, gate `build_architecture.py:641-648`) |
+| 17–18 | Grok → GitHub / owner ping | `read-only` | Imported bot. Path B never restarts/scales/pushes (`README.md:13`, gate `build_architecture.py:657-670`) |
 
 ---
 
@@ -121,8 +122,8 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 
 | Element | Text | Evidence |
 |---|---|---|
-| Gate line 1 | “Read-only: the bot never restarts, scales, or pushes” | `build_architecture.py:641-643`; bot template (not in-repo). Path A **does** reset/restart when k8s toolkit is available (`remediator.py:24-52`) — that is not the bot |
-| Gate line 2 | “AWS/EC2 is optional: docker compose up is the same lab. The bot only needs outbound HTTPS from the bridge.” | `build_architecture.py:645-648`; local Compose `docker-compose.yml`; bridge POST `forwarding.py:178-236`; no inbound listener on the bot from this repo |
+| Gate line 1 | “Read-only: the bot never restarts, scales, or pushes” | `build_architecture.py:657-665`; bot template (not in-repo). Path A **does** reset/restart when k8s toolkit is available (`remediator.py:24-52`) — that is not the bot |
+| Gate line 2 | “AWS/EC2 is optional: docker compose up is the same lab. The bot only needs outbound HTTPS from the bridge.” | `build_architecture.py:666-670`; local Compose `docker-compose.yml`; bridge POST `forwarding.py:178-236`; no inbound listener on the bot from this repo |
 | Card 1 | “Fault or real outage trips a Prometheus alert rule.” | Fault injection is **optional**. Rules in `dashboards/alerts.yml`. Real `up==0` / SLO / Redis saturation fire without `/fault` |
 | Card 2 | “Bridge adds evidence and posts enriched JSON to your bot.” | `app.py:143-187` |
 | Card 3 | “Bot diagnoses and files or updates a GitHub issue.” | Imported template; samples issues #4 (synthetic) and #5 (live) |
@@ -209,7 +210,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
-| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` 1920×1200 | `scripts/render_architecture.sh:19-21`; `build_architecture.py:360` |
+| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` 1920×1200 | `scripts/render_architecture.sh:19-21`; `build_architecture.py:366` |
 
 Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.env.example` and mentioned in the README table — `tests/test_docs_consistency.py:57-72`.
 
