@@ -1,0 +1,54 @@
+%%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
+flowchart LR
+  subgraph aws ["EC2 host — Terraform provisions the instance; IAM role + profile and SSM are attached, not a chain"]
+    TF[Terraform]
+    EC2[EC2 host]
+    IAM[IAM role + profile]
+    SSM[SSM]
+    TF -->|provisions| EC2
+    EC2 --- IAM
+    EC2 --- SSM
+
+    subgraph k3s ["k3s sandbox"]
+      K3S[k3s]
+      RED[Red Team]
+      BLUE[Blue Team]
+    end
+
+    subgraph lab ["Compose lab"]
+      TG[Traffic]
+      GW[api-gw]
+      OS[order-service]
+      PS[payment-service]
+      RD[Redis]
+      PG[PostgreSQL]
+      PROM[Prometheus]
+      GRAF[Grafana]
+      AM[Alertmanager]
+      BR[incident-bridge]
+      TG -->|"requests"| GW
+      GW -->|"/api/orders"| OS
+      GW -->|"/api/payments"| PS
+      OS -->|"POST /payments"| PS
+      OS --> RD
+      OS --> PG
+      GW -->|"metrics"| PROM
+      PROM -->|"reads"| GRAF
+      PROM -->|"firing alerts"| AM
+      AM -->|"webhook"| BR
+      BR -.->|"PromQL"| PROM
+    end
+  end
+
+  subgraph grok ["Your Grok bot"]
+    BOT["AI Incident Diagnosis"]
+    GH[GitHub issue]
+    PING[Owner ping]
+    BOT -->|"label: incident"| GH
+    BOT -->|"firing critical"| PING
+  end
+
+  RED -->|"faults"| OS
+  BLUE -->|"health / reset"| OS
+  BLUE -->|"query"| PROM
+  BR -->|"enriched JSON"| BOT

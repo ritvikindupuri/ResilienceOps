@@ -13,7 +13,7 @@ Email the repository owner (see the GitHub profile for `ritvikindupuri`) with:
 ## Secret handling
 
 - Never commit `.env`, `*.env` (except `.env.example`), or deploy/payload zip archives.
-- `ANTHROPIC_API_KEY`, Grafana admin credentials, and cloud credentials must come from the process environment, AWS SSM Parameter Store, or AWS Secrets Manager.
+- `ANTHROPIC_API_KEY`, `GROK_WEBHOOK_KEY`, Grafana admin credentials, `POSTGRES_PASSWORD`, and cloud credentials must come from the process environment, AWS SSM Parameter Store, or AWS Secrets Manager. Never commit the Grok Bot webhook key.
 - `deploy_remote.py` builds a deploy archive at run time and refuses to include secret env files.
 - `EC2_INSTANCE_ID` must be set in the environment; deploy/SSM helper scripts fail closed if it is unset.
 

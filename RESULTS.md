@@ -1,9 +1,11 @@
 # ResilienceOps — SRE Results & Incident Telemetry Report
 
+> Dated run snapshot. Current setup, model IDs (`agents/config.py`), and the Grok Bot **AI Incident Diagnosis** path are documented in [README.md](README.md).
+>
 > **Executive SRE Verification & Telemetry Report**  
 > **Environment**: AWS Production Cluster (`us-east-1`) | Kubernetes Agent Sandbox (`sre-agent-sandbox`)  
 > **Telemetry Stream**: 1-Second Polling Tick Interval (`liveNow: true`)  
-> **Diagnostic Engine**: Claude 3.7 Sonnet with Extended Thinking | Autonomous Closed-Loop Self-Healing
+> **Diagnostic Engine** (this run): Claude Sonnet with Extended Thinking | Autonomous Closed-Loop Self-Healing
 
 ---
 
@@ -20,7 +22,7 @@ The dual-pane observability architecture maintains strict separation between **r
 | **Mean Time to Remediate (MTTR)** | `< 120.00s` | **`3.42s - 57.55s`** (Container bounce to config reset) | Optimal |
 | **Remediation Success Rate** | `> 95.00%` | **`100.0%`** (7/7 autonomous recoveries) | Flawless |
 | **False Positive Rate** | `< 2.00%` | **`0.00%`** | Optimal |
-| **Diagnostic Confidence (RCA)** | `> 85.00%` | **`95.00%`** (Claude 3.7 Sonnet Extended Thinking) | Verified |
+| **Diagnostic Confidence (RCA)** | `> 85.00%` | **`95.00%`** (this run's diagnostic model) | Verified |
 
 ---
 
@@ -163,7 +165,7 @@ At 2026-10-06 01:01:19 UTC, an automated reliability breach was detected impacti
 ## 5. Engineering Takeaways & Reliability Conclusions
 
 1. **Autonomous Closed-Loop SRE is Production-Viable**:
-   - By marrying real-time streaming metrics (Prometheus/Grafana) with an LLM diagnostic engine running Claude 3.7 Sonnet with Extended Thinking, incidents that typically take 15–45 minutes of human on-call triage are diagnosed and resolved in **under 60 seconds**.
+   - By marrying real-time streaming metrics (Prometheus/Grafana) with an LLM diagnostic engine, incidents that typically take 15–45 minutes of human on-call triage are diagnosed and resolved in **under 60 seconds**. Current model IDs are in `agents/config.py`; see the README.
 2. **Clear Separation of Observability Concerns**:
    - Dedicating Grafana strictly to operational golden signals and CloudWatch strictly to security auditing and attack vectors prevents alert fatigue and keeps operators focused during active incidents.
 3. **Safe Multi-Agent Coexistence**:

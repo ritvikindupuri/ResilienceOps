@@ -1,8 +1,8 @@
 """Build a deploy archive from the working tree and push it via SSM.
 
 Secrets are never bundled. Provide ANTHROPIC_API_KEY, GRAFANA_ADMIN_USER,
-and GRAFANA_ADMIN_PASSWORD on the host via the environment, SSM Parameter
-Store, or Secrets Manager.
+GRAFANA_ADMIN_PASSWORD, POSTGRES_PASSWORD, and GROK_WEBHOOK_* on the host
+via the environment, SSM Parameter Store, or Secrets Manager.
 """
 
 import base64
