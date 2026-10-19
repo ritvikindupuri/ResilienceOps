@@ -57,7 +57,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1600×1100 with a 24px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px) | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2200. README `<img width="100%">` |
+| Canvas | 1600×1360 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px) | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2720. README `<img width="100%">` |
 | Operator (laptop) | Thin top band “Deploy (optional AWS) · laptop”: Terraform, `put_lab_secrets.py`, `deploy_remote.py` | Laptop scripts, not AWS resources. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py` |
 | AWS group | “AWS” holds S3, SSM, Param Store. One drop into the EC2 host (S3 zip + SSM `send_command` + Param Store `.env`) | S3 `terraform/main.tf` deploy bucket; `deploy_remote.py` `ssm.send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are a footnote, not icons |
 | EC2 host | Purple dashed, “EC2 host · VPC 10.0.0.0/16 · public subnet · SG :3000/:8000 from allowed_cidr” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to `allowed_cidr` |
@@ -84,8 +84,8 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
 | k3s | small dashed “k3s sandbox (optional)” / “Optional: runs orchestrator.py in one sandbox pod” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`; only `red-team-sandbox` runs `orchestrator.py` |
-| Red Team | “Injects faults” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
-| Blue Team | “Detects and resets” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
+| Red Team | “faults order” / “+ payment” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
+| Blue Team | “health on all 3” / “reset order + payment” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
 | Traffic | “Live load” | `docker-compose.yml:120-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
 | api-gw | “Gateway” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
 | order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:32`); uvicorn `:376` |
@@ -223,7 +223,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
-| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (3200×2200) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1600×1100 |
+| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (3200×2720) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1600×1360 |
 
 Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.env.example` and mentioned in the README table — `tests/test_docs_consistency.py:57-72`.
 

@@ -160,8 +160,13 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
     assert "optional AWS" in svg
-    assert "health ×3" in svg
-    assert "reset OS+PS" in svg
+    assert "health on all 3" in svg
+    assert "reset order + payment" in svg
+    assert "faults order" in svg
+    assert "→ OS" not in svg
+    assert "faults OS+PS" not in svg
+    assert "CloudWatch log groups" in svg
+    assert "/sre/autonomous-agent-audit" not in svg
     assert "Grok Bot (external)" not in svg
     assert "AI Incident Diagnosis" in svg
     assert "PromQL · jsonl" in svg
@@ -259,6 +264,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1600×1100; render_architecture.sh writes 2×.
+    # Native SVG is 1600×1360; render_architecture.sh writes 2×.
     assert width in {1600, 3200}, width
-    assert height in {1100, 2200}, height
+    assert height in {1360, 2720}, height

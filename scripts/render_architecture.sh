@@ -41,7 +41,7 @@ timeout 20s "$CHROME" \
   --headless --disable-gpu --no-sandbox --hide-scrollbars \
   --user-data-dir="$tmpdir" \
   --default-background-color=FFFFFFFF \
-  --window-size=3200,2200 \
+  --window-size=3200,2720 \
   --virtual-time-budget=4000 \
   --screenshot="$OUT" \
   "file://$SVG" >/tmp/architecture-chrome.log 2>&1 || true
