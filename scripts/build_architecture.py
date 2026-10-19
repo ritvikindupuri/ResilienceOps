@@ -21,7 +21,10 @@ OUT = ROOT / "docs" / "architecture.svg"
 
 GROK_RED = "#FF3E51"
 
-# Official SVG files. viewBox is read from each file.
+# ~1.3x the previous 52px marks / 14px names so the figure reads at README width.
+ICON = 68
+LABEL_BAND = 56  # group title has this band to itself; icons start below it
+
 ICON_FILES = [
     "docker",
     "fastapi",
@@ -84,7 +87,6 @@ def icon_symbol(name: str) -> str:
 
 
 def generic_symbols() -> str:
-    # Plain generic marks (not trademarked product logos).
     return """    <symbol id="i-person" viewBox="0 0 24 24">
       <circle cx="12" cy="8" r="4" fill="#4B5563"/>
       <path fill="#4B5563" d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7v1H4z"/>
@@ -124,16 +126,17 @@ def symbols() -> str:
     return "\n".join(chunks)
 
 
-def node(x: float, y: float, icon: str, name: str, cap: str, size: float = 52) -> str:
-    top = -size - 6
+def node(x: float, y: float, icon: str, name: str, cap: str, size: float = ICON) -> str:
+    # Icon sits above the name; caller must place y so the icon stays below the group label.
+    top = -size - 8
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{top:.1f}" width="{size:.0f}" height="{size:.0f}"/>
-    <text class="name" y="14" text-anchor="middle">{name}</text>
-    <text class="cap" y="32" text-anchor="middle">{cap}</text>
+    <text class="name" y="18" text-anchor="middle">{name}</text>
+    <text class="cap" y="40" text-anchor="middle">{cap}</text>
   </g>"""
 
 
-def _rounded_hexagon_path(radius: float = 30, corner: float = 10.5) -> str:
+def _rounded_hexagon_path(radius: float = 40, corner: float = 13) -> str:
     """Pointy-top hexagon with quadratic corner rounding (Identity Mapper shape)."""
     verts = []
     for i in range(6):
@@ -167,24 +170,22 @@ def _rounded_hexagon_path(radius: float = 30, corner: float = 10.5) -> str:
 
 
 def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
-    """Rounded pointy-top hexagon + two small slanted white eyes.
+    """Rounded pointy-top hexagon + two small slanted white capsule eyes.
 
-    Geometry copies the violet Identity Mapper hexagon in the 1024px
-    AWS attack-path architecture.png (around x=270-340, y=400-470):
-    regular hexagon, rounded corners, eyes as short ovals rotated
-    clockwise so the right mark sits slightly higher. Recolored #FF3E51.
+    Eyes match the Identity Mapper bot in the attack-path architecture.png:
+    short stadium capsules, rotated clockwise so the right mark sits higher.
     """
     path = _rounded_hexagon_path()
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
-    <g transform="translate(0,-24)">
+    <g transform="translate(0,-28)">
       <path d="{path}" fill="{GROK_RED}"/>
-      <g transform="translate(0,-4) rotate(16)">
-        <ellipse cx="-6.2" cy="0" rx="3.6" ry="5.0" fill="#FFFFFF"/>
-        <ellipse cx="6.2" cy="0" rx="3.6" ry="5.0" fill="#FFFFFF"/>
+      <g transform="translate(0,-5) rotate(28)">
+        <rect x="-12.2" y="-7.2" width="5.6" height="14.4" rx="2.8" fill="#FFFFFF"/>
+        <rect x="6.6" y="-7.2" width="5.6" height="14.4" rx="2.8" fill="#FFFFFF"/>
       </g>
     </g>
-    <text class="name" y="28" text-anchor="middle">{name}</text>
-    <text class="cap" y="46" text-anchor="middle">{cap}</text>
+    <text class="name" y="36" text-anchor="middle">{name}</text>
+    <text class="cap" y="58" text-anchor="middle">{cap}</text>
   </g>"""
 
 
@@ -192,7 +193,7 @@ def group(x: float, y: float, w: float, h: float, label: str) -> str:
     return (
         f'  <rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" '
         f'rx="22" fill="#F8FAFC" stroke="#E5E7EB"/>\n'
-        f'  <text x="{x + 22:.0f}" y="{y + 28:.0f}" class="group">{label}</text>'
+        f'  <text x="{x + 24:.0f}" y="{y + 34:.0f}" class="group">{label}</text>'
     )
 
 
@@ -205,43 +206,75 @@ def arrow(x1: float, y1: float, x2: float, y2: float, dashed: bool = False) -> s
 
 
 def pill(x: float, y: float, text: str) -> str:
-    w = max(72, 7.2 * len(text) + 18)
-    return f"""  <g transform="translate({x - w / 2:.1f},{y - 10:.0f})">
-    <rect width="{w:.1f}" height="20" rx="10" fill="#FFFFFF" stroke="#D1D5DB"/>
-    <text x="{w / 2:.1f}" y="14" text-anchor="middle" class="pill">{text}</text>
+    w = max(88, 8.6 * len(text) + 22)
+    return f"""  <g transform="translate({x - w / 2:.1f},{y - 12:.0f})">
+    <rect width="{w:.1f}" height="24" rx="12" fill="#FFFFFF" stroke="#D1D5DB"/>
+    <text x="{w / 2:.1f}" y="17" text-anchor="middle" class="pill">{text}</text>
   </g>"""
 
 
 def build() -> str:
-    W, H = 1920, 1000
+    W, H = 1920, 1100
 
-    g_aws = group(36, 72, 280, 228, "AWS host")
-    g_k3s = group(36, 316, 280, 316, "k3s sandbox")
-    g_lab = group(336, 72, 968, 560, "Compose lab")
-    g_bot = group(1324, 72, 560, 560, "Your Grok bot")
+    # Shared vertical band for the four groups so the bot column can be centered.
+    gy = 64
+    aws_h = 318
+    gap = 16
+    k3s_y = gy + aws_h + gap
+    k3s_h = 468
+    col_bottom = k3s_y + k3s_h  # 866
+    lab_h = col_bottom - gy  # 802
+
+    g_aws = group(36, gy, 304, aws_h, "AWS host")
+    g_k3s = group(36, k3s_y, 304, k3s_h, "k3s sandbox")
+    g_lab = group(356, gy, 948, lab_h, "Compose lab")
+    g_bot = group(1320, gy, 564, lab_h, "Your Grok bot")
+
+    # First icon top = group_y + LABEL_BAND. node y = icon_top + ICON + 8.
+    aws_r1 = gy + LABEL_BAND + ICON + 8  # 196
+    aws_r2 = aws_r1 + ICON + 8 + 40 + 16  # 328
+    k3s_r1 = k3s_y + LABEL_BAND + ICON + 8
+    k3s_pitch = ICON + 8 + 40 + 28
+    k3s_r2 = k3s_r1 + k3s_pitch
+    k3s_r3 = k3s_r2 + k3s_pitch
+
+    lab_r1 = gy + LABEL_BAND + ICON + 8  # 196, aligned with AWS row 1
+    lab_r2 = lab_r1 + 176  # redis / postgres / docker (gap under the metrics rail)
+    lab_r3 = lab_r2 + 160  # prometheus / alertmanager / bridge
+    lab_r4 = lab_r3 + 148  # grafana under prometheus
+
+    # Vertically center the bot stack in the group (below the label band).
+    # Leave enough gap under the caption so outgoing arrows travel down, not
+    # through the label.
+    bot_cx = 1602
+    bot_inner_top = gy + LABEL_BAND
+    bot_inner_bot = gy + lab_h - 24
+    bot_stack_h = 68 + 64 + 88 + ICON + 8 + 40  # avatar + arrow gap + github row
+    bot_avatar_y = bot_inner_top + (bot_inner_bot - bot_inner_top - bot_stack_h) / 2 + 68
+    bot_row_y = bot_avatar_y + 228
 
     nodes = [
-        node(106, 148, "terraform", "Terraform", "One-file deploy"),
-        node(220, 148, "aws-ec2", "EC2", "Lab host"),
-        node(106, 248, "aws-iam", "IAM", "Instance role"),
-        node(220, 248, "aws-ssm", "SSM", "Host access"),
-        node(176, 392, "k3s", "k3s", "Agent sandbox"),
-        node(176, 492, "person-red", "Red Team", "Injects faults"),
-        node(176, 584, "person-blue", "Blue Team", "Detects and resets"),
-        node(430, 190, "traffic", "Traffic", "Live load"),
-        node(590, 190, "fastapi", "api-gw", "Gateway"),
-        node(760, 190, "fastapi", "order-service", "Orders"),
-        node(930, 190, "fastapi", "payment-service", "Payments"),
-        node(760, 325, "redis", "Redis", "Cache"),
-        node(930, 325, "postgresql", "PostgreSQL", "Orders DB"),
-        node(1090, 325, "docker", "Docker", "Compose stack"),
-        node(520, 460, "prometheus", "Prometheus", "Scrapes + rules"),
-        node(520, 580, "grafana", "Grafana", "Reads Prometheus"),
-        node(780, 460, "alertmanager", "Alertmanager", "Groups alerts"),
-        node(1080, 460, "document", "incident-bridge", "Adds evidence"),
-        grok_avatar(1604, 214, "AI Incident Diagnosis", "Your Grok bot"),
-        node(1480, 430, "github", "GitHub issue", "label: incident"),
-        node(1728, 430, "bell", "Owner ping", "Firing critical"),
+        node(112, aws_r1, "terraform", "Terraform", "One-file deploy"),
+        node(254, aws_r1, "aws-ec2", "EC2", "Lab host"),
+        node(112, aws_r2, "aws-iam", "IAM", "Instance role"),
+        node(254, aws_r2, "aws-ssm", "SSM", "Host access"),
+        node(188, k3s_r1, "k3s", "k3s", "Agent sandbox"),
+        node(188, k3s_r2, "person-red", "Red Team", "Injects faults"),
+        node(188, k3s_r3, "person-blue", "Blue Team", "Detects and resets"),
+        node(456, lab_r1, "traffic", "Traffic", "Live load"),
+        node(628, lab_r1, "fastapi", "api-gw", "Gateway"),
+        node(828, lab_r1, "fastapi", "order-service", "Orders"),
+        node(1036, lab_r1, "fastapi", "payment-service", "Payments"),
+        node(828, lab_r2, "redis", "Redis", "Cache"),
+        node(1036, lab_r2, "postgresql", "PostgreSQL", "Orders DB"),
+        node(1210, lab_r2, "docker", "Docker", "Compose stack"),
+        node(628, lab_r3, "prometheus", "Prometheus", "Scrapes + rules"),
+        node(628, lab_r4, "grafana", "Grafana", "Reads Prometheus"),
+        node(900, lab_r3, "alertmanager", "Alertmanager", "Groups alerts"),
+        node(1148, lab_r3, "document", "incident-bridge", "Adds evidence"),
+        grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", "Your Grok bot"),
+        node(1468, bot_row_y, "github", "GitHub issue", "label: incident"),
+        node(1736, bot_row_y, "bell", "Owner ping", "Firing critical"),
     ]
 
     parts = [
@@ -251,16 +284,16 @@ def build() -> str:
      aria-label="How ResilienceOps plus AI Incident Diagnosis works">
   <defs>
     <style>
-      .title {{ font: 700 28px Arial, Helvetica, sans-serif; fill: #111827; }}
-      .group {{ font: 600 13px Arial, Helvetica, sans-serif; fill: #6B7280; }}
-      .name {{ font: 700 14px Arial, Helvetica, sans-serif; fill: #111827; }}
-      .cap {{ font: 12px Arial, Helvetica, sans-serif; fill: #6B7280; }}
-      .pill {{ font: 600 11px Arial, Helvetica, sans-serif; fill: #4B5563; }}
-      .gate {{ font: 600 14px Arial, Helvetica, sans-serif; fill: #4B5563; }}
-      .gate-sub {{ font: 12px Arial, Helvetica, sans-serif; fill: #6B7280; }}
-      .card-n {{ font: 700 14px Arial, Helvetica, sans-serif; fill: #C2410C; }}
-      .card-t {{ font: 13px Arial, Helvetica, sans-serif; fill: #1F2937; }}
-      .arrow {{ stroke: #9CA3AF; stroke-width: 1.8; fill: none; }}
+      .title {{ font: 700 36px Arial, Helvetica, sans-serif; fill: #111827; }}
+      .group {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .name {{ font: 700 18px Arial, Helvetica, sans-serif; fill: #111827; }}
+      .cap {{ font: 16px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .pill {{ font: 600 14px Arial, Helvetica, sans-serif; fill: #4B5563; }}
+      .gate {{ font: 600 18px Arial, Helvetica, sans-serif; fill: #4B5563; }}
+      .gate-sub {{ font: 16px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .card-n {{ font: 700 18px Arial, Helvetica, sans-serif; fill: #C2410C; }}
+      .card-t {{ font: 17px Arial, Helvetica, sans-serif; fill: #1F2937; }}
+      .arrow {{ stroke: #9CA3AF; stroke-width: 2.2; fill: none; }}
     </style>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF"/>
@@ -268,7 +301,7 @@ def build() -> str:
 {symbols()}
   </defs>
   <rect width="{W}" height="{H}" fill="#FFFFFF"/>
-  <text x="{W / 2:.0f}" y="44" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
+  <text x="{W / 2:.0f}" y="46" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
 '''
     ]
     parts.append(g_aws)
@@ -277,62 +310,83 @@ def build() -> str:
     parts.append(g_bot)
     parts.extend(nodes)
 
-    # Request path
-    parts.append(arrow(462, 180, 554, 180))
-    parts.append(arrow(622, 180, 714, 180))
-    parts.append(arrow(792, 180, 884, 180))
-    parts.append(arrow(760, 224, 760, 283))
-    parts.append(arrow(930, 224, 930, 283))
-    # Metrics scrape into Prometheus
+    # Request path (icon vertical center is node_y - ICON/2 - 4).
+    ic = lab_r1 - ICON / 2 - 4  # ~158
+    parts.append(arrow(490, ic, 594, ic))
+    parts.append(arrow(662, ic, 794, ic))
+    parts.append(arrow(862, ic, 1002, ic))
+    # One metrics rail under the three FastAPI services, then straight down
+    # the api-gw column to Prometheus. Redis/Postgres arrows start below the rail.
+    bar_y = lab_r1 + 50
+    prom_top = lab_r3 - ICON - 8
     parts.append(
-        '  <polyline points="845,365 845,400 520,400 520,412" fill="none" class="arrow" marker-end="url(#arr)"/>'
+        f'  <line x1="628" y1="{bar_y:.0f}" x2="1036" y2="{bar_y:.0f}" class="arrow"/>'
     )
-    # Alert path (Grafana hangs off Prometheus so it is not in this chain)
-    parts.append(arrow(562, 450, 738, 450))
-    parts.append(arrow(822, 450, 1038, 450))
-    parts.append(arrow(520, 492, 520, 532))
-    # Bridge -> Grok
+    parts.append(arrow(628, bar_y, 628, prom_top))
+    parts.append(pill(710, (bar_y + prom_top) / 2, "metrics"))
+    parts.append(arrow(828, bar_y + 10, 828, lab_r2 - ICON - 8))
+    parts.append(arrow(1036, bar_y + 10, 1036, lab_r2 - ICON - 8))
+
+    # Alert path
+    am_ic = lab_r3 - ICON / 2 - 4
+    parts.append(arrow(662, am_ic, 866, am_ic))
+    parts.append(arrow(934, am_ic, 1114, am_ic))
+    parts.append(arrow(628, lab_r3 + 44, 628, lab_r4 - ICON - 8))
+
+    # Bridge → Grok hexagon (incoming hits the avatar, not the caption)
+    hex_cy = bot_avatar_y - 28
     parts.append(
-        '  <polyline points="1122,450 1288,450 1288,192 1570,192" fill="none" class="arrow" marker-end="url(#arr)"/>'
+        f'  <polyline points="1182,{am_ic:.0f} 1304,{am_ic:.0f} 1304,{hex_cy:.0f} 1560,{hex_cy:.0f}" '
+        f'fill="none" class="arrow" marker-end="url(#arr)"/>'
     )
-    parts.append(arrow(1570, 258, 1480, 388))
-    parts.append(arrow(1638, 258, 1728, 388))
-    # Red injects into the service row; Blue probes/resets via api-gw.
+    # Fork from a point below the caption (name +36, cap +58) down to the icons.
+    out_y = bot_avatar_y + 78
+    gh_top = bot_row_y - ICON - 8
+    parts.append(arrow(bot_cx, out_y, 1468, gh_top))
+    parts.append(arrow(bot_cx, out_y, 1736, gh_top))
+
+    # Red injects into order-service; Blue probes/resets via api-gw.
+    red_ic = k3s_r2 - ICON / 2 - 4
+    blue_ic = k3s_r3 - ICON / 2 - 4
     parts.append(
-        '  <polyline points="206,480 330,480 330,168 394,168" fill="none" class="arrow" marker-end="url(#arr)"/>'
+        f'  <polyline points="222,{red_ic:.0f} 340,{red_ic:.0f} 340,{ic:.0f} 422,{ic:.0f}" '
+        f'fill="none" class="arrow" marker-end="url(#arr)"/>'
     )
     parts.append(
-        '  <polyline points="206,572 330,572 330,230 548,230" fill="none" class="arrow" marker-end="url(#arr)"/>'
+        f'  <polyline points="222,{blue_ic:.0f} 340,{blue_ic:.0f} 340,{ic + 36:.0f} 594,{ic + 36:.0f}" '
+        f'fill="none" class="arrow" marker-end="url(#arr)"/>'
     )
 
-    parts.append(pill(530, 152, "requests"))
-    parts.append(pill(258, 464, "faults"))
-    parts.append(pill(258, 556, "detect / reset"))
-    parts.append(pill(700, 388, "metrics"))
-    parts.append(pill(650, 434, "firing alerts"))
-    parts.append(pill(575, 512, "PromQL"))
-    parts.append(pill(1220, 434, "enriched JSON"))
-    parts.append(pill(1660, 318, "read-only"))
+    parts.append(pill(544, ic - 22, "requests"))
+    parts.append(pill(280, red_ic, "faults"))
+    parts.append(pill(280, blue_ic, "detect / reset"))
+    parts.append(pill(950, am_ic - 22, "firing alerts"))
+    parts.append(pill(828, (lab_r3 + 44 + lab_r4 - ICON - 8) / 2, "PromQL"))
+    parts.append(pill(1288, am_ic - 22, "enriched JSON"))
+    parts.append(pill(bot_cx + 90, (out_y + gh_top) / 2, "read-only"))
 
+    gate_y = col_bottom + 18
     parts.append(
-        '  <rect x="36" y="656" width="1848" height="56" rx="18" fill="#FFFFFF" '
-        'stroke="#D1D5DB" stroke-dasharray="7 6"/>'
+        f'  <rect x="36" y="{gate_y:.0f}" width="1848" height="64" rx="18" fill="#FFFFFF" '
+        f'stroke="#D1D5DB" stroke-dasharray="7 6"/>'
     )
     parts.append(
-        '  <text x="960" y="680" text-anchor="middle" class="gate">'
+        f'  <text x="960" y="{gate_y + 26:.0f}" text-anchor="middle" class="gate">'
         "Read-only: the bot never restarts, scales, or pushes</text>"
     )
     parts.append(
-        '  <text x="960" y="698" text-anchor="middle" class="gate-sub">'
+        f'  <text x="960" y="{gate_y + 48:.0f}" text-anchor="middle" class="gate-sub">'
         "Path A (Red/Blue on k3s) may reset faults. The Grok bot only diagnoses and files issues.</text>"
     )
 
+    card_y = gate_y + 80
+
     def card2(n: int, x: float, line1: str, line2: str) -> str:
-        return f"""  <g transform="translate({x:.0f},736)">
-    <rect width="592" height="80" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
-    <text x="20" y="34" class="card-n">{n}.</text>
-    <text x="44" y="34" class="card-t">{line1}</text>
-    <text x="44" y="56" class="card-t">{line2}</text>
+        return f"""  <g transform="translate({x:.0f},{card_y:.0f})">
+    <rect width="592" height="96" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
+    <text x="24" y="40" class="card-n">{n}.</text>
+    <text x="52" y="40" class="card-t">{line1}</text>
+    <text x="52" y="68" class="card-t">{line2}</text>
   </g>"""
 
     parts.append(card2(1, 36, "Fault or real outage trips a", "Prometheus alert rule."))
