@@ -6,7 +6,7 @@ The [root README](../README.md) is the **current source of truth** for setup, ar
 
 Images used by the README live in [`images/`](images/).
 
-The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). It is rebuilt from Simple Icons in [`icons/`](icons/) plus [`../scripts/build_architecture.py`](../scripts/build_architecture.py) into [`architecture.svg`](architecture.svg), then rasterized:
+The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). It is rebuilt from official marks in [`icons/`](icons/) (AWS Architecture Icons, CNCF/k3s, brand glyphs) plus [`../scripts/build_architecture.py`](../scripts/build_architecture.py) into [`architecture.svg`](architecture.svg), then rasterized:
 
 ```bash
 ./scripts/render_architecture.sh

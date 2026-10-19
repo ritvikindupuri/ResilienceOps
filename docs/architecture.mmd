@@ -3,9 +3,12 @@ flowchart LR
   subgraph aws ["AWS host"]
     TF[Terraform]
     EC2[EC2]
+    IAM[IAM]
+    SSM[SSM]
   end
 
   subgraph k3s ["k3s sandbox"]
+    K3S[k3s]
     RED[Red Team]
     BLUE[Blue Team]
   end
@@ -33,7 +36,7 @@ flowchart LR
   end
 
   subgraph grok ["Your Grok bot"]
-    BOT[Grok bot]
+    BOT["AI Incident Diagnosis"]
     GH[GitHub issue]
     PING[Owner ping]
     BOT --> GH
@@ -41,6 +44,7 @@ flowchart LR
   end
 
   TF --> EC2
+  IAM --- SSM
   RED -->|"faults"| OS
   BLUE -->|"detect / reset"| GW
   BR -->|"enriched JSON"| BOT
