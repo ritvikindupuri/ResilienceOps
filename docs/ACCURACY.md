@@ -57,13 +57,14 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1600×1360 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px) | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2720. README `<img width="100%">` |
+| Canvas | 1600×1360 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px). Incident path is one horizontal Row A; supporting edges stay on Row B | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2720. README `<img width="100%">` |
 | Operator (laptop) | Thin top band “Deploy (optional AWS) · laptop”: Terraform, `put_lab_secrets.py`, `deploy_remote.py` | Laptop scripts, not AWS resources. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py` |
-| AWS group | “AWS” holds S3, SSM, Param Store. One drop into the EC2 host (S3 zip + SSM `send_command` + Param Store `.env`) | S3 `terraform/main.tf` deploy bucket; `deploy_remote.py` `ssm.send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are a footnote, not icons |
+| AWS group | “AWS” holds S3 (`from deploy_remote.py`), SSM (`send_command`), Param Store (`from put_lab_secrets.py`). One drop into the EC2 host | S3 `terraform/main.tf` deploy bucket; `deploy_remote.py` `ssm.send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are a footnote, not icons |
 | EC2 host | Purple dashed, “EC2 host · VPC 10.0.0.0/16 · public subnet · SG :3000/:8000 from allowed_cidr” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to `allowed_cidr` |
 | k3s group | Small dashed “k3s sandbox (optional)” + “Optional: runs orchestrator.py in one sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox` |
-| Agents group | “Agents” + “--profile agents” holds Red + Blue, inside Lab (Docker Compose) | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` |
-| Compose group | “Lab (Docker Compose)” wrapping Agents, app, observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
+| Agents group | Narrow “Agents” + “--profile agents” column (Red above Blue). Edges leave from the right edge only | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` |
+| Target services | Column group `api-gw` / `order-service` / `payment-service`. Orange ①/② and grey Traffic/Blue touch the group box, not individual icons | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
+| Compose group | “Lab (Docker Compose)” wrapping Agents, Target services, observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
 | External column | “External” + AI Incident Diagnosis hex avatar | Imported template, not hosted in-repo. Bridge needs outbound HTTPS (`GROK_WEBHOOK_URL`); agents also call Anthropic. Never “Your Grok bot” |
 | Unused subnets | Footnote: `app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24` | Created `terraform/main.tf`; instance `subnet_id` is `public_ingress` only |
 
@@ -75,17 +76,17 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 |---|---|---|
 | Terraform | “optional AWS” (outside the VPC) | AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
 | deploy_remote.py | “operator” (outside the VPC) | Builds a zip, uploads to S3, `ssm.send_command` |
-| S3 satellite | “deploy → host” | `aws_s3_bucket.deploy`; `deploy_remote.py` `_upload_payload` |
-| Param Store satellite | “secrets → .env” | `scripts/put_lab_secrets.py` SecureString; host `.env` via instance role `GetParameter` |
+| S3 satellite | “from deploy_remote.py” | `aws_s3_bucket.deploy`; `deploy_remote.py` `_upload_payload` |
+| Param Store satellite | “from put_lab_secrets.py” | `scripts/put_lab_secrets.py` SecureString; host `.env` via instance role `GetParameter` |
 | IAM satellite | “role + profile” | `aws_iam_role.sre_host_role` name `sre-platform-host-role`; instance profile `sre-platform-instance-profile` |
 | SSM satellite | “send_command” | `AmazonSSMManagedInstanceCore`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
 | CW Logs satellite | “agents → CW” | `agents/common/structured_logger.py` `CreateLogStream` + `put_log_events` to `/sre/autonomous-agent-audit` stream `audit-stream` (Terraform + logger). Compose `agent-sandbox` `AWS_REGION` |
-| put_lab_secrets.py satellite | “laptop → Param” | Operator script; not an AWS resource. Arrow into Param Store |
+| put_lab_secrets.py satellite | “laptop” | Operator script; not an AWS resource. Caption on Param Store (`from put_lab_secrets.py`) |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
 | k3s | small dashed “k3s sandbox (optional)” / “Optional: runs orchestrator.py in one sandbox pod” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`; only `red-team-sandbox` runs `orchestrator.py` |
 | Red Team | “faults order” / “+ payment” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
-| Blue Team | “health on all 3” / “reset order + payment” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
+| Blue Team | “health on all 3” / “reset order + payment” / “queries Prometheus” (inside Agents box) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
 | Traffic | “Live load” | `docker-compose.yml:120-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
 | api-gw | “Gateway” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
 | order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:32`); uvicorn `:376` |
