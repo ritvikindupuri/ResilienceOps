@@ -1,0 +1,13 @@
+# AWS / k3s overlay. Not used by a plain `docker compose up` on a laptop.
+# deploy_remote.py (and deploy_k8s_sandbox.py) merge this file after writing
+# PROMETHEUS_BIND=<instance private IP> and
+# COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml into the host .env.
+#
+# Effect: Prometheus is reachable at http://<private-ip>:9090 from k3s pods
+# on the same EC2 host (local delivery; no security-group hop). ingress_sg
+# still does not open 9090 — only Grafana 3000 and API 8000 to allowed_cidr.
+# Do not set PROMETHEUS_BIND=0.0.0.0.
+services:
+  prometheus:
+    ports:
+      - "${PROMETHEUS_BIND:?set PROMETHEUS_BIND to the private IP}:9090:9090"

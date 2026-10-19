@@ -63,9 +63,16 @@ spec:
         agent.role: red-team-fault
     spec:
       serviceAccountName: red-agent-sa
+      volumes:
+      - name: app
+        emptyDir: {}
       containers:
       - name: fault-squad
         image: python:3.11-slim
+        workingDir: /app
+        volumeMounts:
+        - name: app
+          mountPath: /app
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -109,9 +116,16 @@ spec:
         agent.role: blue-team-defender
     spec:
       serviceAccountName: sre-defender-sa
+      volumes:
+      - name: app
+        emptyDir: {}
       containers:
       - name: sre-squad
         image: python:3.11-slim
+        workingDir: /app
+        volumeMounts:
+        - name: app
+          mountPath: /app
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -155,4 +169,18 @@ spec:
   # replace this rule with those destinations only.
   - ports:
     - port: 443
+      protocol: TCP
+  # Compose lab on the EC2 host (AWS path). Apps are not in k3s; the
+  # orchestrator uses --target-ip <host private IP>. Scoped to the lab VPC.
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - port: 8000
+      protocol: TCP
+    - port: 8001
+      protocol: TCP
+    - port: 8002
+      protocol: TCP
+    - port: 9090
       protocol: TCP

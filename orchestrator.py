@@ -26,12 +26,40 @@ if hasattr(sys.stdout, 'reconfigure'):
 from agents.fault_injector.strategist import faultStrategistAgent
 from agents.fault_injector.infra_disruptor import InfraDisruptorAgent
 from agents.fault_injector.network_adversary import NetworkAdversaryAgent
+from agents.fault_injector.fault_catalog import FaultCatalog
 
 # Blue Team (Defensive Squad)
 from agents.incident_response.monitor import IncidentMonitor
 from agents.incident_response.diagnostician import DiagnosticAgent
 from agents.incident_response.remediator import RemediatorAgent
 from agents.incident_response.post_mortem import PostMortemGenerator
+
+
+def fault_hold_seconds() -> int:
+    """Seconds to leave a Red fault in place before Blue remediates / finally-reset.
+
+    Default 120s covers `dashboards/alerts.yml` `for:` windows (up to 20s) plus
+    Alertmanager `group_wait` / `group_interval` so incident-bridge can forward.
+    Set FAULT_HOLD_SECONDS=0 to skip the hold (tests, or Path A-only runs).
+    """
+    raw = (os.getenv("FAULT_HOLD_SECONDS") or "120").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 120
+
+
+def hold_fault_for_alerts() -> None:
+    hold = fault_hold_seconds()
+    if hold <= 0:
+        print("[*] FAULT_HOLD_SECONDS=0; skipping hold before Blue remediation/reset.")
+        return
+    print(
+        f"[*] Holding fault for {hold}s (FAULT_HOLD_SECONDS) so Prometheus "
+        "for: windows can fire and Alertmanager → incident-bridge can forward."
+    )
+    time.sleep(hold)
+
 
 def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
     print("\n" + "="*80)
@@ -61,59 +89,75 @@ def run_resilience_cycle(cycle_id: int, forced_scenario: str = None):
     print(f"    Attack Planner Model: {campaign['llm_model']}")
     print(f"    Attack Strategy: {campaign['strategic_intent']}")
 
-    # Phase 3: Red Team Tactical Execution (Server Resource Stresser OR Network Delay Injector)
-    print("\n[PHASE 3 - RED TEAM] Dispatching Tactical Stress Agent...")
-    scenario = forced_scenario or ("NETWORK_LATENCY" if cycle_id % 2 == 0 else "MEMORY_EXHAUSTION")
-    t_start = time.time()
-    
-    if "NETWORK" in scenario or "PACKET" in scenario or "LATENCY" in scenario:
-        print("    [Operative: Network Delay Injector] Injected downstream transit delay & connection stress.")
-        fault_event = red_network.execute_fault(scenario)
-    else:
-        print("    [Operative: Server Resource Stresser] Injected container memory allocation / cgroup stress.")
-        fault_event = red_infra.execute_fault(scenario)
+    # Always reset at the end of a cycle so MEMORY_EXHAUSTION leaks (and tc
+    # netem / Redis starvation) cannot pile up across --cycles. Before that
+    # reset (and before Blue remediation), hold FAULT_HOLD_SECONDS so Path B
+    # alerts with `for:` windows can fire. Set FAULT_HOLD_SECONDS=0 to skip.
+    try:
+        # Phase 3: Red Team Tactical Execution (Server Resource Stresser OR Network Delay Injector)
+        print("\n[PHASE 3 - RED TEAM] Dispatching Tactical Stress Agent...")
+        scenario = forced_scenario or ("NETWORK_LATENCY" if cycle_id % 2 == 0 else "MEMORY_EXHAUSTION")
+        t_start = time.time()
 
-    # Phase 4: Blue Team Telemetry Monitoring (Health & Uptime Monitor)
-    print("\n[PHASE 4 - BLUE TEAM] Health & Uptime Monitor Scanning Telemetry for SLO Breaches...")
-    incident = None
-    mttd = 0.0
-    for tick in range(1, 10):
-        time.sleep(1.0)
-        curr = blue_monitor.inspect_telemetry()
-        incident = blue_monitor.evaluate_slos(curr)
-        if incident:
-            mttd = time.time() - t_start
-            print(f"[!] INCIDENT DECLARED | MTTD: {mttd:.2f}s | Severity: {incident['severity']}")
-            for v in incident["violations"]:
-                print(f"    - Violation: {v}")
-            break
+        if "NETWORK" in scenario or "PACKET" in scenario or "LATENCY" in scenario:
+            print("    [Operative: Network Delay Injector] Injected downstream transit delay & connection stress.")
+            fault_event = red_network.execute_fault(scenario)
         else:
-            print(f"    [t+{tick}s] Latency: {curr['latency_ms']}ms | Gateway HTTP: {curr['gateway_status']}")
+            print("    [Operative: Server Resource Stresser] Injected container memory allocation / cgroup stress.")
+            fault_event = red_infra.execute_fault(scenario)
 
-    if not incident:
-        print("[-] Service absorbed degradation within SLO error budget. Cycle complete.")
-        return
+        # Phase 4: Blue Team Telemetry Monitoring (Health & Uptime Monitor)
+        print("\n[PHASE 4 - BLUE TEAM] Health & Uptime Monitor Scanning Telemetry for SLO Breaches...")
+        incident = None
+        mttd = 0.0
+        for tick in range(1, 10):
+            time.sleep(1.0)
+            curr = blue_monitor.inspect_telemetry()
+            incident = blue_monitor.evaluate_slos(curr)
+            if incident:
+                mttd = time.time() - t_start
+                print(f"[!] INCIDENT DECLARED | MTTD: {mttd:.2f}s | Severity: {incident['severity']}")
+                for v in incident["violations"]:
+                    print(f"    - Violation: {v}")
+                break
+            else:
+                print(f"    [t+{tick}s] Latency: {curr['latency_ms']}ms | Gateway HTTP: {curr['gateway_status']}")
 
-    # Phase 5: Blue Team Diagnostic RCA with Extended Thinking (Root Cause Investigator)
-    print("\n[PHASE 5 - BLUE TEAM] Root Cause Investigator Running Deep Step-by-Step Diagnosis...")
-    time.sleep(0.5)
-    diagnosis = blue_diagnostician.analyze(incident)
-    print(f"    Identified Root Cause: {diagnosis['primary_root_cause']} (Confidence: {diagnosis['confidence_score']*100:.1f}%)")
-    print(f"    Claude Reasoning: {diagnosis.get('llm_reasoning', 'Analyzed')}")
-    print(f"    Prescribed Fix: {diagnosis['recommended_runbook']}")
+        if incident:
+            # Phase 5: Blue Team Diagnostic RCA with Extended Thinking (Root Cause Investigator)
+            print("\n[PHASE 5 - BLUE TEAM] Root Cause Investigator Running Deep Step-by-Step Diagnosis...")
+            time.sleep(0.5)
+            diagnosis = blue_diagnostician.analyze(incident)
+            print(f"    Identified Root Cause: {diagnosis['primary_root_cause']} (Confidence: {diagnosis['confidence_score']*100:.1f}%)")
+            print(f"    Claude Reasoning: {diagnosis.get('llm_reasoning', 'Analyzed')}")
+            print(f"    Prescribed Fix: {diagnosis['recommended_runbook']}")
 
-    # Phase 6: Blue Team Automated Remediation & Verification (Automated Recovery Fixer)
-    print("\n[PHASE 6 - BLUE TEAM] Automated Recovery Fixer Executing Recovery Fix...")
-    remediation = blue_remediator.execute_runbook(diagnosis)
-    print(f"    Actions Executed: {remediation['actions_taken']}")
-    mttr = time.time() - (t_start + mttd)
-    print(f"[OK] Recovery Validated | MTTR: {mttr:.2f}s | Status: {remediation['verification']['status']}")
+        # Hold before Blue remediation and the guaranteed finally-reset so a
+        # Red fault lasts long enough for matching Prometheus alerts to fire.
+        hold_fault_for_alerts()
 
-    # Phase 7: Incident Report Generation (Incident Report Writer)
-    print("\n[PHASE 7 - BLUE TEAM] Incident Report Writer Compiling Summary Report...")
-    report = blue_post_mortem.generate(fault_event, incident, diagnosis, remediation, mttd, mttr)
-    print("    Report generated and archived to reports/ directory.")
-    print("="*80 + "\n")
+        if not incident:
+            print("[-] Service absorbed degradation within SLO error budget. Cycle complete.")
+            return
+
+        # Phase 6: Blue Team Automated Remediation & Verification (Automated Recovery Fixer)
+        print("\n[PHASE 6 - BLUE TEAM] Automated Recovery Fixer Executing Recovery Fix...")
+        remediation = blue_remediator.execute_runbook(diagnosis)
+        print(f"    Actions Executed: {remediation['actions_taken']}")
+        mttr = time.time() - (t_start + mttd)
+        print(f"[OK] Recovery Validated | MTTR: {mttr:.2f}s | Status: {remediation['verification']['status']}")
+
+        # Phase 7: Incident Report Generation (Incident Report Writer)
+        print("\n[PHASE 7 - BLUE TEAM] Incident Report Writer Compiling Summary Report...")
+        report = blue_post_mortem.generate(fault_event, incident, diagnosis, remediation, mttd, mttr)
+        print("    Report generated and archived to reports/ directory.")
+        print("="*80 + "\n")
+    finally:
+        print("[*] Cycle cleanup: FaultCatalog.reset_environment() (POST /fault/reset on order-service and payment-service).")
+        try:
+            FaultCatalog.reset_environment()
+        except Exception as exc:
+            print(f"[warn] reset_environment failed: {exc}")
 
 def main():
     parser = argparse.ArgumentParser(description="Autonomous SRE Resilience & Incident Response Platform")

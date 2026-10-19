@@ -290,7 +290,8 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "decbytes",
+          "unit": "none",
+          "decimals": 1,
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "smooth",
@@ -308,7 +309,7 @@
               },
               {
                 "color": "red",
-                "value": 256000000
+                "value": 256
               }
             ]
           }

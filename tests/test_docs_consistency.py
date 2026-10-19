@@ -80,15 +80,30 @@ def test_readme_referenced_scripts_exist():
         "scripts/build_architecture.py",
         "orchestrator.py",
         "deploy_remote.py",
+        "deploy_k8s_sandbox.py",
+        "copy_code_to_sandbox.py",
+        "scripts/put_lab_secrets.py",
+        "terraform/deployer-policy.json",
         "teardown.sh",
         "teardown.ps1",
         ".env.example",
+        "docker-compose.prom-lan.yml",
         "dashboards/prometheus.yml",
         "dashboards/alerts.yml",
         "dashboards/alertmanager.yml",
         "docs/architecture.svg",
         "docs/architecture.mmd",
+        "docs/ACCURACY.md",
         "docs/images/infraattack_platform_architecture.png",
+        "docs/images/sample-incident-issue-1.png",
+        "docs/images/sample-incident-issue-2.png",
+        "docs/images/sample-incident-issue-3.png",
+        "docs/images/sample-incident-issue-5-1.png",
+        "docs/images/sample-incident-issue-5-2.png",
+        "docs/images/sample-incident-issue-5-3.png",
+        "examples/e2e_test_alert.json",
+        "examples/live_run_issue5_timeline.md",
+        "examples/live_run_issue5_bridge.log",
         "docs/ResilienceOps_Technical_Documentation.pdf",
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
@@ -132,11 +147,108 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "# Incident Post-Mortem Report: UNKNOWN_FAULT" not in readme
     assert "Example report" in sample
     assert "Incident Post-Mortem Report: MEMORY_EXHAUSTION" in sample
+    assert "issue #5" in readme or "issues/5" in readme
+    assert "RedisConnectionSaturation" in readme
+    assert "forward FAILED after" in readme
     assert "POST /fault/reset" in readme
+    assert "12.1 s" in readme
+    assert "examples/live_run_issue5_timeline.md" in readme
+    assert "examples/live_run_issue5_bridge.log" in readme
+    assert "health ×3" in readme
+    assert "reset ×2" in readme
+    svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
+    assert "Your Grok bot" not in svg
+    assert "Your Grok bot" not in readme
+    assert "AWS account" in svg
+    assert "optional AWS" in svg
+    assert "health ×3" in svg
+    assert "reset ×2" in svg
+    assert "Grok Bot (external)" in svg
+    assert "PromQL · agent jsonl" in svg
+    assert "(Compose agents)" in svg
+    assert "PromQL · jsonl · k8s" not in svg
+    assert "FAULT_HOLD_SECONDS" in svg
+    assert "put_lab_secrets.py" in svg
+    assert "send_command" in svg
+    assert ":3000 / :8000" in svg
+    assert "Agents (--profile agents)" in svg
+    assert "Docker Compose on this host" in svg
+    assert "App + observability (default)" in svg
+    assert "Compose lab on this host" not in svg
+    assert "k3s (optional)" in svg
+    assert "diagnose" in svg
+    assert "read-only" not in svg.lower()
+    assert "Your Grok bot" not in svg
+    assert "app_workloads 10.0.10.0/24" in svg
+    assert "public_ingress  10.0.1.0/24" in svg
+    assert "FAULT_HOLD_SECONDS" in readme
+    assert "PROMETHEUS_BIND" in readme
+    assert "COMPOSE_FILE" in readme
+    assert "create-policy" in readme
+    assert "attach-user-policy" in readme
+    assert "attach-role-policy" in readme
+    assert "detach-user-policy" in readme
+    assert "delete-policy" in readme
+    assert "put-user-policy" not in readme
+    assert "delete-user-policy" not in readme
+    assert "cd terraform" not in readme
+    assert "terraform -chdir=terraform" in readme
+    assert "169.254.169.254" in readme
+    assert "session-manager-plugin" in readme
+    assert "workingDir" in readme
+    assert "sre-target-apps" in readme
+    assert "--apply-microservices" in readme
+    assert "ResilienceOpsDeployer" in readme
+    assert "terraform/deployer-policy.json" in readme
+    assert "put_lab_secrets.py" in readme
+    assert "deploy_k8s_sandbox.py" in readme
+    assert "--profile agents" in readme
+    assert "export AWS_REGION" in readme
+    assert "output -raw instance_id" in readme
+    assert "docker compose up --build -d" in readme
+    assert "FaultCatalog.reset_environment" in readme or "finally" in readme
+    assert "SG  ingress + internal" in svg
+    assert "public RT only" in svg
+    assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
+        ROOT / "services" / "incident-bridge" / "app.py"
+    ).read_text(encoding="utf-8")
     assert "K8sToolKit.k8s_available" in readme
     assert "bounces the container" not in readme
     assert "MTTD: 2.14s" not in readme
     assert "MTTR: 3.42s" not in readme
+
+
+def test_live_run_artifacts_redact_webhook_url():
+    uuidish = re.compile(r"automations/webhook/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-")
+    for rel in (
+        "examples/live_run_issue5_timeline.md",
+        "examples/live_run_issue5_bridge.log",
+        "README.md",
+        "docs/ACCURACY.md",
+    ):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert uuidish.search(text) is None, f"webhook UUID leaked in {rel}"
+    timeline = (ROOT / "examples" / "live_run_issue5_timeline.md").read_text(encoding="utf-8")
+    log = (ROOT / "examples" / "live_run_issue5_bridge.log").read_text(encoding="utf-8")
+    assert "12.1 s" in timeline
+    assert "21:51:11.134" in timeline
+    assert "21:52:06" in timeline
+    assert "<redacted>" in log
+    assert "forwarded 1 alert(s) status=firing" in log
+    assert "ConnectTimeout" in log
+
+
+def test_architecture_geometry_has_no_overlaps():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "build_architecture", ROOT / "scripts" / "build_architecture.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    hits = mod.check_geometry()
+    assert hits == [], "architecture geometry violations:\n  " + "\n  ".join(hits[:20])
 
 
 def test_architecture_png_is_nontrivial():
@@ -146,5 +258,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    assert 1600 <= width <= 2000, width
-    assert 900 <= height <= 1200, height
+    # Native SVG is 2100×1420; render_architecture.sh writes 2×.
+    assert width in {1920, 2100, 3840, 4200}, width
+    assert height in {1200, 1420, 2400, 2840}, height

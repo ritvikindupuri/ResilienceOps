@@ -17,8 +17,8 @@ if [[ ! -f "$SVG" ]]; then
 fi
 
 if command -v rsvg-convert >/dev/null 2>&1; then
-  # Native SVG size (1920x1100). Do not squash into a different aspect ratio.
-  rsvg-convert -w 1920 "$SVG" -o "$OUT"
+  # 2× the native viewBox so README width=950 stays sharp.
+  rsvg-convert --zoom=2 "$SVG" -o "$OUT"
   echo "wrote $OUT via rsvg-convert ($(wc -c < "$OUT") bytes)"
   exit 0
 fi
@@ -41,7 +41,7 @@ timeout 20s "$CHROME" \
   --headless --disable-gpu --no-sandbox --hide-scrollbars \
   --user-data-dir="$tmpdir" \
   --default-background-color=FFFFFFFF \
-  --window-size=1920,1200 \
+  --window-size=4200,2840 \
   --virtual-time-budget=4000 \
   --screenshot="$OUT" \
   "file://$SVG" >/tmp/architecture-chrome.log 2>&1 || true

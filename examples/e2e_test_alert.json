@@ -1,0 +1,31 @@
+{
+  "source": "resilienceops",
+  "status": "firing",
+  "receiver": "incident-bridge",
+  "alerts": [{
+    "status": "firing",
+    "fingerprint": "e2etest-redis-starvation-20261018",
+    "startsAt": "2026-10-19T01:39:00Z",
+    "labels": {"alertname": "RedisConnectionsSaturated", "service": "order-service", "severity": "critical"},
+    "annotations": {
+      "summary": "[E2E TEST RUN] Redis connected clients near maxclients (50) and order-service 5xx rising",
+      "description": "Synthetic end-to-end test alert sent to verify the AI Incident Diagnosis bot. Evidence values are representative of a Redis connection-starvation fault injected by the Red Team (/fault/redis-starvation)."
+    }
+  }],
+  "evidence": {
+    "prometheus": {
+      "redis_connected_clients": {"value": 49, "max": 50, "window": "5m"},
+      "order_service_5xx_rate": {"value": 0.18, "slo": 0.02, "window": "1m"},
+      "order_service_p99_latency_ms": {"value": 2850, "slo": 1200},
+      "payment_service_5xx_rate": {"value": 0.0},
+      "order_service_memory_mb": {"value": 142}
+    },
+    "agent_activity_tail": [
+      "2026-10-19T01:38:41Z red_team FaultStrategist chose REDIS_STARVATION target=order-service",
+      "2026-10-19T01:38:42Z red_team InfraDisruptorAgent POST order-service:8001/fault/redis-starvation -> 200",
+      "2026-10-19T01:38:55Z blue_team IncidentMonitor order-service /health degraded: redis pool exhausted"
+    ],
+    "k8s_events": [],
+    "note": "E2E test payload"
+  }
+}

@@ -1,46 +1,56 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  subgraph aws ["EC2 host — Terraform provisions the instance; IAM role + profile and SSM are attached, not a chain"]
-    TF[Terraform]
-    EC2[EC2 host]
-    IAM[IAM role + profile]
-    SSM[SSM]
-    TF -->|provisions| EC2
-    EC2 --- IAM
-    EC2 --- SSM
-
-    subgraph k3s ["k3s sandbox"]
-      K3S[k3s]
-      RED[Red Team]
-      BLUE[Blue Team]
-    end
-
-    subgraph lab ["Compose lab"]
-      TG[Traffic]
-      GW[api-gw]
-      OS[order-service]
-      PS[payment-service]
-      RD[Redis]
-      PG[PostgreSQL]
-      PROM[Prometheus]
-      GRAF[Grafana]
-      AM[Alertmanager]
-      BR[incident-bridge]
-      TG -->|"requests"| GW
-      GW -->|"/api/orders"| OS
-      GW -->|"/api/payments"| PS
-      OS -->|"POST /payments"| PS
-      OS --> RD
-      OS --> PG
-      GW -->|"metrics"| PROM
-      PROM -->|"reads"| GRAF
-      PROM -->|"firing alerts"| AM
-      AM -->|"webhook"| BR
-      BR -.->|"PromQL"| PROM
+  TF["Terraform · optional AWS"]
+  DEPLOY["deploy_remote.py"]
+  SECRETS["put_lab_secrets.py"]
+  subgraph aws ["AWS account — outside the VPC"]
+    S3["S3 deploy bucket"]
+    PARAM["SSM Parameter Store"]
+    SSM["SSM send_command"]
+    IAM["IAM role + instance profile"]
+    CW["CloudWatch Logs"]
+  end
+  subgraph vpc ["VPC sre-enterprise-vpc — app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused"]
+    IGW["IGW · public RT only"]
+    subgraph pub ["public_ingress 10.0.1.0/24 — one EC2 host"]
+      subgraph sg ["SG ingress + internal · :3000 / :8000"]
+        subgraph k3sopt ["k3s (optional) · deploy_k8s_sandbox.py"]
+          K3S[k3s]
+        end
+        subgraph compose ["Docker Compose on this host"]
+          subgraph agents ["Agents (--profile agents) · POST /api/agent-events · jsonl"]
+            RED[Red Team]
+            BLUE[Blue Team]
+          end
+          subgraph app ["App + observability (default)"]
+          TG[Traffic]
+          GW[api-gw]
+          OS[order-service]
+          PS[payment-service]
+          RD[Redis]
+          PG[PostgreSQL]
+          PROM[Prometheus]
+          GRAF[Grafana]
+          AM[Alertmanager]
+          BR["incident-bridge\nPromQL · agent jsonl (Compose agents)"]
+          TG -->|"requests"| GW
+          GW -->|"/api/orders"| OS
+          GW -->|"/api/payments"| PS
+          OS -->|"POST /payments"| PS
+          OS --> RD
+          OS --> PG
+          GW -->|"3 scrape jobs"| PROM
+          PROM -->|"reads"| GRAF
+          PROM -->|"alerts"| AM
+          AM -->|"webhook"| BR
+          BR -.->|"PromQL"| PROM
+          end
+        end
+      end
     end
   end
 
-  subgraph grok ["Your Grok bot"]
+  subgraph grok ["Grok Bot (external)"]
     BOT["AI Incident Diagnosis"]
     GH[GitHub issue]
     PING[Owner ping]
@@ -48,7 +58,18 @@ flowchart LR
     BOT -->|"firing critical"| PING
   end
 
+  TF -->|provisions| pub
+  DEPLOY --> S3 --> pub
+  SSM --> pub
+  SECRETS --> PARAM
   RED -->|"faults"| OS
-  BLUE -->|"health / reset"| OS
+  RED -->|"faults"| PS
+  BLUE -->|"health ×3"| GW
+  BLUE -->|"health ×3"| OS
+  BLUE -->|"health ×3"| PS
+  BLUE -->|"reset ×2"| OS
+  BLUE -->|"reset ×2"| PS
   BLUE -->|"query"| PROM
+  BLUE --> CW
   BR -->|"enriched JSON"| BOT
+  BOT -->|"diagnose"| GH
