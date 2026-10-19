@@ -159,30 +159,29 @@ def test_readme_sample_post_mortem_is_current_generator():
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
-    assert "AWS account" in svg
     assert "optional AWS" in svg
     assert "health ×3" in svg
-    assert "reset ×2" in svg
-    assert "Grok Bot (external)" in svg
-    assert "PromQL · agent jsonl" in svg
-    assert "(Compose agents)" in svg
+    assert "reset OS+PS" in svg
+    assert "Grok Bot (external)" not in svg
+    assert "AI Incident Diagnosis" in svg
+    assert "PromQL · jsonl" in svg
     assert "PromQL · jsonl · k8s" not in svg
     assert "FAULT_HOLD_SECONDS" in svg
     assert "put_lab_secrets.py" in svg
     assert "send_command" in svg
-    assert ":3000 / :8000" in svg
-    assert "Agents (--profile agents)" in svg
-    assert "Docker Compose on this host" in svg
-    assert "App + observability (default)" in svg
-    assert "Compose lab on this host" not in svg
+    assert ":3000/:8000" in svg
+    assert "--profile agents" in svg
+    assert "Lab (Docker Compose)" in svg
+    assert "Docker Compose on this host" not in svg
     assert "k3s sandbox (optional)" in svg
-    assert "Runs the agents in isolated pods" in svg
+    assert "Optional: runs orchestrator.py in one sandbox pod" in svg
+    assert "Runs the agents in isolated pods" not in svg
     assert "k3s (optional)" not in svg
-    assert "diagnose" in svg
     assert "read-only" not in svg.lower()
-    assert "Your Grok bot" not in svg
+    assert "Owner ping" in svg
+    assert "webhook in" in svg
     assert "app_workloads 10.0.10.0/24" in svg
-    assert "public_ingress  10.0.1.0/24" in svg
+    assert "1–6 incident path" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
     assert "COMPOSE_FILE" in readme
@@ -209,8 +208,8 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "output -raw instance_id" in readme
     assert "docker compose up --build -d" in readme
     assert "FaultCatalog.reset_environment" in readme or "finally" in readme
-    assert "SG  ingress + internal" in svg
-    assert "public RT only" in svg
+    assert "SG :3000/:8000 from allowed_cidr" in svg
+    assert "data_persistence 10.0.20.0/24" in svg
     assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
         ROOT / "services" / "incident-bridge" / "app.py"
     ).read_text(encoding="utf-8")
@@ -260,6 +259,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 2100×1420; render_architecture.sh writes 2×.
-    assert width in {1920, 2100, 3840, 4200}, width
-    assert height in {1200, 1420, 2400, 2840}, height
+    # Native SVG is 1600×1100; render_architecture.sh writes 2×.
+    assert width in {1600, 3200}, width
+    assert height in {1100, 2200}, height

@@ -1,75 +1,69 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  TF["Terraform · optional AWS"]
+  TF["Terraform · IaC"]
   DEPLOY["deploy_remote.py"]
   SECRETS["put_lab_secrets.py"]
-  subgraph aws ["AWS account — outside the VPC"]
-    S3["S3 deploy bucket"]
-    PARAM["SSM Parameter Store"]
-    SSM["SSM send_command"]
-    IAM["IAM role + instance profile"]
-    CW["CloudWatch Logs"]
+  subgraph laptop ["Deploy (optional AWS) · laptop"]
+    TF
+    SECRETS
+    DEPLOY
   end
-  subgraph vpc ["VPC sre-enterprise-vpc — app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused"]
-    IGW["IGW · public RT only"]
-    subgraph pub ["public_ingress 10.0.1.0/24 — one EC2 host"]
-      subgraph sg ["SG ingress + internal · :3000 / :8000"]
-        subgraph k3sopt ["k3s sandbox (optional) · Runs the agents in isolated pods"]
-          K3S[k3s]
-        end
-        subgraph compose ["Docker Compose on this host"]
-          subgraph agents ["Agents (--profile agents) · POST /api/agent-events · jsonl"]
-            RED[Red Team]
-            BLUE[Blue Team]
-          end
-          subgraph app ["App + observability (default)"]
-          TG[Traffic]
-          GW[api-gw]
-          OS[order-service]
-          PS[payment-service]
-          RD[Redis]
-          PG[PostgreSQL]
-          PROM[Prometheus]
-          GRAF[Grafana]
-          AM[Alertmanager]
-          BR["incident-bridge\nPromQL · agent jsonl (Compose agents)"]
-          TG -->|"requests"| GW
-          GW -->|"/api/orders"| OS
-          GW -->|"/api/payments"| PS
-          OS -->|"POST /payments"| PS
-          OS --> RD
-          OS --> PG
-          GW -->|"3 scrape jobs"| PROM
-          PROM -->|"reads"| GRAF
-          PROM -->|"alerts"| AM
-          AM -->|"webhook"| BR
-          BR -.->|"PromQL"| PROM
-          end
-        end
+  subgraph aws ["AWS"]
+    S3["S3 zip → host"]
+    PARAM["Param Store secrets → .env"]
+    SSM["SSM send_command"]
+  end
+  subgraph host ["EC2 host · VPC 10.0.0.0/16 · public subnet · SG :3000/:8000 from allowed_cidr"]
+    subgraph compose ["Lab (Docker Compose)"]
+      subgraph agents ["Agents · --profile agents"]
+        RED[Red Team]
+        BLUE[Blue Team]
       end
+      TG[Traffic]
+      GW[api-gw]
+      OS[order-service]
+      PS[payment-service]
+      RD[Redis]
+      PG[PostgreSQL]
+      PROM[Prometheus]
+      GRAF[Grafana]
+      AM[Alertmanager]
+      BR["incident-bridge"]
+      TG --> GW
+      GW --> OS
+      GW --> PS
+      OS --> PS
+      OS --> RD
+      OS --> PG
+      GW -.-> PROM
+      OS -.-> PROM
+      PS -.-> PROM
+      PROM --> GRAF
+      PROM --> AM
+      AM --> BR
+      BR -.-> PROM
+    end
+    subgraph k3sopt ["k3s sandbox (optional)"]
+      K3S["Optional: runs orchestrator.py in one sandbox pod"]
     end
   end
-
-  subgraph grok ["Grok Bot (external)"]
+  subgraph ext ["External"]
     BOT["AI Incident Diagnosis"]
-    GH[GitHub issue]
-    PING[Owner ping]
-    BOT -->|"label: incident"| GH
-    BOT -->|"firing critical"| PING
+    GH["GitHub issue"]
+    PING["Owner ping"]
+    BOT --> GH
+    BOT --> PING
   end
 
-  TF -->|provisions| pub
-  DEPLOY --> S3 --> pub
-  SSM --> pub
+  DEPLOY --> S3
+  DEPLOY --> SSM
   SECRETS --> PARAM
-  RED -->|"faults"| OS
-  RED -->|"faults"| PS
-  BLUE -->|"health ×3"| GW
-  BLUE -->|"health ×3"| OS
-  BLUE -->|"health ×3"| PS
-  BLUE -->|"reset ×2"| OS
-  BLUE -->|"reset ×2"| PS
-  BLUE -->|"query"| PROM
-  BLUE --> CW
-  BR -->|"enriched JSON"| BOT
-  BOT -->|"diagnose"| GH
+  S3 --> host
+  SSM --> host
+  PARAM --> host
+  RED --> OS
+  RED --> PS
+  BLUE --> OS
+  BLUE --> PS
+  BLUE --> PROM
+  BR --> BOT
