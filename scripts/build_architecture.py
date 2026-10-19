@@ -36,6 +36,8 @@ ICON_FILES = [
     "aws-ec2",
     "aws-iam",
     "aws-ssm",
+    "aws-vpc",
+    "aws-subnet-public",
     "terraform",
     "alertmanager",
 ]
@@ -116,6 +118,10 @@ def generic_symbols() -> str:
     <symbol id="i-clock" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9" fill="none" stroke="#4B5563" stroke-width="1.8"/>
       <path stroke="#4B5563" stroke-width="1.8" stroke-linecap="round" d="M12 7v5l3.2 2"/>
+    </symbol>
+    <symbol id="i-aws-sg" viewBox="0 0 40 40">
+      <rect x="2.5" y="2.5" width="35" height="35" rx="6" fill="#FFF5F5"
+            stroke="#DD344C" stroke-width="2.2" stroke-dasharray="5 3.5"/>
     </symbol>"""
 
 
@@ -200,20 +206,59 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
 {cap_svg}  </g>"""
 
 
-def group(x: float, y: float, w: float, h: float, label: str, icon: str | None = None) -> str:
+def group(
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    label: str,
+    icon: str | None = None,
+    style: str | None = None,
+) -> str:
+    # AWS Architecture Icons group treatments (diagram-as-code / PowerPoint toolkit):
+    # VPC = purple dashed #8C4FFF, public subnet = green #7AA116, default = gray card.
+    palettes = {
+        None: {
+            "fill": "#F8FAFC",
+            "stroke": "#E5E7EB",
+            "sw": "1.5",
+            "dash": "",
+            "rx": "22",
+            "cls": "group",
+        },
+        "vpc": {
+            "fill": "#FFFFFF",
+            "stroke": "#8C4FFF",
+            "sw": "2.4",
+            "dash": ' stroke-dasharray="7 5"',
+            "rx": "6",
+            "cls": "group-vpc",
+        },
+        "public_subnet": {
+            "fill": "#F7FBEA",
+            "stroke": "#7AA116",
+            "sw": "2.2",
+            "dash": "",
+            "rx": "6",
+            "cls": "group-subnet",
+        },
+    }
+    pal = palettes[style]
     icon_svg = ""
     text_x = x + 24
+    icon_size = 24 if style in {"vpc", "public_subnet"} else 22
     if icon:
         icon_svg = (
             f'  <use href="#i-{icon}" xlink:href="#i-{icon}" '
-            f'x="{x + 16:.0f}" y="{y + 10:.0f}" width="22" height="22"/>\n'
+            f'x="{x + 12:.0f}" y="{y + 8:.0f}" width="{icon_size}" height="{icon_size}"/>\n'
         )
-        text_x = x + 44
+        text_x = x + 42
     return (
         f'  <rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" '
-        f'rx="22" fill="#F8FAFC" stroke="#E5E7EB"/>\n'
+        f'rx="{pal["rx"]}" fill="{pal["fill"]}" stroke="{pal["stroke"]}" '
+        f'stroke-width="{pal["sw"]}"{pal["dash"]}/>\n'
         f"{icon_svg}"
-        f'  <text x="{text_x:.0f}" y="{y + 28:.0f}" class="group">{label}</text>'
+        f'  <text x="{text_x:.0f}" y="{y + 26:.0f}" class="{pal["cls"]}">{label}</text>'
     )
 
 
@@ -285,18 +330,30 @@ def build() -> str:
     col_bottom = gy + main_h  # 1026
 
     bot_x, bot_w = 1396, 504
-    ec2_x, ec2_w = 16, 1364
+    vpc_x, vpc_w = 16, 1364
 
-    # Group title is the host box; the AWS EC2 mark is the node Terraform points at.
+    # AWS Architecture Icons groups: VPC (purple dashed) wraps the public subnet
+    # (green) which holds the EC2 host. Terraform still has the one provision arrow.
     g_bot = group(bot_x, gy, bot_w, main_h, "Grok Bot")
-    g_ec2 = group(ec2_x, gy, ec2_w, main_h, "EC2 host")
+    g_vpc = group(
+        vpc_x, gy, vpc_w, main_h, "VPC  sre-enterprise-vpc",
+        icon="aws-vpc", style="vpc",
+    )
+    subnet_x, subnet_y = vpc_x + 8, gy + 36
+    subnet_w, subnet_h = vpc_w - 16, main_h - 46
+    g_subnet = group(
+        subnet_x, subnet_y, subnet_w, subnet_h,
+        "public_ingress  10.0.1.0/24",
+        icon="aws-subnet-public", style="public_subnet",
+    )
+    ec2_x, ec2_w = vpc_x, vpc_w
 
     aws_icon = 48
     aws_r = gy + LABEL_BAND + aws_icon + 8  # 164
     tf_x, ec2_node_x = 400, 590
     # IAM / SSM satellites hang off the EC2 node (no arrows — Terraform creates
     # the role and profile; deploy_remote.py uses SSM).
-    iam_x, ssm_x = 680, 860
+    iam_x, ssm_x, sg_x = 680, 860, 1072
 
     nested_y = aws_r + 70  # 234
     nested_h = col_bottom - nested_y - 14  # 746
@@ -333,6 +390,7 @@ def build() -> str:
         node(ec2_node_x, aws_r, "aws-ec2", "EC2", "compose + k3s", size=aws_icon),
         satellite(iam_x, aws_r - aws_icon / 2 + 6, "aws-iam", "IAM", "role + profile"),
         satellite(ssm_x, aws_r - aws_icon / 2 + 6, "aws-ssm", "SSM", "deploy_remote.py"),
+        satellite(sg_x, aws_r - aws_icon / 2 + 6, "aws-sg", "SG", "ingress + internal"),
         node(k3s_cx, k3s_node_y, "k3s", "k3s", "Agent sandbox"),
         node(k3s_cx, r2, "person-red", "Red Team", "Injects faults"),
         node(k3s_cx, r3, "person-blue", "Blue Team", "Detects and resets"),
@@ -360,6 +418,8 @@ def build() -> str:
     <style>
       .title {{ font: 700 36px Arial, Helvetica, sans-serif; fill: #111827; }}
       .group {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .group-vpc {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #5B3BB4; }}
+      .group-subnet {{ font: 600 17px Arial, Helvetica, sans-serif; fill: #5B7C10; }}
       .name {{ font: 700 18px Arial, Helvetica, sans-serif; fill: #111827; }}
       .cap {{ font: 16px Arial, Helvetica, sans-serif; fill: #6B7280; }}
       .pill {{ font: 600 12px Arial, Helvetica, sans-serif; fill: #4B5563; }}
@@ -378,7 +438,8 @@ def build() -> str:
   <text x="{W / 2:.0f}" y="40" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
 '''
     ]
-    parts.append(g_ec2)
+    parts.append(g_vpc)
+    parts.append(g_subnet)
     parts.append(g_k3s)
     parts.append(g_lab)
     parts.append(g_bot)
@@ -512,7 +573,7 @@ def build() -> str:
     parts.append(
         f'  <text x="960" y="{gate_y + 44:.0f}" text-anchor="middle" class="gate-sub">'
         "Path A (Red/Blue on k3s) may reset faults. The Grok bot only diagnoses and files issues. "
-        "Compose + k3s run on the EC2 host.</text>"
+        "Compose + k3s run on the EC2 host in public_ingress.</text>"
     )
 
     card_y = gate_y + 68

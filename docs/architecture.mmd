@@ -1,42 +1,46 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  subgraph aws ["EC2 host — Terraform provisions the instance; IAM role + profile and SSM are attached, not a chain"]
+  subgraph vpc ["VPC sre-enterprise-vpc"]
     TF[Terraform]
-    EC2[EC2 host]
-    IAM[IAM role + profile]
-    SSM[SSM]
-    TF -->|provisions| EC2
-    EC2 --- IAM
-    EC2 --- SSM
+    subgraph pub ["public_ingress 10.0.1.0/24"]
+      EC2[EC2 host]
+      IAM[IAM role + profile]
+      SSM[SSM]
+      SG[SG ingress + internal]
+      TF -->|provisions| EC2
+      EC2 --- IAM
+      EC2 --- SSM
+      EC2 --- SG
 
-    subgraph k3s ["k3s sandbox"]
-      K3S[k3s]
-      RED[Red Team]
-      BLUE[Blue Team]
-    end
+      subgraph k3s ["k3s sandbox"]
+        K3S[k3s]
+        RED[Red Team]
+        BLUE[Blue Team]
+      end
 
-    subgraph lab ["Compose lab"]
-      TG[Traffic]
-      GW[api-gw]
-      OS[order-service]
-      PS[payment-service]
-      RD[Redis]
-      PG[PostgreSQL]
-      PROM[Prometheus]
-      GRAF[Grafana]
-      AM[Alertmanager]
-      BR[incident-bridge]
-      TG -->|"requests"| GW
-      GW -->|"/api/orders"| OS
-      GW -->|"/api/payments"| PS
-      OS -->|"POST /payments"| PS
-      OS --> RD
-      OS --> PG
-      GW -->|"metrics"| PROM
-      PROM -->|"reads"| GRAF
-      PROM -->|"firing alerts"| AM
-      AM -->|"webhook"| BR
-      BR -.->|"PromQL"| PROM
+      subgraph lab ["Compose lab"]
+        TG[Traffic]
+        GW[api-gw]
+        OS[order-service]
+        PS[payment-service]
+        RD[Redis]
+        PG[PostgreSQL]
+        PROM[Prometheus]
+        GRAF[Grafana]
+        AM[Alertmanager]
+        BR[incident-bridge]
+        TG -->|"requests"| GW
+        GW -->|"/api/orders"| OS
+        GW -->|"/api/payments"| PS
+        OS -->|"POST /payments"| PS
+        OS --> RD
+        OS --> PG
+        GW -->|"metrics"| PROM
+        PROM -->|"reads"| GRAF
+        PROM -->|"firing alerts"| AM
+        AM -->|"webhook"| BR
+        BR -.->|"PromQL"| PROM
+      end
     end
   end
 

@@ -45,7 +45,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   - Agents run inside an isolated `sre-agent-sandbox` namespace constrained by Kubernetes resource limits (`cpu: 500m`, `memory: 512Mi`), audited RBAC roles, and egress NetworkPolicies.
   - Interactive operator shell access via `kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash` with direct cluster connectivity to microservice targets.
 - **Enterprise Cost-Optimized Cloud Deployment**:
-  - Single-file Terraform architecture (`terraform/main.tf`) deploying to AWS with multi-tier VPC segmentation, segregated security groups, and an EC2 host (`t3.small` / `t4g.small` at ~\$0.02/hr).
+  - Single-file Terraform architecture (`terraform/main.tf`) deploying `aws_vpc.sre_vpc` (`sre-enterprise-vpc`, `10.0.0.0/16`) with three subnets (`public_ingress` `10.0.1.0/24`, `app_workloads` `10.0.10.0/24`, `data_persistence` `10.0.20.0/24`), security groups `ingress_sg` (`sre-ingress-sg`) and `internal_app_sg` (`sre-internal-app-sg`), and an EC2 host in `public_ingress` (`t3.small` / `t4g.small` at ~\$0.02/hr).
   - Eliminates AWS NAT Gateways (\$32/mo) and EKS control plane fees (\$72/mo).
   - 1-command deploy and 1-command clean teardown ensuring zero orphan charges.
 
@@ -57,7 +57,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps + AI Incident Diagnosis works" width="950" />
 </p>
 <p align="center"><b>Figure 1: How ResilienceOps + AI Incident Diagnosis works</b></p>
-<p align="center">The bottom cards are Path B (alert → bridge → bot → GitHub). Red/Blue on k3s is Path A. Compose lab and k3s run on the EC2 host. Grafana only <em>reads</em> Prometheus. order-service owns Redis and <code>orders_db</code>. The figure uses one Red arrow (<em>faults</em>) and one Blue arrow (<em>health / reset</em>); endpoint details (<code>POST /fault/*</code>, <code>tc netem</code>, <code>GET /health</code>, reset) are in the step-by-step below.</p>
+<p align="center">The bottom cards are Path B (alert → bridge → bot → GitHub). Red/Blue on k3s is Path A. Compose lab and k3s run on the EC2 host in subnet <code>public_ingress</code> of VPC <code>sre-enterprise-vpc</code>. Grafana only <em>reads</em> Prometheus. order-service owns Redis and <code>orders_db</code>. The figure uses one Red arrow (<em>faults</em>) and one Blue arrow (<em>health / reset</em>); endpoint details (<code>POST /fault/*</code>, <code>tc netem</code>, <code>GET /health</code>, reset) are in the step-by-step below.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
 
 ### Step-by-step flow (matches the code)
@@ -137,7 +137,7 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 | **Container & Cloud** | Docker & Docker Compose | `v2.24+` | Container runtime, resource isolation, and local orchestration |
 | | Certified Kubernetes (`k3s`) | `v1.29+` | Production container orchestration, cgroups, and RBAC sandboxes |
 | | Terraform | `v1.7+` | All-in-one Infrastructure-as-Code for AWS cloud deployment |
-| | AWS (VPC, EC2, IAM, SSM, CloudWatch) | Provider `~> 5.0` | Multi-tier cloud infrastructure host with zero NAT Gateway overhead |
+| | AWS (VPC `sre-enterprise-vpc`, subnets, `ingress_sg` / `internal_app_sg`, EC2, IAM, SSM, CloudWatch) | Provider `~> 5.0` | Multi-tier cloud infrastructure host with zero NAT Gateway overhead |
 
 ---
 
@@ -348,7 +348,19 @@ terraform init
 terraform apply
 ```
 
-Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`).
+`terraform/main.tf` creates a dedicated VPC `aws_vpc.sre_vpc` (Name `sre-enterprise-vpc`, CIDR `var.vpc_cidr` default `10.0.0.0/16`) with an internet gateway (`sre-enterprise-igw`), three subnets, a public route table associated only with `public_ingress`, two security groups, an IAM role + `AmazonSSMManagedInstanceCore` + instance profile, and the EC2 host in `public_ingress`:
+
+| Resource | Terraform name | AWS Name / CIDR | What runs there |
+| --- | --- | --- | --- |
+| VPC | `aws_vpc.sre_vpc` | `sre-enterprise-vpc` `10.0.0.0/16` | Boundary for every AWS resource below |
+| Public subnet | `aws_subnet.public_ingress` | `sre-subnet-public-ingress` `10.0.1.0/24` | EC2 host (`map_public_ip_on_launch`) |
+| App subnet | `aws_subnet.app_workloads` | `sre-subnet-app-workloads` `10.0.10.0/24` | Created; nothing is deployed into it |
+| Data subnet | `aws_subnet.data_persistence` | `sre-subnet-data-persistence` `10.0.20.0/24` | Created; nothing is deployed into it |
+| Ingress SG | `aws_security_group.ingress_sg` | `sre-ingress-sg` | Grafana `3000` and API `8000` from `allowed_cidr` |
+| Internal SG | `aws_security_group.internal_app_sg` | `sre-internal-app-sg` | `8001–8002` from `ingress_sg`; self scrape |
+| Host | `aws_instance.sre_host` | `sre-enterprise-platform-host` | Compose + k3s via `user_data`; both SGs attached |
+
+Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened — use AWS Systems Manager for host access and SSM port forwarding for Prometheus (`127.0.0.1:9090`). The architecture figure shows the VPC group, the `public_ingress` subnet around the EC2 host, and a security-group marker; `app_workloads` and `data_persistence` are named here and omitted from the figure because they are empty.
 
 Typical outputs:
 
