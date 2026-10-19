@@ -165,7 +165,12 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "reset ×2" in svg
     assert "Grok Bot (external)" in svg
     assert "PromQL · agent jsonl" in svg
+    assert "(Compose agents)" in svg
     assert "PromQL · jsonl · k8s" not in svg
+    assert "FAULT_HOLD_SECONDS" in svg
+    assert "put_lab_secrets.py" in svg
+    assert "send_command" in svg
+    assert ":3000 / :8000" in svg
     assert "Agents (--profile agents)" in svg
     assert "Docker Compose on this host" in svg
     assert "App + observability (default)" in svg
@@ -178,8 +183,21 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "public_ingress  10.0.1.0/24" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
-    assert "put-user-policy" in readme
-    assert "delete-user-policy" in readme
+    assert "COMPOSE_FILE" in readme
+    assert "create-policy" in readme
+    assert "attach-user-policy" in readme
+    assert "attach-role-policy" in readme
+    assert "detach-user-policy" in readme
+    assert "delete-policy" in readme
+    assert "put-user-policy" not in readme
+    assert "delete-user-policy" not in readme
+    assert "cd terraform" not in readme
+    assert "terraform -chdir=terraform" in readme
+    assert "169.254.169.254" in readme
+    assert "session-manager-plugin" in readme
+    assert "workingDir" in readme
+    assert "sre-target-apps" in readme
+    assert "--apply-microservices" in readme
     assert "ResilienceOpsDeployer" in readme
     assert "terraform/deployer-policy.json" in readme
     assert "put_lab_secrets.py" in readme

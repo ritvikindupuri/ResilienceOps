@@ -51,6 +51,7 @@ fi
 k3s kubectl exec -n sre-agent-sandbox "$POD" -- ls -la /app /app/agents /app/reports
 echo "Run a cycle with the host private IP (Compose apps are not in k3s DNS):"
 echo "  k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- python3 orchestrator.py --target-ip $PRIVATE_IP --cycles 1 --scenario MEMORY_EXHAUSTION"
+echo "  (pod workingDir is /app; orchestrator.py is copied there)"
 """
     return f"""
 set -euo pipefail
@@ -79,7 +80,11 @@ if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
         sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
       fi
       printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
-      (cd /opt/sre-colosseum && docker compose -f docker-compose.yml -f docker-compose.prom-lan.yml up -d prometheus)
+      if grep -q '^COMPOSE_FILE=' /opt/sre-colosseum/.env 2>/dev/null; then
+        sed -i '/^COMPOSE_FILE=/d' /opt/sre-colosseum/.env
+      fi
+      printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/sre-colosseum/.env
+      (cd /opt/sre-colosseum && docker compose up -d prometheus)
       echo "[ok] Prometheus also published on $PRIVATE_IP:9090 for k3s"
       ;;
   esac

@@ -32,6 +32,9 @@ KEYS = [
 ]
 
 REQUIRED = ("GRAFANA_ADMIN_USER", "GRAFANA_ADMIN_PASSWORD")
+# SSM PutParameter rejects empty Value. Host script writes KEY= for this sentinel
+# so GROK_WEBHOOK_AUTH_SCHEME= (raw key, no Bearer) survives the AWS path.
+EMPTY_SENTINEL = "__EMPTY__"
 
 
 def _load_dotenv(path: Path) -> dict[str, str]:
@@ -74,24 +77,29 @@ def main(argv: list[str] | None = None) -> int:
     written = 0
     skipped = 0
     for key in KEYS:
-        value = os.getenv(key)
-        if value is None or value == "":
+        present_in_env = key in os.environ
+        present_in_file = key in file_vals
+        if present_in_env:
+            value = os.environ.get(key, "")
+        elif present_in_file:
             value = file_vals.get(key, "")
-        if value == "":
+        else:
             skipped += 1
-            print(f"skip {key} (empty)")
+            print(f"skip {key} (unset)")
             continue
+        stored = EMPTY_SENTINEL if value == "" else value
         name = parameter_name(args.prefix, key)
         ssm.put_parameter(
             Name=name,
-            Value=value,
+            Value=stored,
             Type="SecureString",
             Overwrite=True,
             Tier="Standard",
         )
         written += 1
-        print(f"put {name} (SecureString, {len(value)} chars)")
-    print(f"wrote {written} parameter(s), skipped {skipped} empty; region={args.region}")
+        shown = "empty" if stored == EMPTY_SENTINEL else f"{len(value)} chars"
+        print(f"put {name} (SecureString, {shown})")
+    print(f"wrote {written} parameter(s), skipped {skipped} unset; region={args.region}")
     return 0
 
 

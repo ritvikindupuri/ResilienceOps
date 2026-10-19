@@ -45,15 +45,53 @@ def test_deployer_policy_covers_apply_and_deploy():
         "s3:PutObject",
         "s3:GetObject",
         "s3:CreateBucket",
+        "s3:DeleteObjectVersion",
+        "iam:ListInstanceProfilesForRole",
         "logs:CreateLogGroup",
         "logs:DeleteLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource",
+        "logs:ListTagsLogGroup",
+        "ec2:ModifyInstanceMetadataOptions",
     ):
-        assert needed in actions, needed
-    blob = json.dumps(policy)
+        assert needed in actions or _action_covered(actions, needed), needed
+    blob = json.dumps(policy, separators=(",", ":"))
+    assert len(blob) < 6144, f"managed-policy minified size {len(blob)} exceeds 6144"
     assert "sre-platform-host-role" in blob
     assert "ec2.amazonaws.com" in blob
     assert "sre-resilienceops-deploy-*" in blob
     assert "ACCOUNT_ID" in blob
+    assert "s3:Get*" in actions
+    assert "s3:List*" in actions
+    for s3_read in (
+        "s3:GetBucketWebsite",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketCORS",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketLogging",
+        "s3:GetReplicationConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketAcl",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:ListBucketVersions",
+    ):
+        assert _action_covered(actions, s3_read), s3_read
+
+
+def _action_covered(actions: set[str], needed: str) -> bool:
+    if needed in actions:
+        return True
+    return any(
+        a.endswith("*") and needed.startswith(a[:-1])
+        for a in actions
+    )
 
 
 def test_terraform_aws_path_knobs():
@@ -69,6 +107,7 @@ def test_terraform_aws_path_knobs():
         "sre-resilienceops-deploy-",
         "/sre/autonomous-agent-audit",
         "/sre/autonomous-agent-incidents",
+        'name           = "audit-stream"',
         "ssm:GetParameter",
         "logs:PutLogEvents",
         "awscli",
@@ -84,6 +123,9 @@ def test_deploy_remote_uses_s3_and_compose_v2_all_services():
     assert "--profile agents" in src
     assert "docker-compose.prom-lan.yml" in src
     assert "PROMETHEUS_BIND" in src
+    assert "COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml" in src
+    assert "__EMPTY__" in src
+    assert "AWS_REGION=" in dr.build_host_env_script("/resilienceops", "us-east-1")
     assert "0.0.0.0" in dr._prometheus_lan_bind_script()
     lan = dr._prometheus_lan_bind_script()
     assert "127.*" in lan
@@ -151,6 +193,8 @@ def test_sandbox_script_applies_required_manifests_not_microservices_by_default(
     assert "PRIVATE_IP" in script
     assert "docker-compose.prom-lan.yml" in script
     assert "PROMETHEUS_BIND" in script
+    assert "COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml" in script
+    assert "pod workingDir is /app" in script
     with_ms = k8s_deploy.sandbox_host_script(apply_microservices=True, skip_copy=True)
     assert "k8s/apps/microservices.yaml" in with_ms
 
@@ -298,7 +342,7 @@ def test_prometheus_is_not_on_the_internet():
     assert "127.0.0.1:9090:9090" in compose
     assert "0.0.0.0:9090" not in compose
     assert "0.0.0.0:9090" not in lan
-    assert "${PROMETHEUS_BIND}:9090:9090" in lan
+    assert "${PROMETHEUS_BIND:?set PROMETHEUS_BIND to the private IP}:9090:9090" in lan
     assert "ingress_sg" in tf
     # No ingress rule opens 9090 (Grafana 3000 + API 8000 only).
     assert "from_port   = 9090" not in tf
@@ -319,3 +363,60 @@ def test_host_env_script_has_no_secret_literals():
     assert "sk-" not in joined
     assert "Bearer " not in joined
     assert "get-parameter" in joined
+
+
+def test_put_lab_secrets_stores_empty_as_sentinel(monkeypatch, capsys, tmp_path):
+    put = _load_script("scripts/put_lab_secrets.py", "put_lab_secrets")
+    for key in put.KEYS:
+        monkeypatch.delenv(key, raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "GRAFANA_ADMIN_USER=admin\n"
+        "GRAFANA_ADMIN_PASSWORD=pw\n"
+        "GROK_WEBHOOK_AUTH_SCHEME=\n",
+        encoding="utf-8",
+    )
+    stored: dict[str, str] = {}
+
+    class FakeSSM:
+        def put_parameter(self, **kwargs):
+            stored[kwargs["Name"]] = kwargs["Value"]
+            return {}
+
+    class FakeBoto3:
+        def client(self, name, region_name=None):
+            return FakeSSM()
+
+    monkeypatch.setitem(__import__("sys").modules, "boto3", FakeBoto3())
+    assert put.main(["--region", "us-east-1", "--env-file", str(env_file)]) == 0
+    assert stored["/resilienceops/GROK_WEBHOOK_AUTH_SCHEME"] == put.EMPTY_SENTINEL
+    out = capsys.readouterr().out
+    assert "empty" in out
+    assert "pw" not in out
+
+
+def test_compose_agent_gets_aws_region_and_apps_restart():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "AWS_REGION=${AWS_REGION:-us-east-1}" in compose
+    for svc in ("api-gw", "order-service", "payment-service"):
+        marker = f"  {svc}:\n    build:"
+        idx = compose.index(marker)
+        chunk = compose[idx : idx + 120]
+        assert "restart: unless-stopped" in chunk, svc
+
+
+def test_structured_logger_creates_audit_stream():
+    src = (ROOT / "agents/common/structured_logger.py").read_text(encoding="utf-8")
+    assert "create_log_stream" in src
+    assert "audit-stream" in src
+    assert "ResourceAlreadyExistsException" in src
+
+
+def test_teardown_detaches_managed_policy():
+    sh = (ROOT / "teardown.sh").read_text(encoding="utf-8")
+    ps1 = (ROOT / "teardown.ps1").read_text(encoding="utf-8")
+    for text in (sh, ps1):
+        assert "detach-user-policy" in text
+        assert "delete-policy" in text
+        assert "delete-user-policy" not in text
+        assert "ResilienceOpsDeployer" in text

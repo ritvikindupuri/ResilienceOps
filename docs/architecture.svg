@@ -169,6 +169,7 @@
   <text x="422" y="434" class="group">App + observability (default)</text>
   <rect x="1452" y="176" width="452" height="888" rx="22" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="1476" y="202" class="group">Grok Bot (external)</text>
+  <text x="1312" y="284" class="cap">operator :3000 / :8000</text>
   <text x="90" y="342" class="cap">deploy_k8s_sandbox.py</text>
   <text x="1274" y="202" text-anchor="end" class="cap">app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused</text>
   <g transform="translate(84,118)">
@@ -181,30 +182,47 @@
     <text class="name" y="18" text-anchor="middle">deploy_remote.py</text>
     <text class="cap" y="40" text-anchor="middle">operator</text>
   </g>
-  <g transform="translate(620,108)">
+  <g transform="translate(540,108)">
     <use href="#i-aws-s3" xlink:href="#i-aws-s3" x="-13.0" y="-13.0" width="26" height="26"/>
-    <text class="name" y="29" text-anchor="middle" style="font-size:14px">S3</text>
-    <text class="cap" y="45" text-anchor="middle" style="font-size:13px">deploy → host</text>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 14px Arial, Helvetica, sans-serif">S3</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">deploy → host</text>
   </g>
-  <g transform="translate(760,108)">
+  <g transform="translate(670,108)">
     <use href="#i-aws-ssm" xlink:href="#i-aws-ssm" x="-13.0" y="-13.0" width="26" height="26"/>
-    <text class="name" y="29" text-anchor="middle" style="font-size:14px">Param Store</text>
-    <text class="cap" y="45" text-anchor="middle" style="font-size:13px">secrets → .env</text>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 14px Arial, Helvetica, sans-serif">SSM</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">send_command</text>
   </g>
-  <g transform="translate(900,108)">
-    <use href="#i-aws-ssm" xlink:href="#i-aws-ssm" x="-13.0" y="-13.0" width="26" height="26"/>
-    <text class="name" y="29" text-anchor="middle" style="font-size:14px">SSM</text>
-    <text class="cap" y="45" text-anchor="middle" style="font-size:13px">send_command</text>
+  <g transform="translate(860,108)">
+    <use href="#i-document" xlink:href="#i-document" x="-13.0" y="-13.0" width="26" height="26"/>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 11px Arial, Helvetica, sans-serif">put_lab_secrets.py</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">laptop → Param</text>
   </g>
   <g transform="translate(1040,108)">
-    <use href="#i-aws-iam" xlink:href="#i-aws-iam" x="-13.0" y="-13.0" width="26" height="26"/>
-    <text class="name" y="29" text-anchor="middle" style="font-size:14px">IAM</text>
-    <text class="cap" y="45" text-anchor="middle" style="font-size:13px">role + profile</text>
+    <use href="#i-aws-ssm" xlink:href="#i-aws-ssm" x="-13.0" y="-13.0" width="26" height="26"/>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 14px Arial, Helvetica, sans-serif">Param Store</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">secrets → .env</text>
   </g>
   <g transform="translate(1180,108)">
+    <use href="#i-aws-iam" xlink:href="#i-aws-iam" x="-13.0" y="-13.0" width="26" height="26"/>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 14px Arial, Helvetica, sans-serif">IAM</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">role + profile</text>
+  </g>
+  <g transform="translate(1320,108)">
     <use href="#i-aws-cloudwatch" xlink:href="#i-aws-cloudwatch" x="-13.0" y="-13.0" width="26" height="26"/>
-    <text class="name" y="29" text-anchor="middle" style="font-size:14px">CW Logs</text>
-    <text class="cap" y="45" text-anchor="middle" style="font-size:13px">agents → CW</text>
+    <text class="name" y="29" text-anchor="middle"
+          style="font:700 14px Arial, Helvetica, sans-serif">CW Logs</text>
+    <text class="cap" y="45" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">agents → CW</text>
   </g>
   <g transform="translate(1292,232)">
     <use href="#i-aws-igw" xlink:href="#i-aws-igw" x="-14.0" y="-14.0" width="28" height="28"/>
@@ -264,6 +282,7 @@
     <use href="#i-document" xlink:href="#i-document" x="-34.0" y="-76.0" width="68" height="68"/>
     <text class="name" y="18" text-anchor="middle">incident-bridge</text>
     <text class="cap" y="40" text-anchor="middle">PromQL · agent jsonl</text>
+    <text class="cap" y="56" text-anchor="middle">(Compose agents)</text>
   </g>
   <g transform="translate(628,998)">
     <use href="#i-grafana" xlink:href="#i-grafana" x="-26.0" y="-60.0" width="52" height="52"/>
@@ -290,8 +309,12 @@
     <text class="cap" y="40" text-anchor="middle">Firing critical</text>
   </g>
   <polyline points="84,170 84,171 400,171 400,176" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <line x1="394" y1="118" x2="580" y2="108" class="arrow" marker-end="url(#arr)"/>
-  <polyline points="620,172 620,212" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <line x1="394" y1="118" x2="504" y2="108" class="arrow" marker-end="url(#arr)"/>
+  <polyline points="394,126 394,158 670,158 670,124" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <polyline points="670,158 670,176" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <polyline points="540,154 540,176" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
+  <line x1="876" y1="108" x2="1024" y2="108" class="arrow" marker-end="url(#arr)"/>
+  <polyline points="1040,154 1040,176" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <line x1="498" y1="546" x2="592" y2="546" class="arrow" marker-end="url(#arr)"/>
   <line x1="664" y1="546" x2="812" y2="546" class="arrow" marker-end="url(#arr)"/>
   <line x1="884" y1="546" x2="1082" y2="546" class="arrow" marker-end="url(#arr)"/>
@@ -381,8 +404,8 @@
   <g transform="translate(16,1142)">
     <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>
     <text x="24" y="26" class="card-n">1.</text>
-    <text x="52" y="26" class="card-t">Held fault (~120s) or a real outage</text>
-    <text x="52" y="48" class="card-t">trips a Prometheus alert rule.</text>
+    <text x="52" y="26" class="card-t">Held fault (FAULT_HOLD_SECONDS, default 120)</text>
+    <text x="52" y="48" class="card-t">or a real outage trips a Prometheus alert rule.</text>
   </g>
   <g transform="translate(664,1142)">
     <rect width="592" height="56" rx="14" fill="#FFF7ED" stroke="#FDBA74"/>

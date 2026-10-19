@@ -394,6 +394,11 @@ resource "aws_cloudwatch_log_group" "incidents" {
   retention_in_days = 7
 }
 
+resource "aws_cloudwatch_log_stream" "audit" {
+  name           = "audit-stream"
+  log_group_name = aws_cloudwatch_log_group.audit.name
+}
+
 # ==============================================================================
 # 4. SRE PLATFORM HOST WITH AUTOMATED WORKLOAD BOOTSTRAPPING
 # ==============================================================================

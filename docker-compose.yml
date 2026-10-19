@@ -2,6 +2,7 @@ services:
   api-gw:
     build:
       context: ./services/api-gw
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
@@ -28,6 +29,7 @@ services:
   order-service:
     build:
       context: ./services/order-service
+    restart: unless-stopped
     ports:
       - "8001:8001"
     cap_add:
@@ -66,6 +68,7 @@ services:
   payment-service:
     build:
       context: ./services/payment-service
+    restart: unless-stopped
     ports:
       - "8002:8002"
     cap_add:
@@ -241,6 +244,7 @@ services:
       dockerfile: Dockerfile.agent-sandbox
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
       - API_GATEWAY_URL=http://api-gw:8000
       - ORDER_SERVICE_URL=http://order-service:8001
       - PAYMENT_SERVICE_URL=http://payment-service:8002

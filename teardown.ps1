@@ -46,9 +46,12 @@ try {
       --log-group-name-prefix "/sre/autonomous-agent" `
       --query "logGroups[].logGroupName" --output text
     Write-Host "SSM parameters under /resilienceops are not in Terraform state; delete them if you do not want them reused."
-    Write-Host "If you attached the operator inline policy, delete it from an admin login:"
-    Write-Host "  aws iam delete-user-policy --user-name <YOUR_IAM_USER> --policy-name ResilienceOpsDeployer"
-    Write-Host "  aws iam delete-role-policy --role-name <YOUR_IAM_ROLE> --policy-name ResilienceOpsDeployer"
+    Write-Host "If you attached the operator managed policy, detach and delete it from an admin login:"
+    Write-Host "  ACCOUNT_ID=`$(aws sts get-caller-identity --query Account --output text --region `$AWS_REGION)"
+    Write-Host "  POLICY_ARN=`"arn:aws:iam::`${ACCOUNT_ID}:policy/ResilienceOpsDeployer`""
+    Write-Host "  aws iam detach-user-policy --user-name <YOUR_IAM_USER> --policy-arn `$POLICY_ARN"
+    Write-Host "  aws iam detach-role-policy --role-name <YOUR_IAM_ROLE> --policy-arn `$POLICY_ARN"
+    Write-Host "  aws iam delete-policy --policy-arn `$POLICY_ARN"
 
     Write-Host "`n[SUCCESS] Terraform-managed AWS infrastructure destroyed." -ForegroundColor Green
 }

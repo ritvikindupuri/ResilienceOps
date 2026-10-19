@@ -138,7 +138,7 @@ def symbols() -> str:
     return "\n".join(chunks)
 
 
-def node(x: float, y: float, icon: str, name: str, cap: str, size: float = ICON) -> str:
+def node(x: float, y: float, icon: str, name: str, cap: str, size: float = ICON, cap2: str = "") -> str:
     # Icon sits above the name; caller must place y so the icon stays below the group label.
     top = -size - 8
     cap_svg = (
@@ -146,6 +146,10 @@ def node(x: float, y: float, icon: str, name: str, cap: str, size: float = ICON)
         if cap
         else ""
     )
+    if cap2:
+        cap_svg += (
+            f'    <text class="cap" y="56" text-anchor="middle">{cap2}</text>\n'
+        )
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{top:.1f}" width="{size:.0f}" height="{size:.0f}"/>
     <text class="name" y="18" text-anchor="middle">{name}</text>
@@ -336,13 +340,16 @@ def satellite(
     cap: str,
     size: float = 26,
     label_side: str = "right",
+    name_size: int = 14,
 ) -> str:
     """Small icon with the name beside or below it — an attachment, not a chained node."""
     if label_side == "below":
         return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{-size / 2:.1f}" width="{size:.0f}" height="{size:.0f}"/>
-    <text class="name" y="{size / 2 + 16:.0f}" text-anchor="middle" style="font-size:14px">{name}</text>
-    <text class="cap" y="{size / 2 + 32:.0f}" text-anchor="middle" style="font-size:13px">{cap}</text>
+    <text class="name" y="{size / 2 + 16:.0f}" text-anchor="middle"
+          style="font:700 {name_size}px Arial, Helvetica, sans-serif">{name}</text>
+    <text class="cap" y="{size / 2 + 32:.0f}" text-anchor="middle"
+          style="font:13px Arial, Helvetica, sans-serif">{cap}</text>
   </g>"""
     if label_side == "left":
         tx, anchor = -(size / 2 + 10), "end"
@@ -382,7 +389,9 @@ def build() -> str:
     tf_x, deploy_x, op_y = 84, 268, 118  # icon top = 66, fully below the title
     # Wider account strip so S3 / Param Store / SSM / IAM / CW sit in one row.
     acct_x, acct_y, acct_w, acct_h = 430, 60, 1000, 108  # 60–168, under the title
-    s3_x, param_x, ssm_x, iam_x, cw_x = 620, 760, 900, 1040, 1180
+    # S3+SSM sit together so deploy_remote.py can fork without crossing Param.
+    # put_lab_secrets.py sits immediately left of Param Store.
+    s3_x, ssm_x, secrets_x, param_x, iam_x, cw_x = 540, 670, 860, 1040, 1180, 1320
     acct_node_y = 108  # icons; labels sit below inside the strip
 
     # VPC is 8px shorter than 896 so the footer box can sit *below* the
@@ -488,8 +497,9 @@ def build() -> str:
         node(tf_x, op_y, "terraform", "Terraform", "optional AWS", size=aws_icon),
         node(deploy_x, op_y, "document", "deploy_remote.py", "operator", size=aws_icon),
         satellite(s3_x, acct_node_y, "aws-s3", "S3", "deploy → host", size=26, label_side="below"),
-        satellite(param_x, acct_node_y, "aws-ssm", "Param Store", "secrets → .env", size=26, label_side="below"),
         satellite(ssm_x, acct_node_y, "aws-ssm", "SSM", "send_command", size=26, label_side="below"),
+        satellite(secrets_x, acct_node_y, "document", "put_lab_secrets.py", "laptop → Param", size=26, label_side="below", name_size=11),
+        satellite(param_x, acct_node_y, "aws-ssm", "Param Store", "secrets → .env", size=26, label_side="below"),
         satellite(iam_x, acct_node_y, "aws-iam", "IAM", "role + profile", size=26, label_side="below"),
         satellite(cw_x, acct_node_y, "aws-cloudwatch", "CW Logs", "agents → CW", size=26, label_side="below"),
         satellite(igw_x, igw_y, "aws-igw", "IGW", "public RT only", size=28, label_side="right"),
@@ -503,7 +513,7 @@ def build() -> str:
         node(pg_x, r2, "postgresql", "PostgreSQL", "orders_db"),
         node(prom_x, r3, "prometheus", "Prometheus", ""),
         node(am_x, r3, "alertmanager", "Alertmanager", "Groups alerts"),
-        node(br_x, r3, "document", "incident-bridge", "PromQL · agent jsonl"),
+        node(br_x, r3, "document", "incident-bridge", "PromQL · agent jsonl", cap2="(Compose agents)"),
         node(graf_x, graf_y, "grafana", "Grafana", "", size=52),
         grok_avatar(bot_cx, bot_avatar_y, "AI Incident Diagnosis", ""),
         node(gh_x, bot_row_y, "github", "GitHub issue", "label: incident"),
@@ -549,13 +559,21 @@ def build() -> str:
     parts.append(g_agents)
     parts.append(g_app)
     parts.append(g_bot)
+    # Operator reaches Grafana :3000 and api-gw :8000 through IGW + ingress SG.
+    # Caption lives in the VPC–Grok gutter (same side as IGW labels) so it
+    # does not cross Compose arrows.
+    parts.append(
+        f'  <text x="{igw_x + 20:.0f}" y="{igw_y + 52:.0f}" class="cap">'
+        "operator :3000 / :8000</text>"
+    )
     # Subtitles that do not fit in the group title band.
     parts.append(
         f'  <text x="{k3s_x + 42:.0f}" y="{nested_y + 44:.0f}" class="cap">'
         "deploy_k8s_sandbox.py</text>"
     )
-    # Unused subnets live in the VPC but have no workloads today — caption on
-    # the VPC box (not the public_ingress header). Left of the IGW gutter.
+    # Unused subnets live in the VPC but have no workloads today. Right of the
+    # VPC title, *above* public_ingress. Account-strip drops stop at the VPC
+    # stroke so they cannot run through this type.
     parts.append(
         f'  <text x="{vpc_x + vpc_w - 18:.0f}" y="{vpc_y + 26:.0f}" text-anchor="end" '
         f'class="cap">app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24 · unused</text>'
@@ -580,7 +598,6 @@ def build() -> str:
     collector_y = r1 + 54  # under Gateway / Orders / Payments captions (below descenders)
     svc_bottom = r1 + 66  # health-tick arrowheads; 18px below the scrape bar
     health_y = r2 + 72  # well below Redis/Postgres captions (pills sit under the bus)
-    host_top = subnet_y
 
     # 1. Terraform (operator laptop, outside AWS) → VPC border, *right of*
     # the "VPC  sre-enterprise-vpc" title so the shaft never bisects the type.
@@ -595,16 +612,28 @@ def build() -> str:
         (tf_land_x, vpc_y),
     ]))
 
-    # 1b. deploy_remote.py → S3 → host. Start past the deploy_remote.py name.
-    # Param Store drops to the host (.env from put_lab_secrets.py). Drops end
-    # at the public_ingress top so they never enter Compose titles.
+    # 1b. deploy_remote.py → S3 → host and deploy_remote.py → SSM → host.
+    # S3 is a short diagonal (nothing sits between deploy_remote.py and S3).
+    # SSM uses an orthogonal under-caption highway so the shaft cannot run
+    # through the S3 icon. Drops are vertical and stop at public_ingress.
     deploy_label_right = deploy_x + 110  # 18px bold "deploy_remote.py" ~160px wide
-    parts.append(arrow(deploy_label_right + 16, op_y, s3_x - 40, acct_node_y))
-    drop_from = acct_y + acct_h + 4  # gap above the VPC stroke, below captions
+    fork_x = deploy_label_right + 16
+    parts.append(arrow(fork_x, op_y, s3_x - 36, acct_node_y))
+    ssm_run_y = acct_y + acct_h - 10  # 158: below satellite captions, above VPC
+    vpc_top = vpc_y  # stop on the VPC stroke; unused-CIDR type sits below it
     parts.append(poly([
-        (s3_x, drop_from),
-        (s3_x, host_top),
+        (fork_x, op_y + 8),
+        (fork_x, ssm_run_y),
+        (ssm_x, ssm_run_y),
+        (ssm_x, acct_node_y + 16),
     ]))
+    parts.append(poly([(ssm_x, ssm_run_y), (ssm_x, vpc_top)]))
+    drop_from = acct_node_y + 46  # below satellite captions, still in the strip
+    parts.append(poly([(s3_x, drop_from), (s3_x, vpc_top)]))
+    # 1c. put_lab_secrets.py → Param Store → host .env. Short hop between
+    # the two icons (names sit below), then a vertical drop.
+    parts.append(arrow(secrets_x + 16, acct_node_y, param_x - 16, acct_node_y))
+    parts.append(poly([(param_x, drop_from), (param_x, vpc_top)]))
 
     # 2–4. Request path. Pills sit in the gaps above the icons.
     parts.append(arrow(tg_x + 36, svc_ic, gw_x - 36, svc_ic))
@@ -757,7 +786,11 @@ def build() -> str:
     <text x="52" y="48" class="card-t">{line2}</text>
   </g>"""
 
-    parts.append(card2(1, 16, "Held fault (~120s) or a real outage", "trips a Prometheus alert rule."))
+    parts.append(card2(
+        1, 16,
+        "Held fault (FAULT_HOLD_SECONDS, default 120)",
+        "or a real outage trips a Prometheus alert rule.",
+    ))
     parts.append(card2(2, 664, "Bridge adds PromQL + jsonl and posts", "enriched JSON to the bot."))
     parts.append(card2(3, 1312, "Bot diagnoses and files or", "updates a GitHub issue."))
 

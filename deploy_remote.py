@@ -219,10 +219,13 @@ umask 077
 for KEY in {keys}; do
   NAME="${{PREFIX}}/${{KEY}}"
   VAL=$(aws ssm get-parameter --name "$NAME" --with-decryption --region "$REGION" --query Parameter.Value --output text 2>/dev/null || true)
-  if [ -n "$VAL" ] && [ "$VAL" != "None" ]; then
+  if [ "$VAL" = "__EMPTY__" ]; then
+    printf '%s=\\n' "$KEY" >> "$ENV_FILE"
+  elif [ -n "$VAL" ] && [ "$VAL" != "None" ]; then
     printf '%s=%s\\n' "$KEY" "$VAL" >> "$ENV_FILE"
   fi
 done
+printf 'AWS_REGION=%s\\n' "$REGION" >> "$ENV_FILE"
 for KEY in {required}; do
   if ! grep -q "^${{KEY}}=.\\+" "$ENV_FILE"; then
     echo "[error] $KEY missing from Parameter Store ($PREFIX/$KEY). Run: python3 scripts/put_lab_secrets.py --region $REGION" >&2
@@ -281,7 +284,12 @@ case "$PRIVATE_IP" in
       sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
     fi
     printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
-    echo "[ok] PROMETHEUS_BIND=$PRIVATE_IP (k3s on-host; ingress_sg does not open 9090)"
+    if grep -q '^COMPOSE_FILE=' /opt/sre-colosseum/.env 2>/dev/null; then
+      sed -i '/^COMPOSE_FILE=/d' /opt/sre-colosseum/.env
+    fi
+    printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/sre-colosseum/.env
+    export COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml
+    echo "[ok] PROMETHEUS_BIND=$PRIVATE_IP COMPOSE_FILE=$COMPOSE_FILE"
     if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
       COMPOSE_FILES='-f docker-compose.yml -f docker-compose.prom-lan.yml'
     else

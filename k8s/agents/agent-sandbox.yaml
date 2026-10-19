@@ -63,9 +63,16 @@ spec:
         agent.role: red-team-fault
     spec:
       serviceAccountName: red-agent-sa
+      volumes:
+      - name: app
+        emptyDir: {}
       containers:
       - name: fault-squad
         image: python:3.11-slim
+        workingDir: /app
+        volumeMounts:
+        - name: app
+          mountPath: /app
         command: ["/bin/bash", "-c"]
         args:
           - |
@@ -109,9 +116,16 @@ spec:
         agent.role: blue-team-defender
     spec:
       serviceAccountName: sre-defender-sa
+      volumes:
+      - name: app
+        emptyDir: {}
       containers:
       - name: sre-squad
         image: python:3.11-slim
+        workingDir: /app
+        volumeMounts:
+        - name: app
+          mountPath: /app
         command: ["/bin/bash", "-c"]
         args:
           - |

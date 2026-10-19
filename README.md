@@ -72,7 +72,7 @@ After a fault, **two code paths** run. Path A is `orchestrator.py`. Path B is Pr
 4. **Enrichment** — `incident-bridge` (`services/incident-bridge/app.py`) builds an evidence bundle of **PromQL** range summaries (`EVIDENCE_WINDOW_SECONDS` default 600) plus tailed **`AGENT_ACTIVITY_LOG` jsonl** (only when the `agents` profile or a host `orchestrator.py` is writing that file). The Compose bridge image has no `kubernetes` client and no kubeconfig, so it does **not** collect k8s events. The payload is capped at `PAYLOAD_MAX_BYTES` (~100KB) and POSTed as `{status, alerts, evidence, source: "resilienceops"}` using `GROK_WEBHOOK_*`. Same `fingerprint`+`status` is forwarded at most once per `DEDUPE_TTL_SECONDS` (300). If `GROK_WEBHOOK_URL` is empty, the bridge logs `GROK_WEBHOOK_URL is unset; dropping alert payload` and returns `"dropped_unconfigured"` — the rest of the lab keeps running. If the outbound POST fails after `WEBHOOK_MAX_RETRIES`, the bridge logs `forward FAILED after N attempts alertname=… fingerprint=…`, writes `logs/bridge_deadletter.jsonl` (no key), queues a bounded in-memory retry, and does **not** crash the ASGI app. The webhook key is never logged. **`agent_activity` is empty unless something is writing `logs/agent_activity.jsonl`** — that is the opt-in `agents` Compose profile or a host `orchestrator.py` run, not the default `docker compose up`.
 5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` uses telemetry plus optional k8s events (agent sandbox toolkit, not the incident-bridge) and `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) to pick a root cause and runbook (e.g. `MEMORY_EXHAUSTION_OOM` → `EVICT_CONTAINER_AND_PURGE_LEAK`). Path B: the imported Grok Bot template **AI Incident Diagnosis** diagnoses from the evidence bundle (PromQL + agent jsonl) **plus recent commits** in the watched GitHub repo. The bot has no control path into the lab (no restart/scale/rollback/push).
 6. **Issue** — the Grok Bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate (a repeat Redis-starvation run against an open `RedisConnectionSaturation` issue comments instead of opening a new issue). Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
-7. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service) and may restart/scale via k8s if the toolkit is available. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch. Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The bot comments on the GitHub issue. The bot does not reset the fault.
+7. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service). k8s restart/scale runs only if `K8sToolKit.k8s_available` **and** the target pods exist in `sre-target-apps`. On the documented AWS path those apps stay in **Compose** (`sre-target-apps` is empty; `red-agent-sa` is `get`/`list`/`watch` only), so restart/scale is a no-op unless you passed `--apply-microservices`. Compose `restart: unless-stopped` is what brings a crashed `order-service` back. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch (`/sre/autonomous-agent-audit` stream `audit-stream`). Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The bot comments on the GitHub issue. The bot does not reset the fault.
 
 ```mermaid
 flowchart LR
@@ -105,7 +105,7 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 | Security Pillar | Concrete Enforcement Mechanism | SRE & Platform Protection Guarantee |
 |:---|:---|:---|
 | **1. Agent Resource Limits (CPU / RAM)** | Hard cgroup limits enforced per pod: `0.5 CPU (500m)` and `512 MiB RAM`. | If an agent experiences a runaway loop or memory leak, the Linux kernel cgroup OOMKiller immediately terminates the sandbox container (`Exit 137`). **Host node stability and system daemons are 100% protected**. Importantly, sandbox resource constraints cap agent compute—they do not limit or dampen the authentic fault impact injected into target microservices. |
-| **2. API Permissions (ServiceAccount + RBAC)** | Namespaced Roles on `sre-target-apps` only (no ClusterRole). Red Team (`k8s/agents/agent-sandbox.yaml`): `get`/`list`/`watch` on `pods` and `pods/exec`. Blue Team (`k8s/base/namespace-rbac.yaml`): `get`/`list`/`watch`/`delete` on pods, `get` on `pods/log`, `get`/`list` on events, and `get`/`list`/`watch`/`patch`/`update` on `deployments` / `deployments/scale`. | Agents have **no cluster-admin**. They cannot inspect `kube-system` or cluster secrets through these Roles. `kubectl exec` into the sandbox from the host uses the operator kubeconfig, not the sandbox ServiceAccount. |
+| **2. API Permissions (ServiceAccount + RBAC)** | Namespaced Roles on `sre-target-apps` only (no ClusterRole). Red Team (`k8s/agents/agent-sandbox.yaml`): `get`/`list`/`watch` on `pods` and `pods/exec` (no restart/scale). Blue Team (`k8s/base/namespace-rbac.yaml`): `get`/`list`/`watch`/`delete` on pods, `get` on `pods/log`, `get`/`list` on events, and `get`/`list`/`watch`/`patch`/`update` on `deployments` / `deployments/scale`. | Agents have **no cluster-admin**. They cannot inspect `kube-system` or cluster secrets through these Roles. `kubectl exec` into the sandbox from the host uses the operator kubeconfig, not the sandbox ServiceAccount. On the documented AWS path `sre-target-apps` is **empty** (apps run in Compose), so Blue restart/scale has nothing to patch unless you pass `--apply-microservices`. |
 | **3. Network Rules (Egress Policies)** | Declarative `NetworkPolicy` controlling pod ingress and egress traffic. | Egress allows DNS (`TCP/UDP 53`), pods in namespaces labeled `arena.sre.io/role=victim` (`sre-target-apps`), outbound TCP `443` (Anthropic and AWS APIs; default k3s/flannel cannot FQDN-filter), and TCP `8000`/`8001`/`8002`/`9090` to the lab VPC CIDR (`10.0.0.0/16`) so the sandbox can reach Compose on the EC2 host private IP. The Grok Bot webhook is sent by **incident-bridge** on the Compose network, not by the sandbox NetworkPolicy. |
 
 ### How the Sandbox Operates During Incident Cycles
@@ -114,7 +114,7 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 2. **Sandbox Pod Execution**:
    - **Red Team Agents**: Select and trigger surgical faults against target services (e.g., cgroup memory leaks on `order-service`, Linux kernel `tc netem` latency on `payment-service`).
    - **Blue Team Agents**: Continuously monitor golden signals, check service health, invoke the configured diagnostic model over outbound HTTPS (port 443) for root-cause analysis, and execute automated runbook resets.
-3. **Target Services Tier**: The live microservices cluster (`Order`, `Payment`, `API Gateway`) receives the injected faults and resets while keeping underlying host OS and cluster system pods completely isolated.
+3. **Target Services Tier**: On the documented AWS path the live apps (`api-gw`, `order-service`, `payment-service`) run in **Compose on the EC2 host**, not in `sre-target-apps`. Faults and `POST /fault/reset` go to the host private IP. In-cluster restart/scale is a no-op unless you pass `--apply-microservices` (pre-built `sre-arena/*` images). Host OS and kube-system stay isolated either way.
 
 ---
 
@@ -155,23 +155,27 @@ AWS/EC2 is **optional**. `docker compose up` on a laptop is the same Compose lab
 - Commands below use **`python3`**. Ubuntu/Debian typically have no `python` alias; if `python3` is missing, install it (`sudo apt-get install python3 python3-pip`).
 - **Anthropic API key** for the in-cluster Red/Blue agents (models listed in `agents/config.py`).
 - **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template (GitHub must be connected to the bot).
-- For AWS: **AWS CLI v2**, **Terraform 1.5+**, and an identity that can **create** the lab (read-only principals 403 on `ec2:CreateVpc` / `iam:CreateRole`). Attach the checked-in operator policy **from an admin login** after substituting your account id — a read-only identity cannot change its own permissions:
+- For AWS: **AWS CLI v2**, **Terraform 1.5+**, the **Session Manager plugin** (`session-manager-plugin` — required for `aws ssm start-session`), and an identity that can **create** the lab (read-only principals 403 on `ec2:CreateVpc` / `iam:CreateRole`). Attach the checked-in operator policy **from an admin login** after substituting your account id — a read-only identity cannot change its own permissions. Use a **customer managed policy** (inline user policies are capped at 2,048 characters; this document is larger):
   ```bash
   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION:-us-east-1}")
   sed "s/ACCOUNT_ID/${ACCOUNT_ID}/g" terraform/deployer-policy.json > /tmp/resilienceops-deployer-policy.json
-  aws iam put-user-policy --user-name <YOUR_IAM_USER> --policy-name ResilienceOpsDeployer \
-    --policy-document file:///tmp/resilienceops-deployer-policy.json
+  POLICY_ARN=$(aws iam create-policy --policy-name ResilienceOpsDeployer \
+    --policy-document file:///tmp/resilienceops-deployer-policy.json \
+    --query 'Policy.Arn' --output text)
+  aws iam attach-user-policy --user-name <YOUR_IAM_USER> --policy-arn "$POLICY_ARN"
   # If you authenticate as a role instead of a user:
-  aws iam put-role-policy --role-name <YOUR_IAM_ROLE> --policy-name ResilienceOpsDeployer \
-    --policy-document file:///tmp/resilienceops-deployer-policy.json
+  aws iam attach-role-policy --role-name <YOUR_IAM_ROLE> --policy-arn "$POLICY_ARN"
   aws sts get-caller-identity --region "${AWS_REGION:-us-east-1}"
   ```
-  Console path: **IAM → Users → user → Add permissions → Create inline policy → JSON**, paste the substituted document, name it `ResilienceOpsDeployer`. (For a role: **IAM → Roles → role → Add permissions → Create inline policy → JSON**.)
-  That policy covers EC2/VPC create+delete, `iam:CreateRole` / `DeleteRole` / `PassRole` (to `ec2.amazonaws.com` on `sre-platform-host-role` only) / instance-profile, `ssm:SendCommand` / `GetCommandInvocation` / `DescribeInstanceInformation` / `PutParameter` / `GetParameter`, S3 on `sre-resilienceops-deploy-*` (zip upload), and CloudWatch log-group create/delete. The EC2 instance role is separate (`AmazonSSMManagedInstanceCore` + inline GetParameter / S3 GetObject / `logs:PutLogEvents`).
-  Teardown the inline policy (also from an admin login):
+  Console path: **IAM → Policies → Create policy → JSON**, paste the substituted document, name it `ResilienceOpsDeployer`, then **IAM → Users → user → Add permissions → Attach policies** (or **IAM → Roles → role → Add permissions → Attach policies**).
+  That policy covers EC2/VPC create+delete, `iam:CreateRole` / `DeleteRole` / `PassRole` (to `ec2.amazonaws.com` on `sre-platform-host-role` only) / instance-profile, `ssm:SendCommand` / `GetCommandInvocation` / `DescribeInstanceInformation` / `PutParameter` / `GetParameter`, S3 on `sre-resilienceops-deploy-*` (including the Get* reads Terraform AWS provider v5 needs and `DeleteObjectVersion` for `force_destroy`), and CloudWatch log-group/stream create/delete. The EC2 instance role is separate (`AmazonSSMManagedInstanceCore` + inline GetParameter / S3 GetObject / `logs:CreateLogStream` / `PutLogEvents`).
+  Teardown the managed policy (also from an admin login):
   ```bash
-  aws iam delete-user-policy --user-name <YOUR_IAM_USER> --policy-name ResilienceOpsDeployer
-  aws iam delete-role-policy --role-name <YOUR_IAM_ROLE> --policy-name ResilienceOpsDeployer
+  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION:-us-east-1}")
+  POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/ResilienceOpsDeployer"
+  aws iam detach-user-policy --user-name <YOUR_IAM_USER> --policy-arn "$POLICY_ARN"
+  # or: aws iam detach-role-policy --role-name <YOUR_IAM_ROLE> --policy-arn "$POLICY_ARN"
+  aws iam delete-policy --policy-arn "$POLICY_ARN"
   ```
 - Export the region in every shell (Terraform, AWS CLI, and the Python deploy scripts default independently; a CLI default of `us-east-2` will miss a `us-east-1` stack):
   ```bash
@@ -217,14 +221,15 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `GROK_WEBHOOK_URL` | incident-bridge | Empty = drop alerts locally (`webhook_configured: false`) |
 | `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the routine in the bot info pane |
 | `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
-| `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`. Compose uses `${GROK_WEBHOOK_AUTH_SCHEME-Bearer}` so a present-but-empty value sends the raw key |
+| `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`. Compose uses `${GROK_WEBHOOK_AUTH_SCHEME-Bearer}` so a present-but-empty value sends the raw key. On AWS, `put_lab_secrets.py` stores that empty string as `__EMPTY__` (SSM `PutParameter` rejects `Value=""`); `deploy_remote.py` writes `GROK_WEBHOOK_AUTH_SCHEME=` on the host. **Unset** keys are skipped, which leaves Compose’s `Bearer` default |
 | `API_GATEWAY_URL` | `agents/config.py` | Host default `http://localhost:8000`. Compose sandbox sets `http://api-gw:8000` |
 | `ORDER_SERVICE_URL` | `agents/config.py`, order/payment clients | Host default `http://localhost:8001` |
 | `PAYMENT_SERVICE_URL` | `agents/config.py`, api-gw, order-service | Host default `http://localhost:8002` |
 | `PROMETHEUS_URL` | `agents/config.py`, incident-bridge | Host default `http://localhost:9090`. Bridge container uses `BRIDGE_PROMETHEUS_URL` |
 | `BRIDGE_PROMETHEUS_URL` | compose → bridge `PROMETHEUS_URL` | Default `http://prometheus:9090` (compose DNS) |
-| `PROMETHEUS_BIND` | AWS `docker-compose.prom-lan.yml` | Empty on a laptop. `deploy_remote.py` writes the instance **private IP** so k3s can query `:9090`. Never `0.0.0.0` |
-| `FAULT_HOLD_SECONDS` | `orchestrator.py`, compose `agent-sandbox` | Default `120`. Hold after Red injects / Blue detects, before remediation and the `finally` reset, so Path B alerts can fire. `0` skips the hold |
+| `PROMETHEUS_BIND` | AWS `docker-compose.prom-lan.yml` | Empty on a laptop. `deploy_remote.py` writes the instance **private IP** so k3s can query `:9090`. The overlay uses `${PROMETHEUS_BIND:?…}` so an empty value can never bind `0.0.0.0` |
+| `COMPOSE_FILE` | AWS host `.env` | `deploy_remote.py` writes `docker-compose.yml:docker-compose.prom-lan.yml` so a later plain `docker compose up -d` keeps the private-IP bind. Do not set this on a laptop |
+| `FAULT_HOLD_SECONDS` | `orchestrator.py`, compose `agent-sandbox` | Default `120`. Hold after Red injects / Blue detects, before remediation and the `finally` reset, so Path B alerts can fire. `0` skips the hold. **CPU burn** (`/fault/cpu-burn`, 15s) and **crash** (`/fault/crash`) are not standing faults — the burn ends on its own, and Compose `restart: unless-stopped` brings `order-service` back |
 | `LOGS_DIR` | `agents/config.py` | Default `logs` |
 | `AGENT_ACTIVITY_LOG` | incident-bridge | Compose hardcodes `/app/logs/agent_activity.jsonl` (the `./logs` volume). Host default in `.env.example` is `logs/agent_activity.jsonl` |
 | `EVIDENCE_WINDOW_SECONDS` | incident-bridge | Default `600` |
@@ -413,12 +418,11 @@ Confirm the identity can create the lab (see [Prerequisites](#1-prerequisites) /
 ```bash
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 export AWS_DEFAULT_REGION="$AWS_REGION"
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # set allowed_cidr to YOUR /32 or office CIDR
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars   # set allowed_cidr to YOUR /32 or office CIDR
 # optional: instance_type = "t3.small"  # tight; default is t3.medium
-terraform init
-terraform plan
-terraform apply
+terraform -chdir=terraform init
+terraform -chdir=terraform plan
+terraform -chdir=terraform apply
 ```
 
 Default instance is **`t3.medium`** (2 vCPU / 4 GiB, on-demand us-east-1 Linux about **$0.0416/hr** plus public IPv4 about **$0.005/hr**, ~$1.12/day). `t3.small` (2 GiB, ~$0.0208/hr + IPv4) is optional and tight for Compose + k3s + agents. `user_data` installs **Docker Compose v2** (`docker compose`, so `deploy.resources.limits` apply), `awscli`, unzip, 2G swap, and k3s. IMDSv2 hop limit is 2.
@@ -456,11 +460,11 @@ region          = "us-east-1"
 ```
 
 ```bash
-export AWS_REGION=$(terraform output -raw region)
+export AWS_REGION=$(terraform -chdir=terraform output -raw region)
 export AWS_DEFAULT_REGION="$AWS_REGION"
-export EC2_INSTANCE_ID=$(terraform output -raw instance_id)
-export DEPLOY_BUCKET=$(terraform output -raw deploy_bucket)
-# also put EC2_INSTANCE_ID / DEPLOY_BUCKET / AWS_REGION into the laptop .env
+export EC2_INSTANCE_ID=$(terraform -chdir=terraform output -raw instance_id)
+export DEPLOY_BUCKET=$(terraform -chdir=terraform output -raw deploy_bucket)
+# deploy_remote.py reads these from the shell environment, not from the laptop .env
 ```
 
 <p align="center">
@@ -474,12 +478,13 @@ export DEPLOY_BUCKET=$(terraform output -raw deploy_bucket)
 Grafana interpolation is `:?` required, so the host **must** have `/opt/sre-colosseum/.env` before `docker compose up`. Do **not** put secret values in an SSM `SendCommand` document (that history is visible). Write them as Parameter Store **SecureString**s from your laptop, then let the instance role `GetParameter` them:
 
 ```bash
-# Laptop .env already has GRAFANA_ADMIN_*, optional ANTHROPIC_API_KEY, GROK_WEBHOOK_*, POSTGRES_PASSWORD
+# put_lab_secrets.py reads the laptop .env (or already-exported vars). deploy_remote.py does not.
 python3 scripts/put_lab_secrets.py --region "$AWS_REGION"
 # prints parameter names + character lengths only — never values
+# Empty GROK_WEBHOOK_AUTH_SCHEME is stored as __EMPTY__ so SSM accepts it; the host .env gets KEY=.
 ```
 
-`deploy_remote.py` then: waits for SSM agent **Online** and `cloud-init status --wait`; uploads the zip to `DEPLOY_BUCKET` (avoids the **100 KB SSM SendCommand** limit; a ~74 KB zip is already ~98 KB base64); has the instance `curl` a presigned GET; writes `/opt/sre-colosseum/.env` from `/resilienceops/<KEY>`; runs **`docker compose up --build -d`** (all default services, including **alertmanager** and **incident-bridge**); polls `GetCommandInvocation` and **exits non-zero** on failure. The archive includes `reports/` (required by `Dockerfile.agent-sandbox`). API-key warnings read the **written host `.env`**, not the empty SSM shell env.
+`deploy_remote.py` then: waits for SSM agent **Online** and `cloud-init status --wait`; uploads the zip to `DEPLOY_BUCKET` (avoids the **100 KB SSM SendCommand** limit; a ~74 KB zip is already ~98 KB base64); has the instance `curl` a presigned GET; writes `/opt/sre-colosseum/.env` from `/resilienceops/<KEY>` plus `PROMETHEUS_BIND` / `COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml` / `AWS_REGION`; runs **`docker compose -f docker-compose.yml -f docker-compose.prom-lan.yml up --build -d`** (all default services, including **alertmanager** and **incident-bridge**). After that, a plain `docker compose up -d` on the host keeps the private-IP Prometheus bind because `COMPOSE_FILE` is in the host `.env`. It polls `GetCommandInvocation` and **exits non-zero** on failure. The archive includes `reports/` (required by `Dockerfile.agent-sandbox`). API-key warnings read the **written host `.env`**, not the empty SSM shell env. `deploy_remote.py` does **not** read the laptop `.env` — export `AWS_REGION` / `EC2_INSTANCE_ID` / `DEPLOY_BUCKET` in the shell.
 
 ```bash
 python3 deploy_remote.py --region "$AWS_REGION"
@@ -499,7 +504,7 @@ python3 deploy_k8s_sandbox.py --region "$AWS_REGION"
 
 That applies `k8s/base/namespace-rbac.yaml` then `k8s/agents/agent-sandbox.yaml`, waits until the pod is Ready, copies `agents/`, `orchestrator.py`, and `reports/` into `/app`, and sets `API_GATEWAY_URL` / `ORDER_SERVICE_URL` / `PAYMENT_SERVICE_URL` / `PROMETHEUS_URL` to the **EC2 private IP** (Compose is not at `api-gw.sre-target-apps.svc.cluster.local`). `copy_code_to_sandbox.py` is the copy-only follow-up if the pod was recreated.
 
-Connect with SSM (no SSH / port 22):
+Connect with SSM (no SSH / port 22). `aws ssm start-session` needs the **Session Manager plugin** on the laptop (`session-manager-plugin`; install from AWS docs if the CLI says “SessionManagerPlugin is not found”):
 
 ```bash
 aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION"
@@ -515,17 +520,18 @@ k3s kubectl logs -f deployment/red-team-sandbox -n sre-agent-sandbox
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- /bin/bash
 ```
 
-Example cycle (use the private IP from `terraform output -raw private_ip`):
+Example cycle (get the private IP **on the host** from IMDSv2 — laptop `terraform output` is not in the SSM session):
 
 ```bash
-PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
 aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION"
 # then on the host:
+TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
   python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
 
-Each orchestrator cycle **holds** `FAULT_HOLD_SECONDS` (default 120) so Path B alerts can fire, then **always** `POST /fault/reset` in a `finally` block, even if Blue never declares an incident, so 150 MB leaks cannot stack across `--cycles`. Set `FAULT_HOLD_SECONDS=0` to skip the hold. A repeat firing alert whose fingerprint already has an **open** GitHub `incident` issue gets a **comment**, not a new issue.
+The sandbox container `workingDir` is `/app` (where `deploy_k8s_sandbox.py` copies `orchestrator.py`). Each orchestrator cycle **holds** `FAULT_HOLD_SECONDS` (default 120) so Path B alerts can fire, then **always** `POST /fault/reset` in a `finally` block, even if Blue never declares an incident, so 150 MB leaks cannot stack across `--cycles`. Set `FAULT_HOLD_SECONDS=0` to skip the hold. **CPU burn** (`/fault/cpu-burn`, default 15s) and **crash** (`/fault/crash`) are not held as a standing fault: the burn ends on its own, and Compose `restart: unless-stopped` brings a crashed `order-service` back. A repeat firing alert whose fingerprint already has an **open** GitHub `incident` issue gets a **comment**, not a new issue.
 
 ---
 
@@ -581,7 +587,9 @@ Prefer Compose `--profile agents` on AWS (same `orchestrator.py`, shared Compose
 Run the orchestrator directly inside the quarantined Kubernetes pod over AWS Systems Manager. Target the **EC2 private IP** (Compose apps are not in k3s DNS). Each cycle **holds** `FAULT_HOLD_SECONDS` (default 120) so Prometheus `for:` windows can fire, then **always** resets faults in a `finally` block so leaks cannot pile up across `--cycles`. Prefer Compose `--profile agents` unless you need this k3s quarantine.
 
 ```bash
-PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
+# On the host (SSM session). Laptop terraform output is not in this shell.
+TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
   python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario MEMORY_EXHAUSTION
 ```
@@ -595,7 +603,7 @@ Printed MTTD/MTTR vary with load, scrape lag, and whether Prometheus is reachabl
 - **Phase 3**: Red Team **Server Resource Stresser** POSTs `order-service /fault/leak-memory` (this `--scenario MEMORY_EXHAUSTION` path).
 - **Phase 4**: Blue Team **Health & Uptime Monitor** loops up to 9 ticks of 1s. It declares an incident when p99/probe latency > 1200ms, error rate > 2%, or a probe returns HTTP >= 500 (`INCIDENT DECLARED | MTTD: …` — MTTD is that loop duration). The orchestrator then holds `FAULT_HOLD_SECONDS` (default 120) before Blue remediates so Path B alerts can fire. The cycle still resets in `finally`.
 - **Phase 5**: Blue Team **Root Cause Investigator** (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) plus rule-based heuristics. `MEMORY_EXHAUSTION_OOM` is used when order-service is 5xx **and** recent k8s events mention oom; otherwise you may see `ORDER_PROCESS_FAILURE` or another cause. The OOM runbook is `EVICT_CONTAINER_AND_PURGE_LEAK`.
-- **Phase 6**: Blue Team **Automated Recovery Fixer** (`RemediatorAgent.execute_runbook`) **always** calls `FaultCatalog.reset_environment()` — `POST /fault/reset` on order-service and payment-service. It restarts `order-service` (or scales it to 3 replicas on CPU runbooks) **only if** `K8sToolKit.k8s_available`. It does not unconditionally bounce the container. `verify_recovery` GETs api-gw `/health` up to 5 times; success is HTTP 200 and probe latency < 800ms. Printed MTTR is measured there.
+- **Phase 6**: Blue Team **Automated Recovery Fixer** (`RemediatorAgent.execute_runbook`) **always** calls `FaultCatalog.reset_environment()` — `POST /fault/reset` on order-service and payment-service. It restarts `order-service` (or scales it to 3 replicas on CPU runbooks) **only if** `K8sToolKit.k8s_available` **and** those pods exist in `sre-target-apps`. On this AWS path the namespace is empty (Compose hosts the apps; `red-agent-sa` cannot restart), so treat restart/scale as a no-op unless you passed `--apply-microservices`. `verify_recovery` GETs api-gw `/health` up to 5 times; success is HTTP 200 and probe latency < 800ms. Printed MTTR is measured there.
 - **Phase 7**: Blue Team **Incident Report Writer** writes `reports/incident_*.md` (title from `resolve_fault_title()`, e.g. `MEMORY_EXHAUSTION`).
 
 ---
@@ -605,7 +613,7 @@ Keep the AWS Grafana dashboard open while running the cycle. The following times
 1. Shortly after injection, the **Real-Time System State** gauge often flips from `HEALTHY` to `ACTIVE INCIDENT`.
 2. **Latency Profiles** may spike (sometimes above 2000ms) while the leak or reset is in flight.
 3. **5XX Error Rate** can climb if upstream timeouts accumulate.
-4. After `POST /fault/reset` (and a k8s restart **if** the toolkit is available), latency usually returns toward baseline and the gauge turns green. How many seconds that takes depends on the fault and whether k8s restart ran.
+4. After `POST /fault/reset` (the default AWS recovery; k8s restart/scale is a no-op while `sre-target-apps` is empty), latency usually returns toward baseline and the gauge turns green. How many seconds that takes depends on the fault. Compose `restart: unless-stopped` also brings a crashed `order-service` back.
 
 ---
 
@@ -614,7 +622,9 @@ Keep the AWS Grafana dashboard open while running the cycle. The following times
 Target different failure mechanisms on your AWS cluster using the `--scenario` argument directly through the sandbox pod:
 
 ```bash
-PRIVATE_IP=$(terraform -chdir=terraform output -raw private_ip)
+# On the host (SSM session):
+TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
 
 # Test Linux Kernel tc netem Packet Latency on eth0 (Inside Sandbox Pod).
 # CLI name NETWORK_LATENCY; catalog records KERNEL_TC_NETEM_LATENCY.
@@ -706,8 +716,7 @@ export AWS_DEFAULT_REGION="$AWS_REGION"
 Or:
 
 ```bash
-cd terraform
-terraform destroy
+terraform -chdir=terraform destroy
 ```
 
 Then verify (expect terminated / not found / empty):
@@ -728,12 +737,14 @@ aws ssm get-parameters-by-path --region "$AWS_REGION" --path /resilienceops \
 
 SSM parameters are **not** in Terraform state (`put_lab_secrets.py` creates them). Delete them if you do not want the secrets to persist.
 
-If you attached the operator inline policy in [Prerequisites](#1-prerequisites), remove it from an **admin** login (`terraform destroy` does not delete it):
+If you attached the operator managed policy in [Prerequisites](#1-prerequisites), detach and delete it from an **admin** login (`terraform destroy` does not delete it):
 
 ```bash
-aws iam delete-user-policy --user-name <YOUR_IAM_USER> --policy-name ResilienceOpsDeployer
-# or, if you attached it to a role:
-aws iam delete-role-policy --role-name <YOUR_IAM_ROLE> --policy-name ResilienceOpsDeployer
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")
+POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/ResilienceOpsDeployer"
+aws iam detach-user-policy --user-name <YOUR_IAM_USER> --policy-arn "$POLICY_ARN"
+# or: aws iam detach-role-policy --role-name <YOUR_IAM_ROLE> --policy-arn "$POLICY_ARN"
+aws iam delete-policy --policy-arn "$POLICY_ARN"
 ```
 
 ---
@@ -860,7 +871,7 @@ The webhook key is never logged. Evidence is secret-stripped. Payloads are cappe
 | `GROK_WEBHOOK_URL` | empty (drop) | Bot webhook URL from the routine in the bot info pane |
 | `GROK_WEBHOOK_KEY` | empty | Webhook key; never committed or logged |
 | `GROK_WEBHOOK_AUTH_HEADER` | `Authorization` | Header **name** from the panel |
-| `GROK_WEBHOOK_AUTH_SCHEME` | `Bearer` | Scheme prefix. Empty string sends the raw key as the header value |
+| `GROK_WEBHOOK_AUTH_SCHEME` | `Bearer` | Scheme prefix. Empty string sends the raw key as the header value. On AWS, store the empty value (not an unset key) so `put_lab_secrets.py` writes `__EMPTY__` instead of skipping and leaving Bearer |
 
 5. Start (or recreate) the stack **including alertmanager + incident-bridge**, then test:
 

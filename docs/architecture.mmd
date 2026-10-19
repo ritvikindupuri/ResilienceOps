@@ -2,6 +2,7 @@
 flowchart LR
   TF["Terraform · optional AWS"]
   DEPLOY["deploy_remote.py"]
+  SECRETS["put_lab_secrets.py"]
   subgraph aws ["AWS account — outside the VPC"]
     S3["S3 deploy bucket"]
     PARAM["SSM Parameter Store"]
@@ -31,7 +32,7 @@ flowchart LR
           PROM[Prometheus]
           GRAF[Grafana]
           AM[Alertmanager]
-          BR[incident-bridge]
+          BR["incident-bridge\nPromQL · agent jsonl (Compose agents)"]
           TG -->|"requests"| GW
           GW -->|"/api/orders"| OS
           GW -->|"/api/payments"| PS
@@ -59,7 +60,9 @@ flowchart LR
 
   TF -->|provisions| pub
   DEPLOY --> S3 --> pub
-  PARAM -->|"put_lab_secrets.py → .env"| pub
+  DEPLOY --> SSM --> pub
+  SECRETS --> PARAM -->|"host .env"| pub
+  IGW -->|"operator :3000 / :8000"| sg
   RED -->|"faults"| OS
   RED -->|"faults"| PS
   BLUE -->|"health ×3"| GW

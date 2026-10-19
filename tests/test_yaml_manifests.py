@@ -53,3 +53,13 @@ def test_blue_team_pod_uses_sandbox_sa():
     docs = _load_all("k8s/agents/agent-sandbox.yaml")
     dep = next(d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == "blue-team-operator")
     assert dep["spec"]["template"]["spec"]["serviceAccountName"] == "sre-defender-sa"
+
+
+def test_sandbox_pods_use_working_dir_app():
+    docs = _load_all("k8s/agents/agent-sandbox.yaml")
+    for name in ("red-team-sandbox", "blue-team-operator"):
+        dep = next(d for d in docs if d.get("kind") == "Deployment" and d["metadata"]["name"] == name)
+        container = dep["spec"]["template"]["spec"]["containers"][0]
+        assert container["workingDir"] == "/app", name
+        mounts = {m["mountPath"] for m in container.get("volumeMounts", [])}
+        assert "/app" in mounts, name
