@@ -57,11 +57,11 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1600×1360 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px). Incident path is one horizontal Row A; supporting edges stay on Row B | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2720. README `<img width="100%">` |
-| Operator (laptop) | Thin top band “Deploy (optional AWS) · laptop”: Terraform, `put_lab_secrets.py`, `deploy_remote.py` | Laptop scripts, not AWS resources. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py` |
-| AWS group | “AWS” holds S3 (`from deploy_remote.py`), SSM (`send_command`), Param Store (`from put_lab_secrets.py`). One drop into the EC2 host | S3 `terraform/main.tf` deploy bucket; `deploy_remote.py` `ssm.send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are a footnote, not icons |
+| Canvas | 1600×1224 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px). Incident path is one horizontal Row A; supporting edges stay on Row B. Legend only below the boxes (no IAM/CW/IGW/step footer) | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2448. README `<img width="100%">` |
+| Operator (laptop) | Thin top band “Deploy (optional AWS) · laptop”: Terraform (`creates the infra`), Secrets script, Deploy script. No filenames on the figure | Laptop scripts, not AWS resources. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. File names live in the README “How it works” section |
+| AWS group | Official AWS Cloud logo in the header. S3 (`stores the app bundle`), SSM (`runs deploy commands`), Parameter Store (`holds secrets`). One drop into the EC2 host | Official Architecture Icons (Icon-package_07312026). S3 `aws_s3_bucket.deploy` + `deploy_remote.py` `_upload_payload` + presigned GET; SSM `send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are README prose, not figure footnotes |
 | EC2 host | Purple dashed, “EC2 host · VPC 10.0.0.0/16 · public subnet · SG :3000/:8000 from allowed_cidr” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to `allowed_cidr` |
-| k3s group | Small dashed “k3s sandbox (optional)” + “Optional: runs orchestrator.py in one sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox` |
+| k3s group | Small dashed “k3s sandbox (optional)” + “optional: agents in a sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Filename is in the README, not the figure |
 | Agents group | Narrow “Agents” + “--profile agents” column (Red above Blue). Edges leave from the right edge only | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` |
 | Target services | Column group `api-gw` / `order-service` / `payment-service`. Orange ①/② and grey Traffic/Blue touch the group box, not individual icons | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
 | Compose group | “Lab (Docker Compose)” wrapping Agents, Target services, observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
@@ -74,14 +74,14 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Node | Caption on figure | Evidence |
 |---|---|---|
-| Terraform | “optional AWS” (outside the VPC) | AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
-| deploy_remote.py | “operator” (outside the VPC) | Builds a zip, uploads to S3, `ssm.send_command` |
-| S3 satellite | “from deploy_remote.py” | `aws_s3_bucket.deploy`; `deploy_remote.py` `_upload_payload` |
-| Param Store satellite | “from put_lab_secrets.py” | `scripts/put_lab_secrets.py` SecureString; host `.env` via instance role `GetParameter` |
+| Terraform | “creates the infra” | AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
+| Deploy script | “Deploy script” | `deploy_remote.py`: zip, S3 `put_object`, presigned GET, `ssm.send_command` |
+| S3 satellite | “stores the app bundle” | `aws_s3_bucket.deploy`; `deploy_remote.py` `_upload_payload` `put_object` + `generate_presigned_url` (`get_object`, 3600s); host `curl` of that URL |
+| Param Store satellite | “holds secrets” | `scripts/put_lab_secrets.py` SecureString; host `.env` via instance role `GetParameter` |
 | IAM satellite | “role + profile” | `aws_iam_role.sre_host_role` name `sre-platform-host-role`; instance profile `sre-platform-instance-profile` |
-| SSM satellite | “send_command” | `AmazonSSMManagedInstanceCore`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
+| SSM satellite | “runs deploy commands” | `AmazonSSMManagedInstanceCore`; `deploy_remote.py` `send_and_wait` / `AWS-RunShellScript` |
 | CW Logs satellite | “agents → CW” | `agents/common/structured_logger.py` `CreateLogStream` + `put_log_events` to `/sre/autonomous-agent-audit` stream `audit-stream` (Terraform + logger). Compose `agent-sandbox` `AWS_REGION` |
-| put_lab_secrets.py satellite | “laptop” | Operator script; not an AWS resource. Caption on Param Store (`from put_lab_secrets.py`) |
+| Secrets script satellite | “Secrets script” | `scripts/put_lab_secrets.py`; not an AWS resource |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
 | k3s | small dashed “k3s sandbox (optional)” / “Optional: runs orchestrator.py in one sandbox pod” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`; only `red-team-sandbox` runs `orchestrator.py` |
@@ -95,7 +95,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:103-109`; order-service `POSTGRES_DB` `:39` |
 | Prometheus | (no caption; scrape arrow from the service row) | image `prom/prometheus:v2.52.0` `docker-compose.yml:132`; `dashboards/prometheus.yml:1-12` |
 | Alertmanager | “Groups alerts” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:153`; `dashboards/alertmanager.yml:4-16` |
-| incident-bridge | “PromQL · agent jsonl (Compose agents)” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
+| incident-bridge | “adds evidence” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
 | Grafana | (no caption; under the payment-service column, reads from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
 | GitHub issue | “label: incident” | Bot behavior (imported template). Sample: issue #5 label `incident`. Path A does **not** open issues (`orchestrator.py:112-115` writes `reports/`) |
@@ -224,7 +224,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
-| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (3200×2720) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1600×1360 |
+| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (3200×2448) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1600×1224 |
 
 Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.env.example` and mentioned in the README table — `tests/test_docs_consistency.py:57-72`.
 

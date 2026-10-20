@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """Build docs/architecture.svg in the Grok-bot-repo icon style.
 
-Official marks live in docs/icons/ (AWS Architecture Icons, CNCF/k3s,
-Grafana plugin Alertmanager, Simple Icons brand glyphs). Generic person /
-clock / bell / document / traffic symbols are drawn here. The Grok bot
-avatar is the real mark: a rounded hexagon tilted ~22°, fill #FB2B3E,
-with two upright white capsule eyes.
+Official marks live in docs/icons/:
+- AWS Architecture Icons asset package (service + resource + group logos):
+  https://aws.amazon.com/architecture/icons/
+  Icon-package_07312026 (Simple Storage Service, Systems Manager,
+  Systems Manager Parameter Store resource icon, Amazon EC2, AWS Cloud logo).
+- Terraform / Docker / Prometheus / Grafana / GitHub: official brand glyphs
+  via Simple Icons (CC0), project brand hex.
+- k3s: official mark from CNCF artwork (projects/k3s).
+- Alertmanager: Grafana data-source mark.
+
+Generic person / clock / bell / document / traffic symbols are drawn here.
+The Grok bot avatar is the real mark: a rounded hexagon tilted ~22°,
+fill #FB2B3E, with two upright white capsule eyes.
 """
 
 from __future__ import annotations
@@ -44,6 +52,8 @@ ICON_FILES = [
     "aws-iam",
     "aws-ssm",
     "aws-s3",
+    "aws-param-store",
+    "aws-logo",
     "aws-cloudwatch",
     "aws-vpc",
     "aws-subnet-public",
@@ -813,7 +823,7 @@ def build() -> str:
 
 
 def build_scene() -> tuple[str, list[str]]:
-    W, H = 1600, 1360
+    W, H = 1600, 1224
     scene = Scene(W, H)
 
     # Top deploy band: one row of 6 icons. No long flyover arrows.
@@ -821,8 +831,8 @@ def build_scene() -> tuple[str, list[str]]:
     lap_x, lap_w = 24, 764
     aws_x, aws_w = 800, 776
     sat_y = 170
-    tf_x, sec_x, dep_x = 100, 305, 540
-    s3_x, ssm_x, par_x = 960, 1160, 1390
+    tf_x, sec_x, dep_x = 145, 350, 560
+    s3_x, ssm_x, par_x = 955, 1215, 1445
     drop_x = 1000
 
     host_x, host_y, host_w, host_h = 24, 268, 1192, 832
@@ -889,16 +899,16 @@ def build_scene() -> tuple[str, list[str]]:
     scene.add(group(lap_x, dep_y, lap_w, dep_h, "Deploy (optional AWS) · laptop", style="account"))
     scene.container("laptop", lap_x, dep_y, lap_w, dep_h)
     scene.text(lap_x + 18, dep_y + 28, "Deploy (optional AWS) · laptop", GROUP_PX, bold=True, name="group:laptop", container="laptop")
-    scene.add(group(aws_x, dep_y, aws_w, dep_h, "AWS", icon="aws-s3", style="account"))
+    scene.add(group(aws_x, dep_y, aws_w, dep_h, "AWS", icon="aws-logo", style="account"))
     scene.container("aws", aws_x, dep_y, aws_w, dep_h)
     scene.text(aws_x + 40, dep_y + 28, "AWS", GROUP_PX, bold=True, name="group:aws", container="aws")
 
-    scene.satellite_at(tf_x, sat_y, "terraform", "Terraform", "IaC", container="laptop")
-    scene.satellite_at(sec_x, sat_y, "document", "put_lab_secrets.py", "laptop", name_size=22, container="laptop")
-    scene.satellite_at(dep_x, sat_y, "document", "deploy_remote.py", "operator", container="laptop")
-    scene.satellite_at(s3_x, sat_y, "aws-s3", "S3", "from deploy_remote.py", container="aws")
-    scene.satellite_at(ssm_x, sat_y, "aws-ssm", "SSM", "send_command", container="aws")
-    scene.satellite_at(par_x, sat_y, "aws-ssm", "Param Store", "from put_lab_secrets.py", container="aws")
+    scene.satellite_at(tf_x, sat_y, "terraform", "Terraform", "creates the infra", container="laptop")
+    scene.satellite_at(sec_x, sat_y, "document", "Secrets script", "", name_size=22, container="laptop")
+    scene.satellite_at(dep_x, sat_y, "document", "Deploy script", "", name_size=22, container="laptop")
+    scene.satellite_at(s3_x, sat_y, "aws-s3", "S3", "stores the app bundle", container="aws")
+    scene.satellite_at(ssm_x, sat_y, "aws-ssm", "SSM", "runs deploy commands", container="aws")
+    scene.satellite_at(par_x, sat_y, "aws-param-store", "Parameter Store", "holds secrets", name_size=22, container="aws")
 
     # Host + External. SG sits on a second header line so the AWS→host drop misses it.
     host_title = "EC2 host · VPC 10.0.0.0/16 · public subnet"
@@ -929,7 +939,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.text(svc_x + 14, svc_y + 26, "Target services", GROUP_PX, bold=True, name="group:services", container="services")
 
     k3s_title = "k3s sandbox (optional)"
-    k3s_sub = "Optional: runs orchestrator.py in one sandbox pod"
+    k3s_sub = "optional: agents in a sandbox pod"
     scene.add(group(k3s_x, k3s_y, k3s_w, k3s_h, k3s_title, icon="k3s", style="optional"))
     scene.container("k3s", k3s_x, k3s_y, k3s_w, k3s_h)
     scene.text(k3s_x + 40, k3s_y + 28, k3s_title, GROUP_PX, bold=True, name="group:k3s", container="k3s")
@@ -960,7 +970,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.node_at(svc_cx, ps_y, "fastapi", "payment-", "", name2="service", container="services")
     scene.node_at(prom_x, prom_y, "prometheus", "Prometheus", "pulls /metrics", container="compose")
     scene.node_at(am_x, am_y, "alertmanager", "Alert", "", name2="manager", container="compose")
-    scene.node_at(br_x, br_y, "document", "incident-", "PromQL · jsonl", name2="bridge", container="compose")
+    scene.node_at(br_x, br_y, "document", "incident-", "adds evidence", name2="bridge", container="compose")
     scene.node_at(tg_x, db_y, "traffic", "Traffic", "load", container="compose")
     scene.node_at(rd_x, db_y, "redis", "Redis", "cache", container="compose")
     scene.node_at(pg_x, db_y, "postgresql", "PostgreSQL", "orders_db", container="compose")
@@ -1070,24 +1080,6 @@ def build_scene() -> tuple[str, list[str]]:
     scene.text(80, leg_y + 6, "1–6 incident path", CAP_PX, name="legend-inc")
     scene.text(344, leg_y + 6, "supporting", CAP_PX, name="legend-sup")
     scene.text(554, leg_y + 6, "query (PromQL)", CAP_PX, name="legend-q")
-
-    iam1 = "IAM role + instance profile · CloudWatch log groups"
-    iam2 = "IGW · unused subnets app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24"
-    foot_y = leg_y + 32
-    scene.add(f'  <text x="{W / 2:.0f}" y="{foot_y}" text-anchor="middle" class="cap">{iam1}</text>')
-    scene.add(f'  <text x="{W / 2:.0f}" y="{foot_y + 28}" text-anchor="middle" class="cap">{iam2}</text>')
-    scene.text(W / 2, foot_y, iam1, CAP_PX, anchor="middle", name="foot-iam1")
-    scene.text(W / 2, foot_y + 28, iam2, CAP_PX, anchor="middle", name="foot-iam2")
-
-    f1 = "① Red faults order-service + payment-service (FAULT_HOLD_SECONDS default 120)   ② Prometheus scrapes all 3"
-    f2 = "③ Alertmanager   ④ incident-bridge   ⑤ AI Incident Diagnosis   ⑥ GitHub issue (label: incident) + owner ping"
-    f3 = "The bot has no control path into the lab: webhook in, GitHub issue + owner ping out."
-    scene.add(f'  <text x="{W / 2:.0f}" y="{foot_y + 58}" text-anchor="middle" class="foot">{f1}</text>')
-    scene.add(f'  <text x="{W / 2:.0f}" y="{foot_y + 86}" text-anchor="middle" class="foot">{f2}</text>')
-    scene.add(f'  <text x="{W / 2:.0f}" y="{foot_y + 114}" text-anchor="middle" class="foot">{f3}</text>')
-    scene.text(W / 2, foot_y + 58, f1, CAP_PX, anchor="middle", name="foot-1")
-    scene.text(W / 2, foot_y + 86, f2, CAP_PX, anchor="middle", name="foot-2")
-    scene.text(W / 2, foot_y + 114, f3, CAP_PX, anchor="middle", name="foot-3")
     scene.add("</svg>\n")
     return "\n".join(scene.parts), scene.check()
 

@@ -165,27 +165,40 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "faults order" in svg
     assert "→ OS" not in svg
     assert "faults OS+PS" not in svg
-    assert "CloudWatch log groups" in svg
     assert "/sre/autonomous-agent-audit" not in svg
     assert "Grok Bot (external)" not in svg
     assert "AI Incident Diagnosis" in svg
-    assert "PromQL · jsonl" in svg
-    assert "PromQL · jsonl · k8s" not in svg
-    assert "FAULT_HOLD_SECONDS" in svg
-    assert "put_lab_secrets.py" in svg
-    assert "send_command" in svg
+    assert "adds evidence" in svg
+    assert "PromQL · jsonl" not in svg
+    assert "creates the infra" in svg
+    assert "Secrets script" in svg
+    assert "Deploy script" in svg
+    assert "stores the app bundle" in svg
+    assert "runs deploy commands" in svg
+    assert "holds secrets" in svg
+    assert "optional: agents in a sandbox pod" in svg
+    for filename in (
+        "put_lab_secrets.py",
+        "deploy_remote.py",
+        "orchestrator.py",
+        "jsonl",
+        "FAULT_HOLD_SECONDS",
+        "send_command",
+        "CloudWatch log groups",
+        "webhook in",
+        "app_workloads",
+        "data_persistence",
+    ):
+        assert filename not in svg, filename
     assert ":3000/:8000" in svg
     assert "--profile agents" in svg
     assert "Lab (Docker Compose)" in svg
     assert "Docker Compose on this host" not in svg
     assert "k3s sandbox (optional)" in svg
-    assert "Optional: runs orchestrator.py in one sandbox pod" in svg
     assert "Runs the agents in isolated pods" not in svg
     assert "k3s (optional)" not in svg
     assert "read-only" not in svg.lower()
     assert "Owner ping" in svg
-    assert "webhook in" in svg
-    assert "app_workloads 10.0.10.0/24" in svg
     assert "1–6 incident path" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
@@ -214,7 +227,11 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "docker compose up --build -d" in readme
     assert "FaultCatalog.reset_environment" in readme or "finally" in readme
     assert "SG :3000/:8000 from allowed_cidr" in svg
-    assert "data_persistence 10.0.20.0/24" in svg
+    assert "CloudWatch log groups" in readme
+    assert "app_workloads 10.0.10.0/24" in readme
+    assert "data_persistence 10.0.20.0/24" in readme
+    assert "webhook in" in readme
+    assert "send_command" in readme
     assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
         ROOT / "services" / "incident-bridge" / "app.py"
     ).read_text(encoding="utf-8")
@@ -264,6 +281,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1600×1360; render_architecture.sh writes 2×.
+    # Native SVG is 1600×1224; render_architecture.sh writes 2×.
     assert width in {1600, 3200}, width
-    assert height in {1360, 2720}, height
+    assert height in {1224, 2448}, height
