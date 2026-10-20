@@ -308,6 +308,8 @@ def _stroke(inc: bool, dashed: bool, thin: bool = False) -> tuple[str, str, str]
         cls = "arrow-inc-thin"
     elif inc:
         cls = "arrow-inc"
+    elif thin:
+        cls = "arrow-thin"
     else:
         cls = "arrow"
     mk = "arr-inc" if inc else "arr"
@@ -759,7 +761,9 @@ class Scene:
                     in1 = _pt_in_box(s[0], s[1], b, 8.0)
                     in2 = _pt_in_box(s[2], s[3], b, 8.0)
                     if b[4] in solid_groups:
-                        if in1 and in2:
+                        # Start or end inside (e.g. ① from the Red icon) and exit
+                        # the right edge. A flyover that only clips the fill still fails.
+                        if in1 or in2:
                             continue
                         if clip > 16.0:
                             hits.append(f"line {s[4]} through {b[5]} {b[4]}")
@@ -826,42 +830,39 @@ def build_scene() -> tuple[str, list[str]]:
     W, H = 1600, 1224
     scene = Scene(W, H)
 
-    # Top deploy band: one row of 6 icons. No long flyover arrows.
-    dep_y, dep_h = 104, 148
-    lap_x, lap_w = 24, 764
+    # Deploy band: icons on one row; three short grey arrows in the title/icon gap.
+    dep_y, dep_h = 96, 172
+    lap_x, lap_w = 24, 760
     aws_x, aws_w = 800, 776
-    sat_y = 170
+    sat_y = 194
     tf_x, sec_x, dep_x = 145, 350, 560
-    s3_x, ssm_x, par_x = 955, 1215, 1445
-    drop_x = 1000
+    par_x, s3_x, ssm_x = 910, 1160, 1430
+    drop_x = 1010
+    arr_ssm_y, arr_s3_y, arr_par_y = 144, 156, 168
 
-    host_x, host_y, host_w, host_h = 24, 268, 1192, 832
-    bot_x, bot_y, bot_w, bot_h = 1232, 268, 344, 832
+    host_x, host_y, host_w, host_h = 24, 276, 1192, 820
+    bot_x, bot_y, bot_w, bot_h = 1232, 276, 344, 820
 
-    compose_x, compose_y = 36, 348
+    compose_x, compose_y = 36, 356
     compose_w, compose_h = 1168, 636
-    k3s_x, k3s_y, k3s_w, k3s_h = 36, 996, 1168, 72
+    k3s_x, k3s_y, k3s_w, k3s_h = 36, 1004, 1168, 68
 
-    # Agents column: Red on Row A, Blue on Row B. Edges leave from the right edge.
-    agents_x, agents_y, agents_w, agents_h = 48, 404, 268, 500
-    red_x, red_y = 182, 566
+    agents_x, agents_y, agents_w, agents_h = 48, 412, 272, 490
+    red_x, red_y = 182, 560
     blue_x, blue_y = 182, 775
 
-    # Target services: api-gw / order-service / payment-service in one column.
-    svc_x, svc_y, svc_w, svc_h = 340, 404, 250, 430
-    svc_cx = 465
-    gw_y, os_y, ps_y = 510, 625, 755
+    svc_x, svc_y, svc_w, svc_h = 408, 412, 228, 422
+    svc_cx = 522
+    gw_y, os_y, ps_y = 510, 625, 750
 
-    # Row A (incident): one straight horizontal at Red's icon center.
     row_a = _ic(red_y)
-    prom_x, am_x, br_x = 720, 930, 1105
+    prom_x, am_x, br_x = 800, 980, 1110
     prom_y = am_y = br_y = red_y
-    graf_x, graf_y = 720, 730
+    graf_x, graf_y = 800, 720
 
-    # Row B: Redis + PostgreSQL under the group; Traffic to the right, up then into the group.
-    rd_x, pg_x, tg_x, db_y = 380, 520, 680, 900
+    rd_x, pg_x, tg_x, db_y = 420, 550, 700, 925
 
-    grok_x, grok_y = 1328, 562
+    grok_x, grok_y = 1328, 560
     gh_x, ping_x, gh_y, ping_y = 1500, 1500, 700, 880
 
     scene.add(f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -879,6 +880,7 @@ def build_scene() -> tuple[str, list[str]]:
       .legend {{ font: {CAP_PX}px Arial, Helvetica, sans-serif; fill: #4B5563; }}
       .badge {{ font: 700 22px Arial, Helvetica, sans-serif; fill: #FFFFFF; }}
       .arrow {{ stroke: #9CA3AF; stroke-width: 2.0; fill: none; }}
+      .arrow-thin {{ stroke: #9CA3AF; stroke-width: 1.35; fill: none; }}
       .arrow-inc {{ stroke: {INC_ORANGE}; stroke-width: 3.4; fill: none; }}
       .arrow-inc-thin {{ stroke: {INC_ORANGE}; stroke-width: 2.0; fill: none; }}
     </style>
@@ -895,7 +897,6 @@ def build_scene() -> tuple[str, list[str]]:
 ''')
     scene.text(W / 2, 72, "How ResilienceOps + AI Incident Diagnosis works", TITLE_PX, bold=True, anchor="middle", name="title")
 
-    # Deploy band.
     scene.add(group(lap_x, dep_y, lap_w, dep_h, "Deploy (optional AWS) · laptop", style="account"))
     scene.container("laptop", lap_x, dep_y, lap_w, dep_h)
     scene.text(lap_x + 18, dep_y + 28, "Deploy (optional AWS) · laptop", GROUP_PX, bold=True, name="group:laptop", container="laptop")
@@ -910,8 +911,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.satellite_at(ssm_x, sat_y, "aws-ssm", "SSM", "runs deploy commands", container="aws")
     scene.satellite_at(par_x, sat_y, "aws-param-store", "Parameter Store", "holds secrets", name_size=22, container="aws")
 
-    # Host + External. SG sits on a second header line so the AWS→host drop misses it.
-    host_title = "EC2 host · VPC 10.0.0.0/16 · public subnet"
+    host_title = "EC2 host · public subnet in VPC 10.0.0.0/16"
     host_sg = "SG :3000/:8000 from allowed_cidr"
     scene.add(group(host_x, host_y, host_w, host_h, host_title, icon="aws-ec2", style="host"))
     scene.container("host", host_x, host_y, host_w, host_h)
@@ -939,7 +939,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.text(svc_x + 14, svc_y + 26, "Target services", GROUP_PX, bold=True, name="group:services", container="services")
 
     k3s_title = "k3s sandbox (optional)"
-    k3s_sub = "optional: agents in a sandbox pod"
+    k3s_sub = "agents in one sandbox pod"
     scene.add(group(k3s_x, k3s_y, k3s_w, k3s_h, k3s_title, icon="k3s", style="optional"))
     scene.container("k3s", k3s_x, k3s_y, k3s_w, k3s_h)
     scene.text(k3s_x + 40, k3s_y + 28, k3s_title, GROUP_PX, bold=True, name="group:k3s", container="k3s")
@@ -979,9 +979,17 @@ def build_scene() -> tuple[str, list[str]]:
     scene.node_at(gh_x, gh_y, "github", "GitHub", "incident", name2="issue", name_size=22, container="bot")
     scene.node_at(ping_x, ping_y, "bell", "Owner ping", "critical", name_size=22, container="bot")
 
-    agents_right = agents_x + agents_w
-    svc_left, svc_right = svc_x, svc_x + svc_w
-    svc_bottom = svc_y + svc_h
+    sat_half = 15.0
+    red_right = red_x + ICON / 2 + 4
+    blue_right = blue_x + ICON / 2 + 4
+    os_left = svc_cx - ICON / 2 - 4
+    gw_left = os_left
+    ps_left = os_left
+    gw_ic = _ic(gw_y)
+    os_ic = _ic(os_y)
+    ps_ic = _ic(ps_y)
+    blue_ic = _ic(blue_y)
+    svc_right = svc_x + svc_w
     prom_left = prom_x - ICON / 2 - 8
     prom_right = prom_x + ICON / 2 + 8
     am_left = am_x - ICON / 2 - 8
@@ -996,20 +1004,63 @@ def build_scene() -> tuple[str, list[str]]:
     prom_top = _icon_top(prom_y)
     graf_top = _icon_top(graf_y, 48)
     db_top = _icon_top(db_y)
-    gutter_x = (agents_right + svc_left) / 2
-    blue_ic = _ic(blue_y)
-    blue_enter_y = 668
-    fork_x = 1438
+    prom_cap_y = prom_y + 52
+    fork_x = 368
+    # Lane just left of ② (636). OS→DB passes this x at os_ic through a bus gap.
+    bus_x = 628
+    osdb_x = 650
+    join_x = 330
+    corr_y = 852
+    fork_bot = 1438
     badge_y = row_a - 28
     promql_y = 412
-    prom_cap_y = prom_y + 52
+    # Blue ticks land on a lower slice of each service icon so they do not
+    # sit on the same y as ①'s icon-center landings.
+    gw_tick_y = gw_ic + 16
+    os_tick_y = os_ic + 16
+    ps_tick_y = ps_ic + 16
+    query_y = row_a + 24
+    os_pass_lo, os_pass_hi = os_ic - 9, os_ic + 9
+    blue_caps = ("cap:Blue Team", "cap2:Blue Team", "cap3:Blue Team")
 
-    # Deploy: captions on AWS icons replace long arrows; one drop into the host.
+    # Deploy: three short greys in the title/icon gap + one drop into the host.
+    scene.arrow(
+        sec_x + sat_half, arr_par_y, par_x - sat_half, arr_par_y,
+        name="sec-param",
+        touch=("sat:Secrets script", "sat:Parameter Store", "sat-cap:Parameter Store"),
+    )
+    scene.arrow(
+        dep_x + sat_half, arr_s3_y, s3_x - sat_half, arr_s3_y,
+        name="dep-s3",
+        touch=("sat:Deploy script", "sat:S3", "sat-cap:S3"),
+    )
+    scene.arrow(
+        dep_x + sat_half, arr_ssm_y, ssm_x - sat_half, arr_ssm_y,
+        name="dep-ssm",
+        touch=("sat:Deploy script", "sat:SSM", "sat-cap:SSM"),
+    )
     scene.arrow(drop_x, dep_y + dep_h, drop_x, host_y, name="aws-host")
 
-    # Row A — every orange arrow is a straight horizontal between adjacent boxes.
-    scene.arrow(agents_right, row_a, svc_left, row_a, inc=True, name="fault")
-    scene.badge((agents_right + svc_left) / 2, badge_y, 1, container="compose")
+    # ① from the Red icon, fork to order-service and payment-service only.
+    scene.poly(
+        [(red_right, row_a), (fork_x, row_a)],
+        inc=True,
+        marked=False,
+        name="fault-stem",
+    )
+    scene.poly(
+        [(fork_x, row_a), (fork_x, os_ic), (os_left, os_ic)],
+        inc=True,
+        name="fault-os",
+    )
+    scene.poly(
+        [(fork_x, os_ic), (fork_x, ps_ic), (ps_left, ps_ic)],
+        inc=True,
+        name="fault-ps",
+    )
+    scene.badge(fork_x, badge_y, 1, container="compose")
+
+    # Row A incident path ②–⑥.
     scene.arrow(
         svc_right, row_a, prom_left, row_a, inc=True, name="scrape",
         touch=("cap:Prometheus",),
@@ -1022,16 +1073,16 @@ def build_scene() -> tuple[str, list[str]]:
     scene.arrow(br_right, row_a, grok_left, row_a, inc=True, name="br-bot")
     scene.badge(bot_x + 22, badge_y, 5, container="bot")
     scene.poly(
-        [(grok_right, row_a), (fork_x, row_a), (fork_x, gh_ic), (gh_left, gh_ic)],
+        [(grok_right, row_a), (fork_bot, row_a), (fork_bot, gh_ic), (gh_left, gh_ic)],
         inc=True,
         name="bot-gh",
     )
     scene.poly(
-        [(fork_x, gh_ic), (fork_x, ping_ic), (ping_left, ping_ic)],
+        [(fork_bot, gh_ic), (fork_bot, ping_ic), (ping_left, ping_ic)],
         inc=True,
         name="bot-ping",
     )
-    scene.badge(fork_x, badge_y, 6, container="bot")
+    scene.badge(fork_bot, badge_y, 6, container="bot")
 
     # PromQL query: orthogonal U above Row A, bridge → Prometheus.
     scene.poly(
@@ -1043,43 +1094,160 @@ def build_scene() -> tuple[str, list[str]]:
         ],
         dashed=True,
         name="promql",
+        touch=("cap:Prometheus", "name:Prometheus"),
     )
 
-    # Row B supporting lanes — no crossings with Row A.
     scene.arrow(
         prom_x, prom_cap_y + 16, prom_x, graf_top, name="prom-graf",
-        touch=("cap:Prometheus",),
+        touch=("cap:Prometheus", "cap:Grafana"),
+    )
+
+    # Shared y=corr corridor above the data-store icons, split at every
+    # hanging node so T-junctions share endpoints.
+    # x order: Blue 330 · Redis 420 · PG 550 · bus 628 · OS-drop 650 · Traffic 700.
+    scene.poly(
+        [(svc_cx + ICON / 2 + 4, os_ic), (osdb_x, os_ic)],
+        marked=False,
+        name="os-db-out",
+        touch=("name:order-", "name2:order-"),
     )
     scene.poly(
-        [(tg_x, db_top), (tg_x, svc_bottom), (svc_right, svc_bottom)],
-        name="traffic-svc",
+        [(osdb_x, os_ic), (osdb_x, corr_y)],
+        marked=False,
+        name="os-db-drop",
+        touch=("name:order-", "name2:order-"),
     )
-    scene.arrow(rd_x, svc_bottom, rd_x, db_top, name="svc-redis")
-    scene.arrow(pg_x, svc_bottom, pg_x, db_top, name="svc-pg")
     scene.poly(
-        [
-            (agents_right, blue_ic),
-            (gutter_x, blue_ic),
-            (gutter_x, blue_enter_y),
-            (svc_left, blue_enter_y),
-        ],
-        name="blue-health",
-        touch=("cap:Blue Team", "cap2:Blue Team", "cap3:Blue Team"),
+        [(tg_x, db_top), (tg_x, corr_y)],
+        marked=False,
+        name="traffic-up",
+        touch=("name:Traffic", "cap:Traffic"),
+    )
+    scene.poly(
+        [(blue_right, blue_ic), (join_x, blue_ic), (join_x, corr_y)],
+        marked=False,
+        name="blue-stem",
+        touch=blue_caps,
+    )
+    scene.poly(
+        [(join_x, corr_y), (rd_x, corr_y)],
+        marked=False,
+        name="corr-blue-rd",
+        touch=blue_caps + ("name:Redis", "cap:Redis"),
+    )
+    scene.poly(
+        [(rd_x, corr_y), (pg_x, corr_y)],
+        marked=False,
+        name="corr-rd-pg",
+        touch=("name:Redis", "cap:Redis", "name:PostgreSQL", "cap:PostgreSQL"),
+    )
+    scene.poly(
+        [(pg_x, corr_y), (bus_x, corr_y)],
+        marked=False,
+        name="corr-pg-bus",
+        touch=("name:PostgreSQL", "cap:PostgreSQL"),
+    )
+    scene.poly(
+        [(bus_x, corr_y), (osdb_x, corr_y)],
+        marked=False,
+        name="corr-bus-os",
+    )
+    scene.poly(
+        [(osdb_x, corr_y), (tg_x, corr_y)],
+        marked=False,
+        name="corr-os-tg",
+        touch=("name:Traffic", "cap:Traffic"),
+    )
+    scene.poly(
+        [(rd_x, corr_y), (rd_x, db_top)],
+        name="os-redis",
+        touch=("name:order-", "name2:order-", "name:Redis", "cap:Redis"),
+    )
+    scene.poly(
+        [(pg_x, corr_y), (pg_x, db_top)],
+        name="os-pg",
+        touch=("name:order-", "name2:order-", "name:PostgreSQL", "cap:PostgreSQL"),
+    )
+
+    # Services-right bus with a gap at order-service icon-center so OS→DB
+    # can pass through without sharing a shaft with Blue/Traffic.
+    scene.poly(
+        [(bus_x, corr_y), (bus_x, ps_tick_y)],
+        marked=False,
+        name="bus-ps",
+    )
+    scene.poly(
+        [(bus_x, ps_tick_y), (bus_x, os_tick_y)],
+        marked=False,
+        name="bus-os",
+    )
+    scene.poly(
+        [(bus_x, os_tick_y), (bus_x, os_pass_hi)],
+        marked=False,
+        name="bus-os-end",
+    )
+    scene.poly(
+        [(bus_x, os_pass_lo), (bus_x, query_y)],
+        marked=False,
+        name="bus-query",
+    )
+    scene.poly(
+        [(bus_x, query_y), (bus_x, gw_tick_y)],
+        marked=False,
+        name="bus-gw-tick",
+    )
+    scene.poly(
+        [(bus_x, gw_tick_y), (bus_x, gw_ic), (gw_left, gw_ic)],
+        name="traffic-gw",
+        touch=("name:api-gw", "name:Traffic", "cap:Traffic"),
+    )
+    scene.poly(
+        [(bus_x, ps_tick_y), (ps_left, ps_tick_y)],
+        thin=True,
+        name="blue-ps",
+        touch=blue_caps + ("name:payment-", "name2:payment-"),
+    )
+    scene.poly(
+        [(bus_x, os_tick_y), (os_left, os_tick_y)],
+        thin=True,
+        name="blue-os",
+        touch=blue_caps + ("name:order-", "name2:order-"),
+    )
+    scene.poly(
+        [(bus_x, gw_tick_y), (gw_left, gw_tick_y)],
+        thin=True,
+        name="blue-gw",
+        touch=blue_caps + ("name:api-gw",),
+    )
+    scene.poly(
+        [(bus_x, query_y), (prom_left, query_y)],
+        dashed=True,
+        name="blue-promql",
+        touch=blue_caps + ("name:Prometheus", "cap:Prometheus"),
     )
 
     host_bottom = host_y + host_h
-    leg_y = host_bottom + 34
+    leg_y = host_bottom + 28
+    leg_y2 = leg_y + 26
     scene.add(
         f'  <line x1="36" y1="{leg_y}" x2="70" y2="{leg_y}" class="arrow-inc"/>'
         f'  <text x="80" y="{leg_y + 6}" class="legend">1–6 incident path</text>'
         f'  <line x1="300" y1="{leg_y}" x2="334" y2="{leg_y}" class="arrow"/>'
         f'  <text x="344" y="{leg_y + 6}" class="legend">supporting</text>'
-        f'  <line x1="500" y1="{leg_y}" x2="544" y2="{leg_y}" class="arrow" stroke-dasharray="7 6"/>'
-        f'  <text x="554" y="{leg_y + 6}" class="legend">query (PromQL)</text>'
+        f'  <line x1="36" y1="{leg_y2}" x2="80" y2="{leg_y2}" class="arrow"/>'
+        f'  <line x1="88" y1="{leg_y2}" x2="132" y2="{leg_y2}" class="arrow" stroke-dasharray="7 6"/>'
+        f'  <text x="144" y="{leg_y2 + 6}" class="legend">'
+        f"solid = data flow · dashed = query (arrow points to what's queried)</text>"
     )
     scene.text(80, leg_y + 6, "1–6 incident path", CAP_PX, name="legend-inc")
     scene.text(344, leg_y + 6, "supporting", CAP_PX, name="legend-sup")
-    scene.text(554, leg_y + 6, "query (PromQL)", CAP_PX, name="legend-q")
+    scene.text(
+        144,
+        leg_y2 + 6,
+        "solid = data flow · dashed = query (arrow points to what's queried)",
+        CAP_PX,
+        name="legend-q",
+    )
     scene.add("</svg>\n")
     return "\n".join(scene.parts), scene.check()
 

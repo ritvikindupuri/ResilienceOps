@@ -5,7 +5,7 @@ Icons in this folder are inlined into `docs/architecture.svg` by
 
 | File | Source |
 | --- | --- |
-| `aws-ec2.svg`, `aws-s3.svg`, `aws-ssm.svg`, `aws-iam.svg` | [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) service icons from **Icon-package_07312026** (`Arch_Amazon-EC2_64`, `Arch_Amazon-Simple-Storage-Service_64`, `Arch_AWS-Systems-Manager_64`). AWS, the AWS logo, and AWS service names are trademarks of Amazon.com, Inc. or its affiliates. |
+| `aws-ec2.svg`, `aws-s3.svg`, `aws-ssm.svg`, `aws-iam.svg` | [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) service icons from **Icon-package_07312026** (`Arch_Amazon-EC2_64`, `Arch_Amazon-Simple-Storage-Service_64`, `Arch_AWS-Systems-Manager_64`, `Arch_AWS-Identity-and-Access-Management_64`). AWS, the AWS logo, and AWS service names are trademarks of Amazon.com, Inc. or its affiliates. |
 | `aws-param-store.svg` | Same package, **resource** icon `Res_AWS-Systems-Manager_Parameter-Store_48`. |
 | `aws-logo.svg` | Same package, group mark `AWS-Cloud-logo_32`. |
 | `aws-cloudwatch.svg` | Compact AWS-style mark kept for unused/legacy figure variants. |

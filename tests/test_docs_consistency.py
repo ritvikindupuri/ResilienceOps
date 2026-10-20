@@ -154,8 +154,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "12.1 s" in readme
     assert "examples/live_run_issue5_timeline.md" in readme
     assert "examples/live_run_issue5_bridge.log" in readme
-    assert "health ×3" in readme
-    assert "reset ×2" in readme
+    assert "Blue checks health on all 3 and resets order-service and payment-service" in readme
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
@@ -176,7 +175,12 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "stores the app bundle" in svg
     assert "runs deploy commands" in svg
     assert "holds secrets" in svg
-    assert "optional: agents in a sandbox pod" in svg
+    assert "agents in one sandbox pod" in svg
+    assert "optional: agents in a sandbox pod" not in svg
+    assert "EC2 host · public subnet in VPC 10.0.0.0/16" in svg
+    assert "solid = data flow" in svg
+    assert "Grey edges are supporting (deploy, traffic, data stores, health/reset, Grafana)." in readme
+    assert "Bridge queries Prometheus (dashed)" in readme
     for filename in (
         "put_lab_secrets.py",
         "deploy_remote.py",

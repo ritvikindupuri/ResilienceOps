@@ -13,7 +13,7 @@ flowchart LR
     PARAM["Param Store secrets → .env"]
     SSM["SSM send_command"]
   end
-  subgraph host ["EC2 host · VPC 10.0.0.0/16 · public subnet · SG :3000/:8000 from allowed_cidr"]
+  subgraph host ["EC2 host · public subnet in VPC 10.0.0.0/16 · SG :3000/:8000 from allowed_cidr"]
     subgraph compose ["Lab (Docker Compose)"]
       subgraph agents ["Agents · --profile agents"]
         RED[Red Team]
@@ -44,7 +44,7 @@ flowchart LR
       BR -.-> PROM
     end
     subgraph k3sopt ["k3s sandbox (optional)"]
-      K3S["Optional: runs orchestrator.py in one sandbox pod"]
+      K3S["agents in one sandbox pod"]
     end
   end
   subgraph ext ["External"]

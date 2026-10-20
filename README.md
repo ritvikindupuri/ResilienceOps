@@ -57,7 +57,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps + AI Incident Diagnosis works" width="100%" />
 </p>
 <p align="center"><b>Figure 1: How ResilienceOps + AI Incident Diagnosis works</b></p>
-<p align="center">Orange ①–⑥ is the incident path. Grey edges are supporting (traffic, health/reset, Grafana). Dashed grey is the PromQL query. Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
+<p align="center">Orange ①–⑥ is the incident path. Grey edges are supporting (deploy, traffic, data stores, health/reset, Grafana). Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
 
 ### How it works, step by step
@@ -67,11 +67,11 @@ The numbered path in Figure 1 is Path B (Prometheus → bot). Path A is Red/Blue
 1. **Fault injection.** Red Team faults **order-service and payment-service only** (not api-gw). `orchestrator.py` holds the fault for `FAULT_HOLD_SECONDS` (default **120**) so Prometheus `for:` windows can fire. `FaultCatalog.reset_environment()` still runs in `finally`.
 2. **Scrape.** Prometheus pulls `/metrics` from **all 3** services (`api-gw`, `order-service`, `payment-service`) every 1s (`dashboards/prometheus.yml`).
 3. **Alert.** Firing rules go to Alertmanager (`alertmanager:9093`), which POSTs to `incident-bridge:8080/webhook`.
-4. **Evidence.** incident-bridge adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host `orchestrator.py` is writing it). No Kubernetes client in the Compose bridge image.
-5. **Diagnosis.** The imported Grok template **AI Incident Diagnosis** reads the webhook. Dashed edge: bridge queries Prometheus. The bot has **no control path** into the lab: webhook in, GitHub issue + owner ping out.
+4. **Evidence.** incident-bridge adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host `orchestrator.py` is writing it). Bridge queries Prometheus (dashed). No Kubernetes client in the Compose bridge image.
+5. **Diagnosis.** The imported Grok template **AI Incident Diagnosis** reads the webhook. The bot has **no control path** into the lab: webhook in, GitHub issue + owner ping out.
 6. **Issue + ping.** The bot opens or updates a GitHub issue labeled `incident`. Firing **critical** alerts also ping the owner.
 
-**Deploy flow (optional AWS).** Laptop Terraform (`terraform/main.tf`) creates the infra, including `aws_s3_bucket.deploy`. `scripts/put_lab_secrets.py` writes SecureString parameters. `deploy_remote.py` uploads the zip to that bucket, mints a **presigned GET**, and `ssm.send_command` has the instance curl the zip, unzip, and `docker compose up`. The instance role reads Parameter Store into `/opt/sre-colosseum/.env`. One drop onto the EC2 host (VPC `10.0.0.0/16`, public subnet, SG :3000/:8000 from `allowed_cidr`). IAM role + instance profile, CloudWatch log groups, IGW, and unused subnets `app_workloads 10.0.10.0/24` / `data_persistence 10.0.20.0/24` are Terraform resources, not drawn as icons. Grafana only *reads* Prometheus. order-service owns Redis and `orders_db`. Blue *health ×3* / *reset ×2* (order-service and payment-service). Optional k3s runs `orchestrator.py` in one sandbox pod (`deploy_k8s_sandbox.py`).
+**Deploy flow (optional AWS).** Laptop Terraform (`terraform/main.tf`) creates the infra, including `aws_s3_bucket.deploy`. `scripts/put_lab_secrets.py` writes SecureString parameters. `deploy_remote.py` uploads the zip to that bucket, mints a **presigned GET**, and `ssm.send_command` has the instance curl the zip, unzip, and `docker compose up`. The instance role reads Parameter Store into `/opt/sre-colosseum/.env`. One drop onto the EC2 host (VPC `10.0.0.0/16`, public subnet, SG :3000/:8000 from `allowed_cidr`). IAM role + instance profile, CloudWatch log groups, IGW, and unused subnets `app_workloads 10.0.10.0/24` / `data_persistence 10.0.20.0/24` are Terraform resources, not drawn as icons. Grafana only *reads* Prometheus. order-service owns Redis and `orders_db`. Blue checks health on all 3 and resets order-service and payment-service. Optional k3s runs `orchestrator.py` in one sandbox pod (`deploy_k8s_sandbox.py`).
 
 ### Step-by-step flow (matches the code)
 
