@@ -169,8 +169,8 @@ The platform is designed to be **run anywhere without friction**. Choose the pat
 
 | Mode | Compute | Estimated Cost | Setup Time | What it Provisions | Best For |
 |---|---|---|---|---|---|
-| **Track 1: Local Docker Lab** *(Fastest)* | Your Laptop / Devbox | **$0.00** | **~2 minutes** | All microservices, Redis, Postgres, Prometheus, Alertmanager, Incident Bridge, Grafana | Quick testing, local debugging, verifying the Grok Bot |
-| **Track 2: AWS Cloud Platform** | AWS EC2 in custom VPC | **~$0.04/hr** | **~8 minutes** | Dedicated VPC (`sre-enterprise-vpc`), public subnet, security groups, EC2 host, CloudWatch logs, optional k3s | Production-grade cloud realism, full network isolation, CloudWatch audits |
+| **Track 1: Local Docker Lab** *(Fastest)* | Your Laptop / Devbox | **$0.00** | **~2 minutes** | All microservices, Redis, Postgres, Prometheus, Alertmanager, Incident Bridge, Grafana | Quick testing, local debugging, and validating webhook connectivity |
+| **Track 2: AWS Cloud Platform** *(Full Production Architecture)* | AWS EC2 in custom VPC | **~$0.04/hr** | **~8 minutes** | Dedicated VPC (`sre-enterprise-vpc`), public subnet, security groups, EC2 host, CloudWatch logs, optional k3s, and **Production Grok Bot incident triage & GitHub issue ticketing** | Authentic cloud environment, full network isolation, live CloudWatch audits, and automated end-to-end incident dispatch to Grok |
 
 ---
 
