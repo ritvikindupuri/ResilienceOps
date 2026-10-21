@@ -143,7 +143,48 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 
 ## Installation and quick start
 
-Follow these steps in order: **local lab first** (clone, `.env`, Docker Compose, Grok Bot), then AWS + k3s if you want the cloud host (steps 8–10). After Terraform and the sandbox are up, use [Operating the lab on AWS](#operating-the-lab-on-aws) for Grafana, CloudWatch, `orchestrator.py` cycles, and teardown. Skip that section if you are only running Compose on your laptop.
+### How the Platform Works in Practice
+
+Before running commands, here is the complete end-to-end lifecycle of the platform:
+
+```
+[1. User Stack Deployed] (Microservices + Prometheus + Alertmanager + Incident Bridge + Grafana)
+         │
+         ▼
+[2. Red Team Agents Injected] (Kernel tc netem latency, memory leak, CPU burn, or Redis starvation)
+   ┌─────┴────────────────────────────────────────────────┐
+   │                                                      │
+   ▼                                                      ▼
+[Path A: In-Cluster Autonomous Healing]    [Path B: External AI Incident Diagnosis]
+Blue Team monitors Golden Signals          Prometheus fires SLO breach (1-second tick)
+Detects breach & calls Claude Sonnet RCA   Alertmanager routes alert to incident-bridge
+Executes automated runbook remediation     Bridge bundles live PromQL metrics & logs
+Verifies service recovery (<800ms)         Bridge POSTs enriched evidence to Grok Bot
+Archives local post-mortem (reports/)      Grok opens / updates GitHub incident issue
+```
+
+### Choose Your Setup Path: Local vs. AWS
+
+The platform is designed to be **run anywhere without friction**. Choose the path that matches your current goal:
+
+| Mode | Compute | Estimated Cost | Setup Time | What it Provisions | Best For |
+|---|---|---|---|---|---|
+| **Track 1: Local Docker Lab** *(Fastest)* | Your Laptop / Devbox | **$0.00** | **~2 minutes** | All microservices, Redis, Postgres, Prometheus, Alertmanager, Incident Bridge, Grafana | Quick testing, local debugging, verifying the Grok Bot |
+| **Track 2: AWS Cloud Platform** | AWS EC2 in custom VPC | **~$0.04/hr** | **~8 minutes** | Dedicated VPC (`sre-enterprise-vpc`), public subnet, security groups, EC2 host, CloudWatch logs, optional k3s | Production-grade cloud realism, full network isolation, CloudWatch audits |
+
+---
+
+### How to Run the Resilience Agents (Sandbox vs. Direct)
+
+Once your infrastructure is up (Local or AWS), you have 3 distinct ways to run the Red & Blue team agents:
+
+| Method | Isolation Level | How to Launch | When to Use |
+|---|---|---|---|
+| **Option 1: Docker Sandbox Container** *(Recommended Local)* | **Containerized Sandbox** (`agent-sandbox` container with CPU/RAM limits) | `docker compose --profile agents up -d` | Cleanest local run; agents execute in their own isolated container with no host dependencies. |
+| **Option 2: Direct Host CLI** *(Development & Debugging)* | **Direct Process** (Runs directly on your terminal via Python) | `python3 orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | Fast script iteration, custom breakpoint debugging, or running individual test scenarios. |
+| **Option 3: Quarantined Kubernetes Pod** *(AWS Cloud Production)* | **Kubernetes Sandbox Pod** (`sre-agent-sandbox` namespace with cgroup hard limits & RBAC) | `k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- python3 orchestrator.py --target-ip $PRIVATE_IP` | True production quarantine on AWS; enforces kernel cgroup caps (`500m` CPU, `512Mi` RAM) and zero cluster-admin privileges. |
+
+---
 
 ### Local or AWS?
 
