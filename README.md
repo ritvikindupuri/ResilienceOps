@@ -174,6 +174,8 @@ The platform is designed to be **run anywhere without friction**. Both tracks ex
 
 > **Note on Real Injections vs. Mocks**: Faults are **never simulated mock data** in either track. The Red Team agents physically allocate resident byte buffers in RAM (`Exit 137`), exhaust Redis socket pools, burn real CPU cycles, and inject Linux kernel `tc netem` network delay directly into the container network stack.
 
+> **Running Inside a Grok Bot / Cloud VM Workspace**: If you have access to Grok Bot or a persistent cloud VM environment with terminal access, you can run either Track 1 (Docker Compose) or Track 2 (AWS Terraform) directly inside that cloud VM. This eliminates the need to install Docker, Python, or AWS CLI tools on your local computer while keeping the entire resilience testing lab persistent in the cloud.
+
 ---
 
 ### How to Run the Resilience Agents (Sandbox vs. Direct)
