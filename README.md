@@ -165,12 +165,14 @@ Archives local post-mortem (reports/)      Grok opens / updates GitHub incident 
 
 ### Choose Your Setup Path: Local vs. AWS
 
-The platform is designed to be **run anywhere without friction**. Choose the path that matches your current goal:
+The platform is designed to be **run anywhere without friction**. Both tracks execute the **exact same autonomous AI agents, real physical kernel/memory faults, and live Grok Bot incident triage**. The only difference is where the hosting infrastructure lives:
 
 | Mode | Compute | Estimated Cost | Setup Time | What it Provisions | Best For |
 |---|---|---|---|---|---|
-| **Track 1: Local Docker Lab** *(Fastest)* | Your Laptop / Devbox | **$0.00** | **~2 minutes** | All microservices, Redis, Postgres, Prometheus, Alertmanager, Incident Bridge, Grafana | Quick testing, local debugging, and validating webhook connectivity |
-| **Track 2: AWS Cloud Platform** *(Full Production Architecture)* | AWS EC2 in custom VPC | **~$0.04/hr** | **~8 minutes** | Dedicated VPC (`sre-enterprise-vpc`), public subnet, security groups, EC2 host, CloudWatch logs, optional k3s, and **Production Grok Bot incident triage & GitHub issue ticketing** | Authentic cloud environment, full network isolation, live CloudWatch audits, and automated end-to-end incident dispatch to Grok |
+| **Track 1: Local Docker Lab** *(Fastest)* | Your Laptop / Devbox | **$0.00** | **~2 minutes** | All microservices, Redis, Postgres, Prometheus, Alertmanager, Incident Bridge, Grafana, and **Full Red/Blue Team AI Agents & Grok Bot** | Fast zero-cost testing, local development, and end-to-end agent resilience runs on your machine |
+| **Track 2: AWS Cloud Platform** *(Full Cloud Deployment)* | AWS EC2 in custom VPC | **~$0.04/hr** | **~8 minutes** | Dedicated VPC (`sre-enterprise-vpc`), public subnet, security groups, EC2 host, CloudWatch logs, optional k3s agent pod quarantine, and **Full Red/Blue Team AI Agents & Grok Bot** | Production cloud realism, multi-subnet network isolation, permanent CloudWatch audit streams, and Kubernetes sandboxing |
+
+> **Note on Real Injections vs. Mocks**: Faults are **never simulated mock data** in either track. The Red Team agents physically allocate resident byte buffers in RAM (`Exit 137`), exhaust Redis socket pools, burn real CPU cycles, and inject Linux kernel `tc netem` network delay directly into the container network stack.
 
 ---
 
