@@ -197,7 +197,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     sandbox_at = readme.index("## Agent sandbox")
     aws_at = readme.index("## AWS (optional)")
     assert how_at < sandbox_at < aws_at
-    assert readme.index("**Figure 1.**") < readme.index("**Figure 2.**") < readme.index("**Figure 3:")
+    assert readme.index("<b>Figure 1.</b>") < readme.index("<b>Figure 2.</b>") < readme.index("<b>Figure 3:")
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     sandbox = (ROOT / "docs" / "sandbox_architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
