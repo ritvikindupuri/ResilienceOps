@@ -3,13 +3,14 @@
 An SRE lab: three FastAPI services, real faults, Prometheus alerts, and two importable Grok bots.
 
 - **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** opens a GitHub `incident` issue. It has [no control path into the lab](#read-these-once).
-- **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** is invoked only by the Diagnosis bot. After Diagnosis files or comments on a firing `incident` issue, it asks this teammate to post one allowlisted fix. The fix runs only after `/approve`, on the machine that can see Compose (or [`--via-ssm`](#read-these-once)).
+- **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** is invoked only by the Diagnosis bot. The fix runs only after `/approve`, on the machine that can see Compose (or [`--via-ssm`](#read-these-once)).
 
 This README is the source of truth. The [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf) is a historical brief. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
 
+The diagnosis bot receives alerts and writes GitHub issues (webhook in, GitHub out). Internals — hold time, EC2 `.env`, SSM, and what the lab actually faults — are in [Reference](#reference).
+
 ## Table of contents
 
-- [Read these once](#read-these-once)
 - [Prerequisites](#prerequisites)
 - [Quick start (local)](#quick-start-local)
 - [Set up both bots](#set-up-both-bots)
@@ -17,29 +18,14 @@ This README is the source of truth. The [technical documentation PDF](docs/Resil
 - [AWS (optional)](#aws-optional)
 - [Troubleshooting](#troubleshooting)
 - [Reference](#reference)
+  - [Read these once](#read-these-once)
+  - [Key features](#key-features)
   - [Architecture](#architecture)
   - [How it works, step by step](#how-it-works-step-by-step)
   - [Code flow](#code-flow)
   - [Full environment table](#full-environment-table)
   - [Sample output: a real test run](#sample-output-a-real-test-run)
   - [Glossary](#glossary)
-
-## Read these once
-
-Later sections link here instead of repeating these sentences.
-
-- **No control path into the lab.** The diagnosis bot only receives webhooks and writes GitHub issues (webhook in, GitHub out). It never restarts, scales, rolls back, or pushes code.
-- **`FAULT_HOLD_SECONDS` defaults to 120.** Path A (`orchestrator.py`) holds the fault so Prometheus `for:` windows can fire, then always calls `FaultCatalog.reset_environment()` in `finally`. Set `0` to skip the hold. `/fault/cpu-burn` (15s) and `/fault/crash` are not standing faults — the burn ends on its own, and Compose `restart: unless-stopped` brings `order-service` back.
-- **EC2 `.env` is root-owned.** `deploy_remote.py` writes `/opt/sre-colosseum/.env`. On that host run `cd /opt/sre-colosseum && sudo python3 remediation/poll_and_apply.py --once`. If the process cannot read the file, `remediation/envload.py` skips it quietly and does not print secrets.
-- **`--via-ssm`** reuses `deploy_remote.send_and_wait` (`ssm.send_command` / `AWS-RunShellScript` in `/opt/sre-colosseum`). Needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded. An SSM failure posts a result comment with `ok: false`. No new IAM is added.
-
-## Key features
-
-- Real kernel and cgroup faults (`tc netem` on `eth0`, heap leaks that can OOM, CFS CPU burn, Redis `maxclients` starvation) — not mock metrics.
-- Optional Red/Blue agents (`orchestrator.py`) that inject, detect, reset, and write `reports/incident_*.md`. They do **not** open GitHub issues.
-- Diagnosis bot: Prometheus → Alertmanager → incident-bridge → webhook → `incident` issue (and a chat ping on firing **critical** alerts). Then it asks the Remediation bot to propose a fix.
-- Remediation bot: no webhook and no repo watch. Diagnosis hands off; the teammate comments one allowlisted proposal. Owner `/approve`; host poller or [`--via-ssm`](#read-these-once) runs `reset_fault`, `restart_service`, or `rollback_deploy`.
-- Grafana at 1s scrape on `:3000`. Optional AWS EC2 + k3s sandbox. CloudWatch log groups `/sre/autonomous-agent-audit` and `/sre/autonomous-agent-incidents` (Terraform creates the groups; dashboards are helper scripts).
 
 ## Prerequisites
 
@@ -54,7 +40,6 @@ Later sections link here instead of repeating these sentences.
 | Local lab (default) | [Quick start](#quick-start-local) + [both bots](#set-up-both-bots) on your laptop |
 | AWS lab | [AWS](#aws-optional) — skip `docker compose up` on the laptop |
 | Red/Blue agents | Optional. Local: `docker compose --profile agents` or `python3 orchestrator.py`. AWS: `--profile agents` or the [k3s sandbox](#optional-k3s-sandbox) |
-| Architecture PNG rebuild | `librsvg2-bin` (`rsvg-convert`) or Chrome, then `./scripts/render_architecture.sh` (`scripts/build_architecture.py`) |
 
 ## Quick start (local)
 
@@ -77,18 +62,18 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-Fill the **eight** required keys (full list in [Reference](#full-environment-table)). Do not commit `.env` ([SECURITY.md](SECURITY.md)).
+Fill Grafana now so Compose can start. Webhook and poller keys are filled later in [Set up both bots](#set-up-both-bots). Do not commit `.env` ([SECURITY.md](SECURITY.md)). Full list in [Reference](#full-environment-table).
 
-| Variable | Why |
+| Variable | When |
 |---|---|
-| `GRAFANA_ADMIN_USER` | Compose fails without it (`${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER}`) |
-| `GRAFANA_ADMIN_PASSWORD` | No `admin`/`admin` default |
-| `GROK_WEBHOOK_URL` | Diagnosis routine webhook. Empty → `webhook_configured: false` |
-| `GROK_WEBHOOK_KEY` | Routine key. Never logged |
-| `GROK_WEBHOOK_AUTH_HEADER` | Header **name**. Default `Authorization` |
-| `GROK_WEBHOOK_AUTH_SCHEME` | Usually `Bearer`. Empty string sends the raw key. **Unset** (missing) leaves Compose’s `Bearer` default |
-| `GITHUB_REPOSITORY` | `owner/name` of **your fork**. The poller reads this; never hardcode another repo in commands |
-| `GITHUB_TOKEN` | Poller token. See [token](#poller-token). `GH_TOKEN` is used only if this is unset |
+| `GRAFANA_ADMIN_USER` | Fill now. Compose fails without it (`${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER}`) |
+| `GRAFANA_ADMIN_PASSWORD` | Fill now. No `admin`/`admin` default |
+| `GROK_WEBHOOK_URL` | Filled later in [Set up both bots](#set-up-both-bots) |
+| `GROK_WEBHOOK_KEY` | Filled later in [Set up both bots](#set-up-both-bots) |
+| `GROK_WEBHOOK_AUTH_HEADER` | Filled later in [Set up both bots](#set-up-both-bots) |
+| `GROK_WEBHOOK_AUTH_SCHEME` | Filled later in [Set up both bots](#set-up-both-bots) |
+| `GITHUB_REPOSITORY` | Filled later in [Set up both bots](#set-up-both-bots) |
+| `GITHUB_TOKEN` | Filled later in [Set up both bots](#set-up-both-bots) |
 
 **Optional:** `ANTHROPIC_API_KEY` (Red/Blue). `POSTGRES_PASSWORD` defaults to `sre_password`.
 
@@ -158,15 +143,6 @@ Work on **your fork**. Do not point the bots at someone else’s repo.
 3. Enable **Actions** (open the **Actions** tab and enable workflows). `/approve` does nothing if Actions is off.
 4. Connect GitHub when each bot asks in its **first chat**, and grant it access to **your fork only**.
 
-### Poller token
-
-Create a token **before** you need the poller. Never commit it.
-
-- **Fine-grained:** repository access = your fork only; **Issues: Read and write**. Metadata read is automatic.
-- **Classic:** scope `repo`.
-
-GitHub does not have permissions named `issues:read` or `issues:write`. Those names in older docs were wrong.
-
 ### AI Incident Diagnosis
 
 This bot receives alerts. It is **not** the remediator. Do not paste remediator secrets into `GROK_WEBHOOK_*`.
@@ -175,14 +151,14 @@ This bot receives alerts. It is **not** the remediator. Do not paste remediator 
 2. Connect GitHub when the bot asks in its first chat, and grant it access to your fork only.
 3. In that first chat, name the GitHub repo (`owner/name`), the alert source (Prometheus / ResilienceOps), and whether to ping you on firing **critical** alerts.
 
-**You should see:** the bot confirms the repo it will watch, and a routine for incident diagnosis with a webhook URL and key.
+The Diagnosis bot gives you a webhook URL and key; use the header and scheme it tells you.
 
-Copy **four** values into `.env` (no trailing spaces):
+Copy those values into `.env` (no trailing spaces):
 
 1. Webhook URL → `GROK_WEBHOOK_URL`
 2. Webhook key → `GROK_WEBHOOK_KEY`
-3. Authorization header **name** → `GROK_WEBHOOK_AUTH_HEADER` (usually `Authorization`)
-4. Authorization **scheme** → `GROK_WEBHOOK_AUTH_SCHEME` (`Bearer`, or empty if the routine sends the raw key)
+3. Header name → `GROK_WEBHOOK_AUTH_HEADER`
+4. Scheme → `GROK_WEBHOOK_AUTH_SCHEME`
 
 Save `.env`, then recreate the bridge so it picks up the file:
 
@@ -197,19 +173,21 @@ On AWS later, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies
 
 ### Incident Remediation
 
-A **second** bot in the **same Grok account**. It has **no webhook** and does **not** watch the repo. Only the Diagnosis bot’s webhook goes in `.env`. Do not paste anything from this bot into `GROK_WEBHOOK_*`.
-
-After Diagnosis files or comments on a firing `incident` issue, it asks this teammate to post one proposal.
+A **second** bot in the **same Grok account**. Only the Diagnosis bot’s webhook goes in `.env`. Do not paste anything from this bot into `GROK_WEBHOOK_*`.
 
 1. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**.
 2. Connect GitHub when the bot asks in its first chat, and grant it access to **the same fork**.
 3. Keep both bots in the same account so Diagnosis can message it.
-4. Enable Actions on that fork (above).
-5. Create the [poller token](#poller-token) and put `GITHUB_REPOSITORY=owner/name` plus `GITHUB_TOKEN` in `.env`. The `/approve` → Actions → poller path still needs this token.
+4. Create the [poller token](#poller-token) and put `GITHUB_REPOSITORY=owner/name` plus `GITHUB_TOKEN` in `.env`. The poller reads `.env` at run time. The `/approve` → Actions → poller path still needs this token.
 
-**You should see:** no webhook URL or key. The bot is ready for Diagnosis to hand off an issue.
+When a proposal should appear, see [How it works step 7](#how-it-works-step-by-step). If it does not, see [No proposal appeared](#no-proposal-appeared).
 
-If no proposal appears within a few minutes, ask the Diagnosis bot to hand off issue #N, or message the Remediation bot directly: `Check issue #N in owner/name and post a proposal.`
+#### Poller token
+
+Create a token **before** you need the poller. Never commit it. The poller reads `.env` at run time.
+
+- **Fine-grained:** repository access = your fork only; **Issues: Read and write**. Metadata read is automatic.
+- **Classic:** scope `repo`.
 
 `.github/workflows/remediation-approve.yml` must be on the **default** branch (`issue_comment` workflows run from there). It **records** `/approve`. It does not execute the fix. The workflow name is `record remediator approval`.
 
@@ -247,7 +225,7 @@ target: order-service
 
 3. **Read the diagnosis issue.** The diagnosis bot [has no control path into the lab](#read-these-once). Sample hop times: [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
 
-4. **Wait for the remediator proposal.** Diagnosis should ask its teammate to comment one proposal on that issue. If none appears within a few minutes, ask the Diagnosis bot to hand off issue #N, or message the Remediation bot directly: `Check issue #N in owner/name and post a proposal.`
+4. **Wait for the remediator proposal.** See [How it works step 7](#how-it-works-step-by-step). If none appears, see [No proposal appeared](#no-proposal-appeared).
 
 5. **Approve.** On that issue, comment exactly:
 
@@ -271,7 +249,12 @@ target: order-service
    cd /opt/sre-colosseum && sudo python3 remediation/poll_and_apply.py --once
    ```
 
-   From a laptop onto that host: add [`--via-ssm`](#read-these-once) to `remediation/remediate.py` / the poller.
+   From a laptop onto that host ([`--via-ssm`](#read-these-once)):
+
+   ```bash
+   python3 remediation/poll_and_apply.py --once --via-ssm
+   python3 remediation/remediate.py --action reset_fault --target both --via-ssm
+   ```
 
    **You should see** a result comment and, on success, `remediation-applied`.
 
@@ -317,7 +300,11 @@ The policy covers EC2/VPC create+delete, `iam:CreateRole` / `DeleteRole` / `Pass
 
 ### Terraform
 
-Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`. Set `allowed_cidr` to your `/32` or office CIDR (`curl -sS https://checkip.amazonaws.com`, then append `/32`). `0.0.0.0/0` is rejected. Set `aws_region` to the **same** value as `$AWS_REGION` (Terraform, AWS CLI, and the Python scripts default independently).
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+```
+
+Set `allowed_cidr` to your `/32` or office CIDR (`curl -sS https://checkip.amazonaws.com`, then append `/32`). `0.0.0.0/0` is rejected. Set `aws_region` to the **same** value as `$AWS_REGION` (Terraform, AWS CLI, and the Python scripts default independently).
 
 Port 22 is closed. SSM Session Manager does not need inbound SSH. Grafana `:3000` and API `:8000` still use `allowed_cidr` unless you SSM port-forward.
 
@@ -499,6 +486,23 @@ If those time out, fix the host Docker FORWARD policy and restart Docker. Dead-l
 Compose v2 message. The stack still builds with the default docker driver.
 
 ## Reference
+
+### Read these once
+
+Later sections link here instead of repeating these sentences.
+
+- **No control path into the lab.** The diagnosis bot only receives webhooks and writes GitHub issues (webhook in, GitHub out). It never restarts, scales, rolls back, or pushes code.
+- **`FAULT_HOLD_SECONDS` defaults to 120.** Path A (`orchestrator.py`) holds the fault so Prometheus `for:` windows can fire, then always calls `FaultCatalog.reset_environment()` in `finally`. Set `0` to skip the hold. `/fault/cpu-burn` (15s) and `/fault/crash` are not standing faults — the burn ends on its own, and Compose `restart: unless-stopped` brings `order-service` back.
+- **EC2 `.env` is root-owned.** `deploy_remote.py` writes `/opt/sre-colosseum/.env`. On that host run `cd /opt/sre-colosseum && sudo python3 remediation/poll_and_apply.py --once`. If the process cannot read the file, `remediation/envload.py` skips it quietly and does not print secrets.
+- **`--via-ssm`** reuses `deploy_remote.send_and_wait` (`ssm.send_command` / `AWS-RunShellScript` in `/opt/sre-colosseum`). Needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded. An SSM failure posts a result comment with `ok: false`. No new IAM is added.
+
+### Key features
+
+- Real kernel and cgroup faults (`tc netem` on `eth0`, heap leaks that can OOM, CFS CPU burn, Redis `maxclients` starvation) — not mock metrics.
+- Optional Red/Blue agents (`orchestrator.py`) that inject, detect, reset, and write `reports/incident_*.md`. They do **not** open GitHub issues.
+- Diagnosis bot: Prometheus → Alertmanager → incident-bridge → webhook → `incident` issue (and a chat ping on firing **critical** alerts).
+- Remediation bot: allowlisted `reset_fault`, `restart_service`, or `rollback_deploy` after `/approve`. See [step 7](#how-it-works-step-by-step).
+- Grafana at 1s scrape on `:3000`. Optional AWS EC2 + k3s sandbox. CloudWatch log groups `/sre/autonomous-agent-audit` and `/sre/autonomous-agent-incidents` (Terraform creates the groups; dashboards are helper scripts).
 
 ### Architecture
 

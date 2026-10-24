@@ -12,13 +12,13 @@ Official marks live in docs/icons/:
 - Alertmanager: Grafana data-source mark.
 
 Generic person / clock / bell / document / traffic symbols are drawn here.
-The Grok bot avatar is the real mark: a rounded hexagon tilted ~22°,
-fill #FB2B3E, with two upright white capsule eyes.
+The Diagnosis avatar is the real mark: a rounded hexagon tilted ~23°,
+fill #FB2B3E, with two upright white capsule eyes. The Remediation
+avatar is the orange tilted capsule (#F59E0B) with two white capsule eyes.
 """
 
 from __future__ import annotations
 
-import base64
 import math
 import re
 import struct
@@ -413,15 +413,14 @@ def _rounded_hexagon_path(radius: float = 42, corner: float = 7) -> str:
 
 
 def remediator_avatar(x: float, y: float) -> str:
-    """Owner PNG (tilted orange capsule, two white eyes). No pale tile."""
-    raw = (ICONS / "remediation-bot.png").read_bytes()
-    b64 = base64.standard_b64encode(raw).decode("ascii")
-    w, h = 118.0, 66.0
-    href = f"data:image/png;base64,{b64}"
+    """Orange tilted capsule, two white capsule eyes — the remediator mark."""
+    w, h = 96.0, 56.0
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <title>Incident Remediation</title>
     <g transform="translate(0,-38) rotate(-35)">
-      <image href="{href}" xlink:href="{href}" x="{-w / 2:.1f}" y="{-h / 2:.1f}" width="{w:.0f}" height="{h:.0f}"/>
+      <rect x="{-w / 2:.1f}" y="{-h / 2:.1f}" width="{w:.0f}" height="{h:.0f}" rx="{h / 2:.1f}" fill="{REM_CAPSULE}"/>
+      <rect x="-18" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
+      <rect x="10" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
     </g>
     <text class="name" y="36" text-anchor="middle">Incident</text>
     <text class="name" y="64" text-anchor="middle">Remediation</text>
@@ -438,10 +437,8 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
     <title>AI Incident Diagnosis</title>
     <g transform="translate(0,-32) rotate(23)">
       <path d="{path}" fill="{GROK_RED}"/>
-    </g>
-    <g transform="translate(-12,-43)">
-      <rect x="-8" y="-6.6" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
-      <rect x="1.2" y="-6.6" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
+      <rect x="-11" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
+      <rect x="5" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
     <text class="name" y="36" text-anchor="middle">AI Incident</text>
     <text class="name" y="64" text-anchor="middle">Diagnosis</text>
@@ -1334,11 +1331,11 @@ def build_scene() -> tuple[str, list[str]]:
     poll_left = poll_x - ICON / 2 - 8
     poll_ic = _ic(poll_y)
     fork_x = 320
-    fork_ps_x = 308
+    fork_ps_x = 290
     badge_y = row_a - 32
     query_y = 688
     blue_lane_y = 820
-    blue_drop_x = 328
+    blue_drop_x = 326
     blue_enter_y = 928
     svc_mid_x = svc_cx
 
@@ -1362,6 +1359,8 @@ def build_scene() -> tuple[str, list[str]]:
     )
 
     # Red Team faults stay grey and unnumbered (not part of ①–⑥).
+    # Payment drops at x=290 (west of the OS fork at 320) so the two
+    # shafts stay a lane apart and do not meet the Blue gutter (x=326).
     scene.poly(
         [(red_right, row_a), (fork_x, row_a)],
         marked=False,
@@ -1382,8 +1381,8 @@ def build_scene() -> tuple[str, list[str]]:
     )
 
     # Blue health-check / reset: one arrow into the services group box
-    # (not onto payment-service). Vertical is east of the "resets" caption
-    # and off the Red payment shaft (x=308, y=808).
+    # (not onto payment-service). Gutter x=326, east of the Red payment
+    # shaft (x=290) and east of the "resets" caption.
     scene.poly(
         [
             (blue_right, _ic(blue_y)),

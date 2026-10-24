@@ -97,7 +97,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | incident-bridge | “queries Prometheus” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
 | Grafana | “dashboard” (under Alertmanager; grey edge from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
-| Incident Remediation | owner PNG, tilted orange capsule, two white eyes (no pale tile) | `docs/icons/remediation-bot.png` embedded and rotated in `remediator_avatar()`. Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Invoked only by Diagnosis (no webhook, no repo watch). Proposes; does not execute |
+| Incident Remediation | tilted orange capsule, two white capsule eyes (no pale tile) | Drawn in `remediator_avatar()` (same mark as `docs/icons/remediation-bot.png`). Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Invoked only by Diagnosis (no webhook, no repo watch). Proposes; does not execute |
 | GitHub issue | “GitHub issue” | Diagnosis bot files `incident` issues. Sample: issue #5. Path A does **not** open issues (`orchestrator.py` writes `reports/`) |
 | Owner ping | centered above Diagnosis | Diagnosis-bot template at import (not in this repo). Firing critical alerts chat-ping the owner |
 | Owner | “/approve” | `remediation/approval.py` `APPROVE_RE`; workflow `remediation-approve.yml` |
