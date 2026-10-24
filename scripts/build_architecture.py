@@ -224,6 +224,7 @@ def remediator_avatar(x: float, y: float) -> str:
     """Orange capsule with two white eyes — drawn, no pale tile, hex-sized."""
     w, h = 96.0, 56.0
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
+    <title>Incident Remediation</title>
     <rect x="{-w / 2:.1f}" y="{-h - 8:.1f}" width="{w:.0f}" height="{h:.0f}" rx="{h / 2:.1f}" fill="{REM_CAPSULE}"/>
     <rect x="-18" y="{-h / 2 - 18:.1f}" width="8" height="18" rx="4" fill="#FFFFFF"/>
     <rect x="10" y="{-h / 2 - 18:.1f}" width="8" height="18" rx="4" fill="#FFFFFF"/>
@@ -239,6 +240,7 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
         f'    <text class="cap" y="70" text-anchor="middle">{cap}</text>\n' if cap else ""
     )
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
+    <title>AI Incident Diagnosis</title>
     <g transform="translate(0,-32) rotate(23)">
       <path d="{path}" fill="{GROK_RED}"/>
     </g>

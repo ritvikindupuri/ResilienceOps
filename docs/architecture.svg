@@ -220,6 +220,7 @@
     <text class="cap" y="52" text-anchor="middle">dashboard</text>
   </g>
   <g transform="translate(1280,546)">
+    <title>AI Incident Diagnosis</title>
     <g transform="translate(0,-32) rotate(23)">
       <path d="M 38.50,-6.06 Q 42.00,0.00 38.50,6.06 L 24.50,30.31 Q 21.00,36.37 14.00,36.37 L -14.00,36.37 Q -21.00,36.37 -24.50,30.31 L -38.50,6.06 Q -42.00,0.00 -38.50,-6.06 L -24.50,-30.31 Q -21.00,-36.37 -14.00,-36.37 L 14.00,-36.37 Q 21.00,-36.37 24.50,-30.31 Z" fill="#FB2B3E"/>
     </g>
@@ -239,6 +240,7 @@
     <text class="name" y="24" text-anchor="middle">GitHub issue</text>
   </g>
   <g transform="translate(1280,880)">
+    <title>Incident Remediation</title>
     <rect x="-48.0" y="-64.0" width="96" height="56" rx="28.0" fill="#F59E0B"/>
     <rect x="-18" y="-46.0" width="8" height="18" rx="4" fill="#FFFFFF"/>
     <rect x="10" y="-46.0" width="8" height="18" rx="4" fill="#FFFFFF"/>
