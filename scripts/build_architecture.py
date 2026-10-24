@@ -21,6 +21,8 @@ from __future__ import annotations
 import base64
 import math
 import re
+import struct
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +45,11 @@ GROUP_ICON = 48
 DISPLAY_W = 950.0
 MIN_EFFECTIVE_PX = 13.0
 
+ICON_PNGS = (
+    ICONS / "remediation-bot.png",
+    ROOT / "remediation" / "remediation-icon.png",
+)
+
 ICON_FILES = [
     "docker",
     "fastapi",
@@ -64,6 +71,162 @@ ICON_FILES = [
     "terraform",
     "alertmanager",
 ]
+
+
+def _paeth(a: int, b: int, c: int) -> int:
+    p = a + b - c
+    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+
+def read_png_rgba(path: Path) -> tuple[int, int, bytes]:
+    """Decode an 8-bit RGB/RGBA PNG. Used by the corner-alpha geometry check."""
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path} is not a PNG")
+    pos = 8
+    width = height = 0
+    color_type = 6
+    idat = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos : pos + 4])[0]
+        tag = data[pos + 4 : pos + 8]
+        chunk = data[pos + 8 : pos + 8 + length]
+        pos += 12 + length
+        if tag == b"IHDR":
+            width, height, bit_depth, color_type, comp, filt, inter = struct.unpack(
+                ">IIBBBBB", chunk
+            )
+            if bit_depth != 8 or color_type not in {2, 6} or inter != 0 or comp != 0:
+                raise ValueError(f"{path}: unsupported PNG {bit_depth}/{color_type}")
+        elif tag == b"IDAT":
+            idat += chunk
+        elif tag == b"IEND":
+            break
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    raw = zlib.decompress(idat)
+    out = bytearray(height * width * 4)
+    prev = bytearray(stride)
+    i = 0
+    for y in range(height):
+        filt = raw[i]
+        i += 1
+        row = bytearray(raw[i : i + stride])
+        i += stride
+        if filt == 1:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + left) & 255
+        elif filt == 2:
+            for x in range(stride):
+                row[x] = (row[x] + prev[x]) & 255
+        elif filt == 3:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+        elif filt == 4:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                up = prev[x]
+                ul = prev[x - channels] if x >= channels else 0
+                row[x] = (row[x] + _paeth(left, up, ul)) & 255
+        elif filt != 0:
+            raise ValueError(f"{path}: unsupported filter {filt}")
+        if channels == 4:
+            out[y * width * 4 : (y + 1) * width * 4] = row
+        else:
+            dst = y * width * 4
+            for x in range(width):
+                src = x * 3
+                out[dst : dst + 4] = bytes([row[src], row[src + 1], row[src + 2], 255])
+                dst += 4
+        prev = row
+    return width, height, bytes(out)
+
+
+def write_png_rgba(path: Path, width: int, height: int, rgba: bytes) -> None:
+    def chunk(tag: bytes, payload: bytes) -> bytes:
+        crc = zlib.crc32(tag + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", crc)
+
+    raw = bytearray()
+    stride = width * 4
+    for y in range(height):
+        raw.append(0)
+        raw.extend(rgba[y * stride : (y + 1) * stride])
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+        + chunk(b"IEND", b"")
+    )
+
+
+def punch_png_background(rgba: bytes, width: int, height: int, thresh: int = 240) -> bytes:
+    """Flood-fill near-white from the edges so eyes stay opaque."""
+    pix = bytearray(rgba)
+
+    def idx(x: int, y: int) -> int:
+        return (y * width + x) * 4
+
+    def is_bg(i: int) -> bool:
+        return pix[i + 3] > 0 and pix[i] >= thresh and pix[i + 1] >= thresh and pix[i + 2] >= thresh
+
+    seen = bytearray(width * height)
+    stack: list[tuple[int, int]] = []
+
+    def seed(x: int, y: int) -> None:
+        if is_bg(idx(x, y)):
+            stack.append((x, y))
+
+    for x in range(width):
+        seed(x, 0)
+        seed(x, height - 1)
+    for y in range(height):
+        seed(0, y)
+        seed(width - 1, y)
+    while stack:
+        x, y = stack.pop()
+        p = y * width + x
+        if seen[p]:
+            continue
+        seen[p] = 1
+        i = idx(x, y)
+        if not is_bg(i):
+            continue
+        pix[i : i + 4] = b"\x00\x00\x00\x00"
+        if x:
+            stack.append((x - 1, y))
+        if x + 1 < width:
+            stack.append((x + 1, y))
+        if y:
+            stack.append((x, y - 1))
+        if y + 1 < height:
+            stack.append((x, y + 1))
+    return bytes(pix)
+
+
+def check_icon_png_corners() -> list[str]:
+    hits: list[str] = []
+    for path in ICON_PNGS:
+        rel = path.relative_to(ROOT)
+        width, height, rgba = read_png_rgba(path)
+        for x, y, name in (
+            (0, 0, "tl"),
+            (width - 1, 0, "tr"),
+            (0, height - 1, "bl"),
+            (width - 1, height - 1, "br"),
+        ):
+            alpha = rgba[(y * width + x) * 4 + 3]
+            if alpha > 8:
+                hits.append(f"png {rel} corner {name} alpha={alpha}")
+    return hits
 
 
 def prefix_ids(svg: str, prefix: str) -> str:
@@ -169,8 +332,26 @@ def node(
     cap2: str = "",
     name2: str = "",
     label_above: bool = False,
+    label_beside: bool = False,
+    name_size: float = NAME_PX,
 ) -> str:
     top = -size - 10
+    if label_beside:
+        tx = size / 2 + 8
+        cy = top + size / 2
+        ny = cy + name_size * 0.35
+        name_svg = (
+            f'    <text class="name" x="{tx:.0f}" y="{ny:.0f}" text-anchor="start"'
+            f' style="font:700 {name_size:.0f}px Arial, Helvetica, sans-serif">{name}</text>\n'
+        )
+        cap_svg = (
+            f'    <text class="cap" x="{tx:.0f}" y="{ny + 24:.0f}" text-anchor="start">{cap}</text>\n'
+            if cap
+            else ""
+        )
+        return f"""  <g transform="translate({x:.0f},{y:.0f})">
+    <use href="#i-{icon}" xlink:href="#i-{icon}" x="{-size / 2:.1f}" y="{top:.1f}" width="{size:.0f}" height="{size:.0f}"/>
+{name_svg}{cap_svg}  </g>"""
     if label_above:
         name_svg = (
             f'    <text class="name" y="{top - 8:.0f}" text-anchor="middle">{name}</text>\n'
@@ -719,14 +900,29 @@ class Scene:
         name_size: float = NAME_PX,
         cap_size: float = CAP_PX,
         label_above: bool = False,
+        label_beside: bool = False,
     ) -> None:
         self.add(
             node(
                 x, y, icon, name, cap, size=size, cap2=cap2, name2=name2,
-                label_above=label_above,
+                label_above=label_above, label_beside=label_beside,
+                name_size=name_size,
             )
         )
         self.icon(x, _icon_top(y, size), size, f"icon:{name}", container=container)
+        if label_beside:
+            tx = x + size / 2 + 8
+            ny = _ic(y, size) + name_size * 0.35
+            self.text(
+                tx, ny, name, name_size, bold=True, anchor="start",
+                name=f"name:{name}", container=container,
+            )
+            if cap:
+                self.text(
+                    tx, ny + 24, cap, cap_size, anchor="start",
+                    name=f"cap:{name}", container=container,
+                )
+            return
         if label_above:
             self.text(
                 x, y - size - 18, name, name_size, bold=True, anchor="middle",
@@ -841,13 +1037,11 @@ class Scene:
                         f"({s1[4]} {s1[0]:.0f},{s1[1]:.0f}-{s1[2]:.0f},{s1[3]:.0f} / "
                         f"{s2[4]} {s2[0]:.0f},{s2[1]:.0f}-{s2[2]:.0f},{s2[3]:.0f})"
                     )
-        # Text: 10px halo unless the label is this edge's own source/target.
+        # Text: 10px halo. No owned-label whitelist — a shaft may not
+        # clip any text bbox, including its own source/target caption.
         for s in self.segments:
-            touch = s[5] if len(s) > 5 else frozenset()
             for b in self.boxes:
                 if b[5] != "text":
-                    continue
-                if _text_belongs(b[4], touch):
                     continue
                 inf = (
                     b[0] - TEXT_CLEARANCE,
@@ -895,7 +1089,7 @@ class Scene:
                             continue
                         if clip > 2.0:
                             hits.append(f"line {s[4]} through {b[5]} {b[4]}")
-        skip = ("group:", "title", "k3s-sub", "foot", "legend", "host-title", "host-sg")
+        skip = ("title", "k3s-sub", "foot", "legend", "host-title", "host-sg")
         for i, b1 in enumerate(self.boxes):
             if b1[5] not in {"text", "icon", "badge"}:
                 continue
@@ -977,10 +1171,10 @@ def build_scene() -> tuple[str, list[str]]:
     graf_x, graf_y = 800, 846
 
     # External column: Diagnosis → GitHub → Remediation → Owner / Actions.
-    # Owner ping sits above Diagnosis with its label above the icon (arrow ⑥
-    # hits the bell, not the words).
+    # Owner ping sits above Diagnosis; label is beside the bell so it
+    # cannot sit on the External header / top border.
     grok_x, grok_y = 1280, 586
-    ping_x, ping_y = 1280, 400
+    ping_x, ping_y = 1280, 430
     gh_x, gh_y = 1280, 740
     rem_x, rem_y = 1280, 920
     own_x, own_y = 1280, 1200
@@ -1098,7 +1292,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.grok_at(grok_x, grok_y, "AI Incident Diagnosis", container="bot")
     scene.node_at(
         ping_x, ping_y, "bell", "Owner ping", "", size=40, name_size=22,
-        cap_size=CAP_PX, container="bot", label_above=True,
+        cap_size=CAP_PX, container="bot", label_beside=True,
     )
     scene.node_at(gh_x, gh_y, "github", "GitHub issue", "", container="bot")
     scene.remediator_at(rem_x, rem_y, container="bot")
@@ -1130,7 +1324,7 @@ def build_scene() -> tuple[str, list[str]]:
     ping_bot = ping_y - 10
     gh_top = _icon_top(gh_y)
     rem_top = rem_y - 88
-    rem_bot = rem_y + 100
+    rem_bot = rem_y + 112
     own_top = _icon_top(own_y)
     own_left = own_x - ICON / 2 - 4
     own_ic = _ic(own_y)
@@ -1143,7 +1337,8 @@ def build_scene() -> tuple[str, list[str]]:
     fork_ps_x = 308
     badge_y = row_a - 32
     query_y = 688
-    gutter_x = 280
+    blue_lane_y = 820
+    blue_drop_x = 328
     blue_enter_y = 928
     svc_mid_x = svc_cx
 
@@ -1156,10 +1351,10 @@ def build_scene() -> tuple[str, list[str]]:
         src="icon:Terraform",
         dst="icon:EC2",
     )
-    # Drop from under the EC2 caption into the host — long enough to read as an arrow.
+    # Drop from under the EC2 caption into the host — starts below "lab host".
     scene.arrow(
         drop_x,
-        dep_node_y + 58,
+        dep_node_y + 80,
         drop_x,
         host_y + 88,
         name="aws-host",
@@ -1187,12 +1382,14 @@ def build_scene() -> tuple[str, list[str]]:
     )
 
     # Blue health-check / reset: one arrow into the services group box
-    # (not onto payment-service), clear of the Red fault lines.
+    # (not onto payment-service). Vertical is east of the "resets" caption
+    # and off the Red payment shaft (x=308, y=808).
     scene.poly(
         [
             (blue_right, _ic(blue_y)),
-            (gutter_x, _ic(blue_y)),
-            (gutter_x, blue_enter_y),
+            (blue_right, blue_lane_y),
+            (blue_drop_x, blue_lane_y),
+            (blue_drop_x, blue_enter_y),
             (svc_mid_x, blue_enter_y),
             (svc_mid_x, svc_y + svc_h),
         ],
@@ -1239,7 +1436,7 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(1172, 630, 5, container="bot")
 
-    # ⑥ Diagnosis → owner ping. Label is above the bell, so the shaft
+    # ⑥ Diagnosis → owner ping. Label is beside the bell, so the shaft
     # hits the icon only.
     scene.arrow(
         grok_x, grok_top, grok_x, ping_bot, inc=True, name="bot-ping",
@@ -1327,13 +1524,14 @@ def build_scene() -> tuple[str, list[str]]:
 
 def check_geometry() -> list[str]:
     _svg, violations = build_scene()
-    return violations
+    return list(violations) + check_icon_png_corners()
 
 
 def main() -> int:
     svg, violations = build_scene()
     OUT.write_text(svg, encoding="utf-8")
     print(f"wrote {OUT}")
+    violations = list(violations) + check_icon_png_corners()
     if violations:
         print(f"{len(violations)} geometry violation(s):")
         for item in violations[:80]:

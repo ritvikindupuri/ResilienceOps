@@ -282,7 +282,7 @@ def test_live_run_artifacts_redact_webhook_url():
     assert "ConnectTimeout" in log
 
 
-def test_architecture_geometry_has_no_overlaps():
+def _load_arch():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -291,8 +291,28 @@ def test_architecture_geometry_has_no_overlaps():
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(mod)
-    hits = mod.check_geometry()
+    return mod
+
+
+def test_architecture_geometry_has_no_overlaps():
+    hits = _load_arch().check_geometry()
     assert hits == [], "architecture geometry violations:\n  " + "\n  ".join(hits[:20])
+
+
+def test_geometry_flags_line_through_any_text():
+    """A shaft through a caption is a hit even when that caption is owned."""
+    mod = _load_arch()
+    scene = mod.Scene(400, 400)
+    scene.text(200, 200, "resets", 24, bold=False, anchor="middle", name="cap:Blue Team")
+    scene.add_seg(200, 160, 200, 240, "blue-svc:1", frozenset({"cap:Blue Team"}))
+    hits = scene.check()
+    assert any("through text cap:Blue Team" in item for item in hits), hits
+
+
+def test_architecture_icon_pngs_have_transparent_corners():
+    mod = _load_arch()
+    hits = mod.check_icon_png_corners()
+    assert hits == [], "icon PNG corners must be transparent:\n  " + "\n  ".join(hits)
 
 
 def test_architecture_png_is_nontrivial():

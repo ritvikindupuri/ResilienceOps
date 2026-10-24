@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+import pytest
 
 from remediation import envload, logutil, poll_and_apply, remediate
 from remediation.actions import Proposal
@@ -129,6 +132,28 @@ def test_load_remediation_env_reads_host_path(tmp_path, monkeypatch):
     host.write_text("GITHUB_REPOSITORY=ec2/lab\n", encoding="utf-8")
     envload.load_remediation_env(root=tmp_path / "missing", extra=[host])
     assert os.getenv("GITHUB_REPOSITORY") == "ec2/lab"
+
+
+@pytest.mark.parametrize("exc_type", [PermissionError, OSError])
+def test_load_remediation_env_skips_unreadable(tmp_path, monkeypatch, capsys, exc_type):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    secret = "should-not-leak"
+    blocked = tmp_path / "blocked.env"
+    blocked.write_text(f"GITHUB_TOKEN={secret}\n", encoding="utf-8")
+    original = Path.read_text
+
+    def boom(self, *args, **kwargs):
+        if Path(self).resolve() == blocked.resolve():
+            raise exc_type("EACCES")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", boom)
+    loaded = envload.load_remediation_env(root=tmp_path / "missing", extra=[blocked])
+    assert os.getenv("GITHUB_TOKEN") is None
+    assert str(blocked.resolve()) not in loaded
+    captured = capsys.readouterr()
+    assert secret not in captured.out
+    assert secret not in captured.err
 
 
 def test_poller_main_loads_dotenv(tmp_path, monkeypatch):

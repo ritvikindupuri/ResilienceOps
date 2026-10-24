@@ -114,7 +114,7 @@ Do [Installation and quick start](#installation-and-quick-start) first (both bot
    export GITHUB_TOKEN=...    # issues:read + issues:write; never commit
    python3 remediation/poll_and_apply.py --once
    ```
-   On AWS you may add `--via-ssm` (reuses `deploy_remote.send_and_wait`). That path needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded to the host. If the SSM command fails, the poller posts a failure result comment on the issue. Expect a result comment and, on success, `remediation-applied`.
+   On the EC2 host, `/opt/sre-colosseum/.env` is written as root — run the poller with `sudo` (or as root) so that file is readable. If the process cannot read it, the loader skips it quietly and does not print secrets. On AWS you may add `--via-ssm` (reuses `deploy_remote.send_and_wait`). That path needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded to the host. If the SSM command fails, the poller posts a failure result comment on the issue. Expect a result comment and, on success, `remediation-applied`.
 8. **Check recovery.** Prometheus `RedisConnectionSaturation` goes inactive; `curl -sS http://127.0.0.1:8001/health` is healthy; `redis_active_connections_count` is back under 40.
 
 To stop: `docker compose down -v`.
@@ -357,7 +357,7 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `GITHUB_REPOSITORY` | remediator poller / Actions | `owner/name`. Actions sets this; the host poller loads it from `.env` or `/opt/sre-colosseum/.env` |
 | `GITHUB_EVENT_PATH` | `remediation/record_approval.py` | Actions-only path to the `issue_comment` event JSON. Leave empty on a laptop |
 | `REMEDIATION_STATE_DIR` | `remediation/actions.py` | Directory for `last_good_deploy.json` and `rollback-*.yml` / `remediation.jsonl`. Default `logs/` |
-| `COMPOSE_PROJECT_NAME` | `remediation/actions.py` | Optional. Used to name `<project>-<service>:last-good` on rollback. Default is the repo directory name |
+| `COMPOSE_PROJECT_NAME` | `remediation/actions.py` | Optional. Used to name `<project>-<service>:last-good` on rollback. Default is the repo directory name with Compose’s `[a-z0-9_-]` alphabet (hyphens stay: `sre-colosseum`, not `srecolosseum`) |
 | `API_GATEWAY_URL` | `agents/config.py` | Host default `http://localhost:8000`. Compose sandbox sets `http://api-gw:8000` |
 | `ORDER_SERVICE_URL` | `agents/config.py`, order/payment clients | Host default `http://localhost:8001` |
 | `PAYMENT_SERVICE_URL` | `agents/config.py`, api-gw, order-service | Host default `http://localhost:8002` |
@@ -453,7 +453,7 @@ This is a **second**, separate bot. Do not paste anything from it into `GROK_WEB
    <!-- /resilienceops-proposal -->
    ```
 5. Confirm `.github/workflows/remediation-approve.yml` is on the **default branch** of that GitHub repo (`issue_comment` workflows run from the default branch). That workflow **records** `/approve`; it does not execute the fix.
-6. Put poller secrets in `.env` (`GITHUB_REPOSITORY` and `GITHUB_TOKEN` with `issues:read` + `issues:write`; `GH_TOKEN` is accepted if `GITHUB_TOKEN` is unset). Never commit them. `poll_and_apply.py` and `remediate.py` load the repo `.env` (and `/opt/sre-colosseum/.env` on EC2) without overriding variables already in the process. On AWS, `scripts/put_lab_secrets.py` copies both into Parameter Store and `deploy_remote.py` writes them onto the host `.env`. You can also `set -a; . /opt/sre-colosseum/.env; set +a`. GitHub Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself when someone comments `/approve`.
+6. Put poller secrets in `.env` (`GITHUB_REPOSITORY` and `GITHUB_TOKEN` with `issues:read` + `issues:write`; `GH_TOKEN` is accepted if `GITHUB_TOKEN` is unset). Never commit them. `poll_and_apply.py` and `remediate.py` load the repo `.env` (and `/opt/sre-colosseum/.env` on EC2) without overriding variables already in the process. On the EC2 host that file is root-owned — run the poller with `sudo` (or as root). If the process cannot read it, the loader skips it quietly and does not print secrets. On AWS, `scripts/put_lab_secrets.py` copies both into Parameter Store and `deploy_remote.py` writes them onto the host `.env`. You can also `set -a; . /opt/sre-colosseum/.env; set +a`. GitHub Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself when someone comments `/approve`.
 
 The `/approve` trigger is: owner (or write/maintain/admin) comments a line that is only `/approve` on an `incident` issue that already has a valid proposal. Snapshot last-good images after the stack is healthy ([step 6](#6-start-the-local-docker-compose-lab)). See [Incident Remediation bot](#incident-remediation-bot).
 
@@ -1115,7 +1115,7 @@ That host process calls `python3 remediation/remediate.py`. On AWS, the same CLI
 1. Import https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5
 2. Connect GitHub and name the same repo the diagnosis bot files issues in.
 3. Leave the diagnosis webhook vars (`GROK_WEBHOOK_*`) pointed at the **diagnosis** routine. The remediator bot does not replace them.
-4. Put `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (or `GH_TOKEN`) in `.env`. The remediator CLIs load that file (and `/opt/sre-colosseum/.env` on EC2) without overriding the process environment. On AWS, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies them to Parameter Store (they are in `KEYS` with the other host secrets). You can also `set -a; . /opt/sre-colosseum/.env; set +a`. Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself.
+4. Put `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (or `GH_TOKEN`) in `.env`. The remediator CLIs load that file (and `/opt/sre-colosseum/.env` on EC2) without overriding the process environment. On the EC2 host, run the poller with `sudo` (or as root) so `/opt/sre-colosseum/.env` is readable; an unreadable file is skipped quietly with no secret output. On AWS, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies them to Parameter Store (they are in `KEYS` with the other host secrets). You can also `set -a; . /opt/sre-colosseum/.env; set +a`. Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself.
 5. After a healthy `docker compose up`, snapshot last-good image IDs once (on the host, or `python3 remediation/remediate.py record-last-good --via-ssm` from the laptop — that needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and `ssm:SendCommand` credentials):
 
 ```bash
@@ -1254,7 +1254,7 @@ The workflow only records a **lone** `/approve` on an **issue** (not a PR) label
 
 ### Poller says skip / does not fix
 
-`python3 remediation/poll_and_apply.py --once` must run **on the host that can reach Compose** (or with `--via-ssm`, which needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop `ssm:SendCommand` credentials). It looks for issues labeled `incident` **and** `remediation-approved`, without `remediation-applied`. It loads repo `.env` and `/opt/sre-colosseum/.env` (existing env wins). On EC2 you can also `set -a; . /opt/sre-colosseum/.env; set +a`. If you see `no recorded approval block`, the Actions job has not commented yet.
+`python3 remediation/poll_and_apply.py --once` must run **on the host that can reach Compose** (or with `--via-ssm`, which needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop `ssm:SendCommand` credentials). It looks for issues labeled `incident` **and** `remediation-approved`, without `remediation-applied`. It loads repo `.env` and `/opt/sre-colosseum/.env` (existing env wins). On EC2 that host file is root-owned — run the poller with `sudo` (or as root); if it cannot be read, the loader skips it quietly and does not print secrets. You can also `set -a; . /opt/sre-colosseum/.env; set +a`. If you see `no recorded approval block`, the Actions job has not commented yet.
 
 ### Bake / buildx warning
 

@@ -202,6 +202,17 @@ def test_rollback_recreates_from_last_good_image(tmp_path, monkeypatch):
     assert result.steps[0]["image_after"] != current
 
 
+def test_compose_project_fallback_keeps_hyphen(monkeypatch):
+    from pathlib import Path
+
+    from remediation import actions as actions_mod
+
+    monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
+    monkeypatch.setattr(actions_mod, "REPO_ROOT", Path("/opt/sre-colosseum"))
+    assert actions_mod._compose_project() == "sre-colosseum"
+    assert actions_mod._default_image_name("order-service") == "sre-colosseum-order-service"
+
+
 def test_rollback_fails_if_running_image_stays_current(tmp_path, monkeypatch):
     from remediation import actions as actions_mod
 
