@@ -5,7 +5,7 @@ flowchart LR
     TF
   end
   subgraph host ["EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16 · Grafana and API ports from your IP"]
-    subgraph compose ["Lab (Docker Compose)"]
+    subgraph compose ["Stack (Docker Compose)"]
       subgraph agents ["Agents · --profile agents"]
         RED[Red Team]
         BLUE[Blue Team]

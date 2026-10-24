@@ -154,7 +154,7 @@
   <g transform="translate(880,226)">
     <use href="#i-aws-ec2" xlink:href="#i-aws-ec2" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">EC2</text>
-    <text class="cap" y="52" text-anchor="middle">lab host</text>
+    <text class="cap" y="52" text-anchor="middle">Compose host</text>
   </g>
   <rect x="32" y="318" width="1056" height="890" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="2.2" stroke-dasharray="7 5"/>
   <use href="#i-aws-ec2" xlink:href="#i-aws-ec2" x="44" y="328" width="48" height="48"/>
@@ -164,7 +164,7 @@
   <text x="1130" y="356" class="group">External</text>
   <rect x="48" y="402" width="1024" height="536" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <use href="#i-docker" xlink:href="#i-docker" x="60" y="412" width="48" height="48"/>
-  <text x="114" y="440" class="group">Lab (Docker Compose)</text>
+  <text x="114" y="440" class="group">Stack (Docker Compose)</text>
   <rect x="62" y="466" width="250" height="456" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="80" y="504" class="group">Agents</text>
   <rect x="336" y="466" width="214" height="456" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>

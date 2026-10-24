@@ -1229,7 +1229,7 @@ def build_scene() -> tuple[str, list[str]]:
     )
 
     scene.node_at(tf_x, dep_node_y, "terraform", "Terraform", "creates the infra", container="deploy")
-    scene.node_at(ec2_x, dep_node_y, "aws-ec2", "EC2", "lab host", container="deploy")
+    scene.node_at(ec2_x, dep_node_y, "aws-ec2", "EC2", "Compose host", container="deploy")
 
     host_title = "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16"
     host_sg = "Grafana and API ports from your IP"
@@ -1245,10 +1245,10 @@ def build_scene() -> tuple[str, list[str]]:
     scene.container("bot", bot_x, bot_y, bot_w, bot_h)
     scene.text(bot_x + 18, bot_y + 38, "External", GROUP_PX, bold=True, name="group:bot", container="bot")
 
-    scene.add(group(compose_x, compose_y, compose_w, compose_h, "Lab (Docker Compose)", icon="docker"))
+    scene.add(group(compose_x, compose_y, compose_w, compose_h, "Stack (Docker Compose)", icon="docker"))
     scene.container("compose", compose_x, compose_y, compose_w, compose_h)
     scene.text(
-        compose_x + 18 + GROUP_ICON, compose_y + 38, "Lab (Docker Compose)",
+        compose_x + 18 + GROUP_ICON, compose_y + 38, "Stack (Docker Compose)",
         GROUP_PX, bold=True, name="group:compose", container="compose",
     )
 
@@ -1350,7 +1350,7 @@ def build_scene() -> tuple[str, list[str]]:
         src="icon:Terraform",
         dst="icon:EC2",
     )
-    # Drop from under the EC2 caption into the host — starts below "lab host".
+    # Drop from under the EC2 caption into the host — starts below "Compose host".
     scene.arrow(
         drop_x,
         dep_node_y + 80,
