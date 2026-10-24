@@ -336,8 +336,14 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "127.0.0.1:6379" in readme
     assert "delete-parameters" in readme
     assert not (ROOT / "dashboards" / "cloudwatch-dashboard.json").exists()
+    assert not (ROOT / "dashboards" / "grafana-dashboard.json").exists()
     assert not (ROOT / "push_dashboard.py").exists()
     assert not (ROOT / "arena_runner.py").exists()
+    faults_table = readme.split("### Faults you can inject", 1)[1].split("Alert rules", 1)[0]
+    assert "PaymentServiceP99LatencySLO" in faults_table
+    assert "PaymentServiceLatencyHigh" in faults_table
+    assert "inhibited while the critical fires" in faults_table
+    assert "PaymentServiceLatencyHigh** (p95 `> 1.2s`, 20s, warning) and **PaymentServiceP99LatencySLO" not in faults_table
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert '"127.0.0.1:6379:6379"' in compose
     assert '"127.0.0.1:5432:5432"' in compose

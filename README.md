@@ -326,7 +326,7 @@ Defaults are the FastAPI query-parameter defaults. Reset is `POST /fault/reset` 
 | order-service | `POST /fault/db-latency` | `delay=2.5` | **OrderServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical) | `POST /fault/reset` |
 | order-service | `POST /fault/error-rate` | `rate=0.5` | **OrderServiceHighErrorRate** (`> 2%` over 30s, 20s, critical) | `POST /fault/reset` |
 | order-service | `POST /fault/crash` | (none) | **ServiceDown** (`up == 0`, 10s, critical) until Compose `restart: unless-stopped` brings the process back | Compose restart. `POST /fault/reset` after it is up |
-| payment-service | `POST /fault/latency` | `delay_ms=2500`, `jitter_ms=100` | **PaymentServiceLatencyHigh** (p95 `> 1.2s`, 20s, warning) and **PaymentServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical) | `POST /fault/reset` |
+| payment-service | `POST /fault/latency` | `delay_ms=2500`, `jitter_ms=100` | **PaymentServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical). **PaymentServiceLatencyHigh** (p95 `> 1.2s`, 20s, warning) is inhibited while the critical fires (`alertmanager.yml` `equal: ["service"]`) | `POST /fault/reset` |
 | payment-service | `POST /fault/drop-rate` | `loss_percent=30.0` | **PaymentServiceHighErrorRate** (`> 2%` over 30s, 20s, critical) | `POST /fault/reset` |
 | payment-service | `POST /fault/outage` | `enabled=True` | **PaymentServiceOutage** (`503_outage` rate `> 0.05`, 10s, critical) and **PaymentServiceHighErrorRate** | `POST /fault/reset` |
 

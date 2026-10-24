@@ -222,6 +222,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | api-gw `GET /health` + `POST /api/orders/orders` body `{item_id, quantity, amount, user_id}` | `api-gw/main.py:64-66,92-111`; `CreateOrderRequest` `order-service/main.py:129-133`; generator `load_generator.py:52-58` |
 | payment-service `GET /health` returns `status` / `service` / `tc_*` | `payment-service/main.py:39-47` |
 | Fault endpoints + code defaults + `alerts.yml` mapping | `order-service/main.py:277-372` (`connections=55`, `mb=50`, `seconds=15`, `delay=2.5`, `rate=0.5`, crash, reset); `payment-service/main.py:79-131` (`delay_ms=2500`, `jitter_ms=100`, `loss_percent=30.0`, `enabled=True`, reset); rules `dashboards/alerts.yml` |
+| Any critical inhibits same-`service` warning (`/fault/latency` → **PaymentServiceP99LatencySLO** fires; **PaymentServiceLatencyHigh** inhibited) | `alertmanager.yml:18-23` `equal: ["service"]`. Redis row already notes the sibling warning is inhibited |
 | `remediate.py` `--proposal-file` / `--proposal-text` / `--skip-verify` / `--verify-timeout` default 45 | `remediate.py:100-114` |
 | `poll_and_apply.py` `--loop` / `--interval` default 20 (sleep `max(5, interval)`) / `--dry-run` | `poll_and_apply.py:93-118` |
 | `send_test_alert.py` `--alertmanager-url` / `--bridge-url` | `send_test_alert.py:70-72` |
