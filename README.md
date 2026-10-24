@@ -1,13 +1,6 @@
 # ResilienceOps
 
-An SRE lab: three FastAPI services, real faults, Prometheus alerts, and two importable Grok bots.
-
-- **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** opens a GitHub `incident` issue. It has [no control path into the lab](#read-these-once).
-- **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** is invoked only by the Diagnosis bot. The fix runs only after `/approve`, on the machine that can see Compose (or [`--via-ssm`](#read-these-once)).
-
-This README is the source of truth. The [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf) is a historical brief. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
-
-The diagnosis bot receives alerts and writes GitHub issues (webhook in, GitHub out). Internals — hold time, EC2 `.env`, SSM, and what the lab actually faults — are in [Reference](#reference).
+ResilienceOps is a self-healing incident response platform for microservices. Prometheus catches real faults in three FastAPI services, the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) bot files a root-cause GitHub issue, and the [Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) bot proposes one fix that runs only after you comment `/approve`.
 
 ## Table of contents
 
@@ -37,13 +30,13 @@ The diagnosis bot receives alerts and writes GitHub issues (webhook in, GitHub o
 
 | You want | Do this |
 |---|---|
-| Local lab (default) | [Quick start](#quick-start-local) + [both bots](#set-up-both-bots) on your laptop |
-| AWS lab | [AWS](#aws-optional) — skip `docker compose up` on the laptop |
+| Local stack (default) | [Quick start](#quick-start-local) + [both bots](#set-up-both-bots) on your laptop |
+| AWS deploy | [AWS](#aws-optional) — skip `docker compose up` on the laptop |
 | Red/Blue agents | Optional. Local: `docker compose --profile agents` or `python3 orchestrator.py`. AWS: `--profile agents` or the [k3s sandbox](#optional-k3s-sandbox) |
 
 ## Quick start (local)
 
-**AWS users:** skip this Compose lab. Go to [AWS (optional)](#aws-optional).
+**AWS users:** skip this Compose stack. Go to [AWS (optional)](#aws-optional).
 
 ### 1. Clone your fork
 
@@ -225,7 +218,7 @@ target: order-service
 
    Expect ~49 Redis clients. Watch `http://127.0.0.1:9090/alerts` until **RedisConnectionSaturation** is firing (`for: 5s`, `>= 48`). The sibling warning is **inhibited** while critical is firing.
 
-3. **Read the diagnosis issue.** The diagnosis bot [has no control path into the lab](#read-these-once). Sample hop times: [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
+3. **Read the diagnosis issue.** The diagnosis bot [has no control path into the stack](#read-these-once). Sample hop times: [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
 
 4. **Wait for the remediator proposal.** See [How it works step 7](#how-it-works-step-by-step). If none appears, see [No proposal appeared](#no-proposal-appeared).
 
@@ -262,7 +255,7 @@ target: order-service
 
 7. **Check recovery.** `RedisConnectionSaturation` goes inactive; `curl -sS http://127.0.0.1:8001/health` is healthy; `redis_active_connections_count` is back under 40.
 
-Stop the local lab: `docker compose down -v`.
+Stop the local stack: `docker compose down -v`.
 
 Synthetic check (no `/fault`): `python3 scripts/send_test_alert.py --target alertmanager` — Alertmanager prints `200`. Confirm the bridge with `docker compose logs --tail 20 incident-bridge`. `--target bridge` hits `127.0.0.1:8088` (`200 {"accepted":true}`).
 
@@ -489,11 +482,13 @@ Compose v2 message. The stack still builds with the default docker driver.
 
 ## Reference
 
+This README is the source of truth. The [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf) is a historical brief. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md). Internals — hold time, EC2 `.env`, SSM, and what the stack actually faults — are in the sections below.
+
 ### Read these once
 
 Later sections link here instead of repeating these sentences.
 
-- **No control path into the lab.** The diagnosis bot only receives webhooks and writes GitHub issues (webhook in, GitHub out). It never restarts, scales, rolls back, or pushes code.
+- **No control path into the stack.** The diagnosis bot only receives webhooks and writes GitHub issues (webhook in, GitHub out). It never restarts, scales, rolls back, or pushes code.
 - **`FAULT_HOLD_SECONDS` defaults to 120.** Path A (`orchestrator.py`) holds the fault so Prometheus `for:` windows can fire, then always calls `FaultCatalog.reset_environment()` in `finally`. Set `0` to skip the hold. `/fault/cpu-burn` (15s) and `/fault/crash` are not standing faults — the burn ends on its own, and Compose `restart: unless-stopped` brings `order-service` back.
 - **EC2 `.env` is root-owned.** `deploy_remote.py` writes `/opt/sre-colosseum/.env`. On that host run `cd /opt/sre-colosseum && sudo python3 remediation/poll_and_apply.py --once`. If the process cannot read the file, `remediation/envload.py` skips it quietly and does not print secrets.
 - **`--via-ssm`** reuses `deploy_remote.send_and_wait` (`ssm.send_command` / `AWS-RunShellScript` in `/opt/sre-colosseum`). Needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded. An SSM failure posts a result comment with `ok: false`. No new IAM is added.
@@ -534,7 +529,7 @@ Figure 1 badges are Path B then Path C. Path A is Red/Blue in one `orchestrator.
 | Path | Who | What |
 |---|---|---|
 | **A — Blue Team** | `orchestrator.py` | Inject, watch, hold, reset, write `reports/incident_*.md`. No GitHub issues. |
-| **B — Diagnosis** | Prom → AM → bridge → [diagnosis bot](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Webhook in, `incident` issue out. [No lab control](#read-these-once). |
+| **B — Diagnosis** | Prom → AM → bridge → [diagnosis bot](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Webhook in, `incident` issue out. [No control path](#read-these-once). |
 | **C — Remediation** | Diagnosis hands off → [Remediation bot](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) → `/approve` → poller | Actions **records**. Host (or [`--via-ssm`](#read-these-once)) executes. |
 
 1. **Scrape.** Prometheus pulls `/metrics` from **all 3** services every 1s (`dashboards/prometheus.yml`).
@@ -546,7 +541,7 @@ Figure 1 badges are Path B then Path C. Path A is Red/Blue in one `orchestrator.
 7. **Handoff.** Diagnosis asks the Remediation bot (same account) to propose a fix.
 8. **Proposal.** Remediation comments one allowlisted action on that GitHub issue.
 9. **Approve.** `/approve`. Actions records; it does not run the fix.
-10. **Fix.** `python3 remediation/poll_and_apply.py` on the lab host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
+10. **Fix.** `python3 remediation/poll_and_apply.py` on the host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
 
 ```mermaid
 flowchart LR
@@ -579,7 +574,7 @@ Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TAR
 
 4. **Enrichment** — `services/incident-bridge/app.py` builds PromQL summaries (`EVIDENCE_WINDOW_SECONDS` default 600) plus tailed `AGENT_ACTIVITY_LOG` jsonl. Payload `{status, alerts, evidence, source: "resilienceops"}`, cap `PAYLOAD_MAX_BYTES` (~100KB). Same `fingerprint`+`status` once per `DEDUPE_TTL_SECONDS` (300). Empty URL → drop. Failed POST after `WEBHOOK_MAX_RETRIES` → `forward FAILED after N attempts alertname=… fingerprint=…` and `logs/bridge_deadletter.jsonl`.
 
-5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` + `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`). Path B: diagnosis bot from evidence **plus recent commits**. [No lab control](#read-these-once).
+5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` + `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`). Path B: diagnosis bot from evidence **plus recent commits**. [No control path](#read-these-once).
 
 6. **Issue** — `incident` label; same fingerprint comments. Path A writes `reports/incident_*.md` instead.
 

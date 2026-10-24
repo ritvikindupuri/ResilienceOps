@@ -207,7 +207,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     ):
         assert filename not in svg, filename
     assert "Grafana and API ports from your IP" in svg
-    assert "Lab (Docker Compose)" in svg
+    assert "Stack (Docker Compose)" in svg
     assert "Docker Compose on this host" not in svg
     assert "k3s sandbox (optional)" in svg
     assert "Runs the agents in isolated pods" not in svg
