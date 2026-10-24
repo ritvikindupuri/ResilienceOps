@@ -62,8 +62,62 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps plus the diagnosis and remediator bots work" width="100%" />
 </p>
 <p align="center"><b>Figure 1: How ResilienceOps plus the diagnosis and remediator bots work</b></p>
-<p align="center">Orange ①–⑥ is the diagnosis path. Orange ⑦–⑨ is the remediator path (GitHub issue → proposal → owner <code>/approve</code> → allowlisted fix on the stack). Grey edges are supporting (deploy, traffic, data stores, health/reset, Grafana). Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
+<p align="center">Orange ①–⑥ is the diagnosis path. Orange ⑦–⑨ is the remediator path (GitHub issue → proposal → owner <code>/approve</code> → allowlisted fix on the stack). Grey edges are supporting (optional AWS deploy, Grafana). Bridge queries Prometheus (dashed). Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
+
+### How it works (plain English)
+
+You run a small shop on your machine (or one EC2 host): **api-gw**, **order-service**, **payment-service**, plus Prometheus, Alertmanager, the incident-bridge, and Grafana. Traffic hits the gateway. Order-service talks to Redis and Postgres; Prometheus scrapes all three apps every **1 second**.
+
+Three independent paths can run after something breaks:
+
+| Path | Who | What happens |
+|---|---|---|
+| **A — Blue Team** | `orchestrator.py` (`docker compose --profile agents`, host CLI, or optional k3s) | Red injects a real fault. Blue watches health + PromQL, holds `FAULT_HOLD_SECONDS` (default **120**), resets both apps, writes `reports/incident_*.md`. Does **not** open GitHub issues. |
+| **B — Diagnosis bot** | Prometheus → Alertmanager → incident-bridge → **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** | The bridge POSTs evidence to the diagnosis **webhook**. The bot opens or comments on a GitHub issue labeled `incident`. It has **no control path** into the lab (webhook in, GitHub issues out). Firing **critical** alerts also chat-ping the owner. |
+| **C — Remediation bot** | **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** → owner `/approve` → host poller | The remediator comments one allowlisted action. You comment `/approve`. GitHub Actions **records** that; it does **not** run the fix (a GitHub-hosted runner cannot see `127.0.0.1`). `python3 remediation/poll_and_apply.py` on the lab host (or `remediate.py --via-ssm` on AWS) is what executes it. |
+
+The numbered path in Figure 1 is Path B then Path C. Path A is Red/Blue in one `orchestrator.py` process.
+
+### How to use
+
+Do [Installation and quick start](#installation-and-quick-start) first (both bots imported, Compose up, `webhook_configured: true`). Then:
+
+1. **Confirm the shop is healthy.**
+   ```bash
+   curl -sS http://127.0.0.1:8001/ready
+   curl -sS http://127.0.0.1:8088/healthz
+   ```
+   You should see order-service `"status":"healthy"` and `"webhook_configured":true`.
+2. **Inject a real fault** (optional demo — production incidents use the same alerts without `/fault`):
+   ```bash
+   curl -sS -X POST 'http://127.0.0.1:8001/fault/redis-starvation'
+   ```
+   Expect ~49 Redis clients. Watch `http://127.0.0.1:9090/alerts` until **RedisConnectionSaturation** is firing (`for: 5s`, threshold `>= 48`).
+3. **Watch the diagnosis issue get filed.** Within about a minute the diagnosis bot opens an `incident` issue (or comments on the open fingerprint). Sample: GitHub [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
+4. **Read the diagnosis.** The issue has a likely root cause, PromQL evidence, and suggest-only advice. The diagnosis bot does **not** reset anything.
+5. **Wait for the remediator proposal.** The separate Incident Remediation bot comments a block like:
+   ```
+   <!-- resilienceops-proposal:v1 -->
+   action: reset_fault
+   target: order-service
+   <!-- /resilienceops-proposal -->
+   ```
+6. **Approve the fix.** On that issue, comment exactly:
+   ```
+   /approve
+   ```
+   You should see a recorded-approval comment and the `remediation-approved` label. GitHub Actions does **not** touch the stack.
+7. **Run the fix on the machine that can see Compose:**
+   ```bash
+   export GITHUB_REPOSITORY=<you>/ResilienceOps
+   export GITHUB_TOKEN=...    # issues:read + issues:write; never commit
+   python3 remediation/poll_and_apply.py --once
+   ```
+   On AWS you may add `--via-ssm` (reuses `deploy_remote.send_and_wait`). Expect a result comment and, on success, `remediation-applied`.
+8. **Check recovery.** Prometheus `RedisConnectionSaturation` goes inactive; `curl -sS http://127.0.0.1:8001/health` is healthy; `redis_active_connections_count` is back under 40.
+
+To stop: `docker compose down -v`.
 
 ### How it works, step by step
 
@@ -358,19 +412,51 @@ python3 -m pip install -r services/incident-bridge/requirements.txt
 
 `requirements.txt` covers host-side agents, pytest, and `scripts/send_test_alert.py` (`httpx`). The bridge file adds FastAPI/Uvicorn if you run the bridge **without** Compose.
 
-### 5. Import the Grok Bot template and copy webhook credentials
+### 5. Import the AI Incident Diagnosis bot (webhook)
 
-1. Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**.
-2. The bot's first conversation asks for the **GitHub repo** to file incidents in (GitHub must already be connected), the **alert source**, and the **ping preference**.
-3. Open the bot's chat. Click the bot's name in the chat header (or press **Cmd+Shift+I**) to open its info pane.
-4. Under **Routines**, open **ResilienceOps incident diagnosis** (or whatever routine the template created).
-5. Copy **Webhook URL** into `GROK_WEBHOOK_URL` and **Webhook key** into `GROK_WEBHOOK_KEY`. Check the **Authorization** header setting — that maps to `GROK_WEBHOOK_AUTH_HEADER` / `GROK_WEBHOOK_AUTH_SCHEME` (scheme may be empty).
+This bot receives alerts. It is **not** the remediator.
+
+1. In a browser, open **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** and import the template (creates your own copy).
+2. Connect **GitHub** to that bot (Grok Bot settings → GitHub). Grant access to the repo that should receive `incident` issues (this repo or your fork).
+3. Start a chat with the new bot. The first conversation asks for:
+   - the **GitHub repo** (`owner/name`)
+   - the **alert source** (say Prometheus / ResilienceOps)
+   - the **ping preference** (chat-ping on firing **critical** alerts)
+4. Open the bot's info pane: click the bot name in the chat header, or press **Cmd+Shift+I**.
+5. Under **Routines**, open **ResilienceOps incident diagnosis** (or the routine the template created).
+6. Copy three things into `.env` (no trailing spaces, never commit `.env`):
+   - **Webhook URL** → `GROK_WEBHOOK_URL`
+   - **Webhook key** → `GROK_WEBHOOK_KEY`
+   - **Authorization** setting → `GROK_WEBHOOK_AUTH_HEADER` (usually `Authorization`) and `GROK_WEBHOOK_AUTH_SCHEME` (usually `Bearer`; set empty if the panel sends the raw key)
+7. Save `.env`. You should see those four `GROK_WEBHOOK_*` lines filled. The URL looks like an `https://` webhook; the key is a secret.
 
 <!-- screenshot: bot chat header → info pane → Routines → ResilienceOps incident diagnosis (Webhook URL, Webhook key, Authorization) -->
 
+On AWS later, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies these into Parameter Store (prints **names + lengths only**). `deploy_remote.py` writes them onto the host as `/opt/sre-colosseum/.env`. Empty `GROK_WEBHOOK_AUTH_SCHEME` is stored as `__EMPTY__` (SSM rejects `""`).
+
 Details: [AI incident diagnosis](#ai-incident-diagnosis).
 
-6. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** as a **second** bot (same GitHub repo). It does not need a webhook URL — it reads `incident` issues and comments a proposal. Copy no secrets. See [Incident Remediation bot](#incident-remediation-bot).
+### 5b. Import the Incident Remediation bot (`/approve` — no webhook)
+
+This is a **second**, separate bot. Do not paste its anything into `GROK_WEBHOOK_*`.
+
+1. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**.
+2. Connect **GitHub** to this bot too, and name the **same** `owner/name` the diagnosis bot files issues in.
+3. Copy **no** webhook URL or key. This bot reads `incident` issues and comments a proposal. It never POSTs into the lab.
+4. On the **lab host** (laptop or the EC2 box), set poller secrets in the shell — not in chat:
+   ```bash
+   export GITHUB_REPOSITORY=<you>/ResilienceOps
+   export GITHUB_TOKEN=...    # fine-grained or classic; issues:read + issues:write
+   ```
+   `GH_TOKEN` is accepted if `GITHUB_TOKEN` is unset. Never commit either. GitHub Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself when someone comments `/approve`.
+5. Confirm `.github/workflows/remediation-approve.yml` is on the default branch of that GitHub repo (this PR / `main` after merge). That workflow **records** `/approve`; it does not execute the fix.
+6. After Compose is healthy (next step), snapshot last-good image IDs once:
+   ```bash
+   python3 remediation/remediate.py record-last-good
+   ```
+   Expected: `{"ok": true, "services": ["api-gw", "order-service", "payment-service"]}` and `logs/last_good_deploy.json`.
+
+The `/approve` trigger is: owner (or write/maintain/admin) comments a line that is only `/approve` on an `incident` issue that already has a valid proposal. See [Incident Remediation bot](#incident-remediation-bot).
 
 ### 6. Start the local Docker Compose lab
 
@@ -945,7 +1031,7 @@ The webhook key is never logged. Evidence is secret-stripped. Payloads are cappe
 
 1. Import the template: https://x.ai/bot/feQpDSeSki7HVgkDCBUaY
 2. Complete the first conversation: GitHub repo (GitHub connected), alert source, ping preference.
-3. Copy webhook credentials from the routine as in [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials) (info pane → **Routines** → **ResilienceOps incident diagnosis**).
+3. Copy webhook credentials from the routine as in [install step 5](#5-import-the-ai-incident-diagnosis-bot-webhook) (info pane → **Routines** → **ResilienceOps incident diagnosis**).
 4. Put them in `.env`:
 
 | Variable | Default | Purpose |
@@ -1057,7 +1143,7 @@ python3 remediation/e2e_local.py
 
 1. `curl -sS http://127.0.0.1:8088/healthz` — `webhook_configured` should be `true`.
 2. Bridge logs: `docker compose logs incident-bridge`. If URL is unset you will see a drop message. The key is never printed.
-3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine (no trailing whitespace). See [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials).
+3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine (no trailing whitespace). See [install step 5](#5-import-the-ai-incident-diagnosis-bot-webhook).
 4. Confirm `GROK_WEBHOOK_AUTH_HEADER` and `GROK_WEBHOOK_AUTH_SCHEME` match the routine's Authorization setting. See [Webhook 401 / 403](#webhook-401--403).
 5. Confirm **GitHub is connected** in the Grok Bot and the first-run conversation named the repo that should receive issues.
 6. Confirm Alertmanager is up (`curl -sS http://127.0.0.1:9093/-/healthy`) and the synthetic alert returned HTTP 200.
@@ -1120,6 +1206,14 @@ docker exec "$(docker compose ps -q incident-bridge)" python -c "import urllib.r
 If those time out while `curl 127.0.0.1:8088/healthz` on the host works, the Docker bridge cannot forward between containers. Check the host firewall / Docker iptables **FORWARD** policy (some locked-down Linux boxes drop forwarded packets), then restart Docker. Keep the fix generic: do not copy another machine's iptables dump. Nested VMs and custom FORWARD DROP policies are common causes. The lab still answers on localhost ports until the engine can route on the compose network.
 
 When the bridge cannot reach the Grok webhook after `WEBHOOK_MAX_RETRIES`, look for `forward FAILED after N attempts alertname=… fingerprint=…` and `logs/bridge_deadletter.jsonl` (no key). The ASGI app stays up (`{"accepted":true}`).
+
+### `/approve` did nothing
+
+The workflow only records a **lone** `/approve` on an **issue** (not a PR) labeled `incident`, from the repo owner or someone with `write` / `maintain` / `admin`. Bot accounts are rejected. A valid `<!-- resilienceops-proposal:v1 -->` block with exactly one allowlisted `action` + `target` must already be on the issue. Check the Actions tab for `record remediator approval`.
+
+### Poller says skip / does not fix
+
+`python3 remediation/poll_and_apply.py --once` must run **on the host that can reach Compose** (or with `--via-ssm`). It looks for issues labeled `incident` **and** `remediation-approved`, without `remediation-applied`. Export `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (or `GH_TOKEN`). If you see `no recorded approval block`, the Actions job has not commented yet.
 
 ### Bake / buildx warning
 

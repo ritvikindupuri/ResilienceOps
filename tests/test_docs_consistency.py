@@ -176,16 +176,16 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "adds evidence" in svg
     assert "PromQL · jsonl" not in svg
     assert "creates the infra" in svg
-    assert "Secrets script" in svg
-    assert "Deploy script" in svg
-    assert "stores the app bundle" in svg
-    assert "runs deploy commands" in svg
-    assert "holds secrets" in svg
+    assert "Secrets script" not in svg
+    assert "Deploy script" not in svg
+    assert "stores the app bundle" not in svg
+    assert "runs deploy commands" not in svg
+    assert "holds secrets" not in svg
     assert "agents in one sandbox pod" in svg
     assert "optional: agents in a sandbox pod" not in svg
     assert "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16" in svg
     assert "solid = data flow" in svg
-    assert "Grey edges are supporting (deploy, traffic, data stores, health/reset, Grafana)." in readme
+    assert "Grey edges are supporting" in readme
     assert "Bridge queries Prometheus (dashed)" in readme
     for filename in (
         "put_lab_secrets.py",

@@ -899,45 +899,35 @@ def build_scene() -> tuple[str, list[str]]:
     W, H = 1600, 1400
     scene = Scene(W, H)
 
-    # One deploy band, ≥20px below the title. Laptop icons left, AWS right.
-    # Title baseline 72, box bottom ≈81 → dep_y 104.
-    dep_y, dep_h = 104, 172
+    # Thin optional-AWS strip. Two icons only — deploy details stay in the README.
+    dep_y, dep_h = 104, 176
     dep_x0, dep_w = 24, 1552
-    sat_y = 198
-    # Laptop icons left, AWS right. Each arrow has its own riser and lane.
-    tf_x, sec_x, par_x = 160, 340, 560
-    dep_x, s3_x, ssm_x = 800, 1080, 1400
-    drop_x = 930
-    lane_ssm, lane_par, lane_s3 = 148, 160, 172
+    sat_y = 182
+    tf_x, ec2_x = 420, 880
+    drop_x = 1040
 
-    host_x, host_y, host_w, host_h = 24, 276, 1192, 996
-    bot_x, bot_y, bot_w, bot_h = 1232, 276, 344, 996
+    host_x, host_y, host_w, host_h = 24, 300, 1188, 972
+    bot_x, bot_y, bot_w, bot_h = 1232, 300, 344, 972
 
-    compose_x, compose_y = 36, 356
-    compose_w, compose_h = 1168, 636
-    k3s_x, k3s_y, k3s_w, k3s_h = 36, 1180, 1168, 68
+    compose_x, compose_y = 40, 388
+    compose_w, compose_h = 1156, 700
+    k3s_x, k3s_y, k3s_w, k3s_h = 40, 1112, 1156, 72
 
-    agents_x, agents_y, agents_w, agents_h = 48, 412, 272, 490
-    red_x, red_y = 182, 560
-    blue_x, blue_y = 182, 775
+    agents_x, agents_y, agents_w, agents_h = 52, 444, 300, 540
+    red_x, red_y = 202, 560
+    blue_x, blue_y = 202, 840
 
-    svc_x, svc_y, svc_w, svc_h = 408, 412, 228, 422
-    svc_cx = 522
-    gw_y, os_y, ps_y = 510, 625, 750
+    svc_x, svc_y, svc_w, svc_h = 380, 444, 240, 540
+    svc_cx = 500
+    gw_y, os_y, ps_y = 540, 700, 860
 
     row_a = _ic(red_y)
-    prom_x, am_x, br_x = 800, 980, 1110
+    prom_x, am_x, br_x = 720, 920, 1100
     prom_y = am_y = br_y = red_y
-    graf_x, graf_y = 800, 720
+    graf_x, graf_y = 720, 820
 
-    rd_x, pg_x, db_y = 420, 550, 925
-    # Traffic sits above-right of the services column so its vertical to
-    # api-gw never crosses ② on row_a.
-    tg_x, tg_y = 720, 424
-
-    grok_x, grok_y = 1328, 560
-    # Ping sits under the diagnosis bot so GitHub can drop to the remediator.
-    gh_x, ping_x, gh_y, ping_y = 1500, 1328, 700, 880
+    grok_x, grok_y = 1328, 540
+    gh_x, ping_x, gh_y, ping_y = 1500, 1328, 700, 860
 
     scene.add(f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -977,11 +967,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.text(dep_x0 + 40, dep_y + 28, "Deploy (optional AWS)", GROUP_PX, bold=True, name="group:deploy", container="deploy")
 
     scene.satellite_at(tf_x, sat_y, "terraform", "Terraform", "creates the infra", container="deploy")
-    scene.satellite_at(sec_x, sat_y, "document", "Secrets script", "", name_size=22, container="deploy")
-    scene.satellite_at(par_x, sat_y, "aws-param-store", "Parameter Store", "holds secrets", name_size=22, container="deploy")
-    scene.satellite_at(dep_x, sat_y, "document", "Deploy script", "", name_size=22, container="deploy")
-    scene.satellite_at(s3_x, sat_y, "aws-s3", "S3", "stores the app bundle", container="deploy")
-    scene.satellite_at(ssm_x, sat_y, "aws-ssm", "SSM", "runs deploy commands", container="deploy")
+    scene.satellite_at(ec2_x, sat_y, "aws-ec2", "EC2", "lab host", container="deploy")
 
     host_title = "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16"
     host_sg = "SG :3000/:8000 from allowed_cidr"
@@ -1006,9 +992,9 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.text(agents_x + 14, agents_y + 50, "--profile agents", CAP_PX, name="agents-cap", container="agents")
 
-    scene.add(group(svc_x, svc_y, svc_w, svc_h, "Target services", style=None))
+    scene.add(group(svc_x, svc_y, svc_w, svc_h, "Services", style=None))
     scene.container("services", svc_x, svc_y, svc_w, svc_h)
-    scene.text(svc_x + 14, svc_y + 26, "Target services", GROUP_PX, bold=True, name="group:services", container="services")
+    scene.text(svc_x + 14, svc_y + 26, "Services", GROUP_PX, bold=True, name="group:services", container="services")
 
     k3s_title = "k3s sandbox (optional)"
     k3s_sub = "agents in one sandbox pod"
@@ -1030,28 +1016,18 @@ def build_scene() -> tuple[str, list[str]]:
         cap2="reset order + payment",
         container="agents",
     )
-    scene.add(
-        f'  <text x="{blue_x:.0f}" y="{blue_y + 100:.0f}" text-anchor="middle" class="cap">queries Prometheus</text>'
-    )
-    scene.text(
-        blue_x, blue_y + 100, "queries Prometheus", CAP_PX, anchor="middle",
-        name="cap3:Blue Team", container="agents",
-    )
     scene.node_at(svc_cx, gw_y, "fastapi", "api-gw", "", container="services")
     scene.node_at(svc_cx, os_y, "fastapi", "order-", "", name2="service", container="services")
     scene.node_at(svc_cx, ps_y, "fastapi", "payment-", "", name2="service", container="services")
     scene.node_at(prom_x, prom_y, "prometheus", "Prometheus", "pulls /metrics", container="compose")
     scene.node_at(am_x, am_y, "alertmanager", "Alert", "", name2="manager", container="compose")
     scene.node_at(br_x, br_y, "document", "incident-", "adds evidence", name2="bridge", container="compose")
-    scene.node_at(tg_x, tg_y, "traffic", "Traffic", "load", container="compose")
-    scene.node_at(rd_x, db_y, "redis", "Redis", "cache", container="compose")
-    scene.node_at(pg_x, db_y, "postgresql", "PostgreSQL", "orders_db", container="compose")
     scene.node_at(graf_x, graf_y, "grafana", "Grafana", "reads Prom", size=48, container="compose")
     scene.grok_at(grok_x, grok_y, "AI Incident Diagnosis", container="bot")
     scene.node_at(gh_x, gh_y, "github", "GitHub", "incident", name2="issue", name_size=22, container="bot")
     scene.node_at(ping_x, ping_y, "bell", "Owner ping", "critical", name_size=22, container="bot")
-    rem_x, rem_y = 1476, 1040
-    own_x, own_y = 1328, 1040
+    rem_x, rem_y = 1476, 1000
+    own_x, own_y = 1328, 1000
     scene.remediator_at(rem_x, rem_y, container="bot")
     scene.node_at(own_x, own_y, "person", "Owner", "/approve", name_size=22, container="bot")
 
@@ -1060,18 +1036,13 @@ def build_scene() -> tuple[str, list[str]]:
     os_left = svc_cx - ICON / 2 - 4
     gw_left = os_left
     ps_left = os_left
-    os_right = svc_cx + ICON / 2 + 4
-    gw_right = os_right
     gw_ic = _ic(gw_y)
     os_ic = _ic(os_y)
     ps_ic = _ic(ps_y)
     blue_ic = _ic(blue_y)
-    tg_ic = _ic(tg_y)
     svc_right = svc_x + svc_w
     prom_left = prom_x - ICON / 2 - 8
     prom_right = prom_x + ICON / 2 + 8
-    prom_icon_right = prom_x + ICON / 2
-    prom_icon_bot = _icon_top(prom_y) + ICON
     am_left = am_x - ICON / 2 - 8
     am_right = am_x + ICON / 2 + 8
     br_left = br_x - ICON / 2 - 8
@@ -1083,58 +1054,24 @@ def build_scene() -> tuple[str, list[str]]:
     gh_ic = _ic(gh_y)
     prom_top = _icon_top(prom_y)
     graf_top = _icon_top(graf_y, 48)
-    db_top = _icon_top(db_y)
-    os_bot = _icon_top(os_y) + ICON
     sat_top = sat_y - 15.0
+    sat_bot = sat_y + 15.0
     prom_cap_y = prom_y + 52
-    # ① stem in the group left padding. Payment drops 20px left of the OS
-    # shaft so Blue can pass between the two orange verticals.
-    fork_x = 368
-    fork_ps_x = 348
-    join_x = 330
-    blue_os_x = 358
-    blue_os_bypass = 395
-    blue_os_pre = 320
-    blue_west_x = 40
-    blue_over_y = 400
-    blue_os_mid_y = 516
-    stem_above_y = row_a - 4
-    os_rd_x, os_pg_x = 648, 672
-    os_rd_y, os_pg_y = 840, 856
-    tg_rail = 680
-    query_floor = 996
-    query_up_x = 910
+    fork_x = 312
+    fork_ps_x = 292
+    join_x = 292
     fork_bot = 1438
     badge_y = row_a - 28
-    promql_y = 412
-    gw_tick_y = gw_ic
-    os_tick_y = os_ic + 16
-    ps_tick_y = ps_ic + 16
+    promql_y = 400
 
-    # Deploy: each arrow has its own riser and lane (no shared segments).
-    scene.poly(
-        [(sec_x, sat_top), (sec_x, lane_par), (par_x, lane_par), (par_x, sat_top)],
-        name="sec-param",
-        src="sat-icon:Secrets script",
-        dst="sat-icon:Parameter Store",
-    )
-    scene.poly(
-        [
-            (dep_x - 8, sat_top),
-            (dep_x + 24, sat_top),
-            (dep_x + 24, lane_s3),
-            (s3_x, lane_s3),
-            (s3_x, sat_top),
-        ],
-        name="dep-s3",
-        src="sat-icon:Deploy script",
-        dst="sat-icon:S3",
-    )
-    scene.poly(
-        [(dep_x + 8, sat_top), (dep_x + 8, lane_ssm), (ssm_x, lane_ssm), (ssm_x, sat_top)],
-        name="dep-ssm",
-        src="sat-icon:Deploy script",
-        dst="sat-icon:SSM",
+    scene.arrow(
+        tf_x + 24,
+        sat_y,
+        ec2_x - 24,
+        sat_y,
+        name="tf-ec2",
+        src="sat-icon:Terraform",
+        dst="sat-icon:EC2",
     )
     scene.arrow(drop_x, dep_y + dep_h, drop_x, host_y, name="aws-host")
 
@@ -1210,10 +1147,10 @@ def build_scene() -> tuple[str, list[str]]:
     own_ic = _ic(own_y)
     own_bot = _icon_top(own_y) + ICON
     gh_bot = _icon_top(gh_y) + ICON
-    rem_drop_y = rem_top - 16
-    fix_y = 1132
-    fix_up_x = 1100
+    rem_drop_y = rem_top - 20
     compose_bot = compose_y + compose_h
+    fix_y = compose_bot + 12
+    fix_up_x = 1080
     scene.poly(
         [
             (gh_x, gh_bot),
@@ -1271,117 +1208,6 @@ def build_scene() -> tuple[str, list[str]]:
         prom_x, prom_cap_y + 16, prom_x, graf_top, name="prom-graf",
         src="icon:Prometheus",
         dst="icon:Grafana",
-    )
-
-    # order-service → Redis / PostgreSQL: own drop + short horizontal each.
-    scene.poly(
-        [
-            (os_right, os_bot),
-            (os_rd_x, os_bot),
-            (os_rd_x, os_rd_y),
-            (rd_x, os_rd_y),
-            (rd_x, db_top),
-        ],
-        name="os-redis",
-        src="icon:order-",
-        dst="icon:Redis",
-    )
-    scene.poly(
-        [
-            (os_right, os_ic),
-            (os_pg_x, os_ic),
-            (os_pg_x, os_pg_y),
-            (pg_x, os_pg_y),
-            (pg_x, db_top),
-        ],
-        name="os-pg",
-        src="icon:order-",
-        dst="icon:PostgreSQL",
-    )
-
-    # Traffic above-right of the services group, into api-gw from the right.
-    # Vertical sits left of ②'s x-range at this y (above row_a), so no cross.
-    scene.poly(
-        [
-            (tg_x - ICON / 2, tg_ic),
-            (tg_rail, tg_ic),
-            (tg_rail, gw_ic),
-            (gw_right, gw_ic),
-        ],
-        name="traffic-gw",
-        src="icon:Traffic",
-        dst="icon:api-gw",
-    )
-
-    # Blue: leave the icon's right side at icon height.
-    # Stem in the Agents–services gap, below ①. Payment tick stays below ①.
-    # api-gw / order-service go west of Red, over the top of ①, then in from
-    # the left (order-service walks around the stem's right end so it never
-    # crosses orange). Query drops the gap, under the services, up into Prom.
-    scene.poly(
-        [(blue_right, blue_ic), (join_x, blue_ic)],
-        marked=False,
-        name="blue-stem",
-        src="icon:Blue Team",
-    )
-    scene.poly(
-        [(blue_right, blue_ic), (blue_west_x, blue_ic), (blue_west_x, blue_over_y)],
-        marked=False,
-        name="blue-west",
-        src="icon:Blue Team",
-    )
-    scene.poly(
-        [
-            (blue_west_x, blue_over_y),
-            (join_x, blue_over_y),
-            (join_x, gw_tick_y),
-            (gw_left, gw_tick_y),
-        ],
-        thin=True,
-        name="blue-gw",
-        src="icon:Blue Team",
-        dst="icon:api-gw",
-    )
-    scene.poly(
-        [
-            (blue_os_pre, blue_over_y),
-            (blue_os_pre, blue_os_mid_y),
-            (blue_os_bypass, blue_os_mid_y),
-            (blue_os_bypass, stem_above_y),
-            (blue_os_x, stem_above_y),
-            (blue_os_x, row_a),
-        ],
-        marked=False,
-        thin=True,
-        name="blue-os-in",
-        src="icon:Blue Team",
-    )
-    scene.poly(
-        [(blue_os_x, row_a), (blue_os_x, os_tick_y), (os_left, os_tick_y)],
-        thin=True,
-        name="blue-os",
-        src="icon:Blue Team",
-        dst="icon:order-",
-    )
-    scene.poly(
-        [(join_x, blue_ic), (join_x, ps_tick_y), (ps_left, ps_tick_y)],
-        thin=True,
-        name="blue-ps",
-        src="icon:Blue Team",
-        dst="icon:payment-",
-    )
-    scene.poly(
-        [
-            (join_x, blue_ic),
-            (join_x, query_floor),
-            (query_up_x, query_floor),
-            (query_up_x, prom_icon_bot),
-            (prom_icon_right, prom_icon_bot),
-        ],
-        dashed=True,
-        name="blue-promql",
-        src="icon:Blue Team",
-        dst="icon:Prometheus",
     )
 
     host_bottom = host_y + host_h

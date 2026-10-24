@@ -1,17 +1,8 @@
 %%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
 flowchart LR
-  TF["Terraform · IaC"]
-  DEPLOY["deploy_remote.py"]
-  SECRETS["put_lab_secrets.py"]
-  subgraph laptop ["Deploy (optional AWS) · laptop"]
+  TF["Terraform"]
+  subgraph aws ["Deploy (optional AWS)"]
     TF
-    SECRETS
-    DEPLOY
-  end
-  subgraph aws ["AWS"]
-    S3["S3 zip → host"]
-    PARAM["Param Store secrets → .env"]
-    SSM["SSM send_command"]
   end
   subgraph host ["EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16 · SG :3000/:8000 from allowed_cidr"]
     subgraph compose ["Lab (Docker Compose)"]
@@ -19,22 +10,13 @@ flowchart LR
         RED[Red Team]
         BLUE[Blue Team]
       end
-      TG[Traffic]
       GW[api-gw]
       OS[order-service]
       PS[payment-service]
-      RD[Redis]
-      PG[PostgreSQL]
       PROM[Prometheus]
       GRAF[Grafana]
       AM[Alertmanager]
       BR["incident-bridge"]
-      TG --> GW
-      GW --> OS
-      GW --> PS
-      OS --> PS
-      OS --> RD
-      OS --> PG
       GW -.-> PROM
       OS -.-> PROM
       PS -.-> PROM
@@ -58,18 +40,8 @@ flowchart LR
     GH --> REM
     REM --> OWN
   end
-  OWN --> OS
-  OWN --> PS
-
-  DEPLOY --> S3
-  DEPLOY --> SSM
-  SECRETS --> PARAM
-  S3 --> host
-  SSM --> host
-  PARAM --> host
+  TF --> host
   RED --> OS
   RED --> PS
-  BLUE --> OS
-  BLUE --> PS
-  BLUE --> PROM
   BR --> BOT
+  OWN --> compose
