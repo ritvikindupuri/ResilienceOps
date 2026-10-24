@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 
 from remediation.actions import Proposal, execute, parse_proposal, verify_recovery
 from remediation.approval import evaluate_approval
+from remediation.envload import load_remediation_env
 from remediation.logutil import emit
 
 OUT = ROOT / "examples" / "remediation_e2e"
@@ -48,6 +49,7 @@ def _stack_up() -> bool:
 
 
 def main() -> int:
+    load_remediation_env()
     OUT.mkdir(parents=True, exist_ok=True)
     report: dict = {
         "started_at": datetime.now(timezone.utc).isoformat(),

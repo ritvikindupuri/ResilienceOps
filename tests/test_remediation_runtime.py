@@ -1,8 +1,10 @@
-"""logutil state dir, --via-ssm forwarding, and poller failure comments."""
+"""logutil state dir, --via-ssm forwarding, poller failure comments, .env load."""
 
 from __future__ import annotations
 
-from remediation import logutil, poll_and_apply, remediate
+import os
+
+from remediation import envload, logutil, poll_and_apply, remediate
 from remediation.actions import Proposal
 
 
@@ -99,3 +101,41 @@ def test_poller_posts_failure_comment_when_ssm_raises(monkeypatch):
     assert comments
     assert "ok: false" in comments[0]
     assert "reset_fault" in comments[0]
+
+
+def test_load_remediation_env_reads_repo_dotenv(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    (tmp_path / ".env").write_text(
+        "GITHUB_TOKEN=from-dotenv\nGITHUB_REPOSITORY=owner/from-dotenv\n",
+        encoding="utf-8",
+    )
+    loaded = envload.load_remediation_env(root=tmp_path)
+    assert loaded
+    assert os.getenv("GITHUB_TOKEN") == "from-dotenv"
+    assert os.getenv("GITHUB_REPOSITORY") == "owner/from-dotenv"
+
+
+def test_load_remediation_env_does_not_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "already-set")
+    (tmp_path / ".env").write_text("GITHUB_TOKEN=from-dotenv\n", encoding="utf-8")
+    envload.load_remediation_env(root=tmp_path)
+    assert os.getenv("GITHUB_TOKEN") == "already-set"
+
+
+def test_load_remediation_env_reads_host_path(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    host = tmp_path / "host.env"
+    host.write_text("GITHUB_REPOSITORY=ec2/lab\n", encoding="utf-8")
+    envload.load_remediation_env(root=tmp_path / "missing", extra=[host])
+    assert os.getenv("GITHUB_REPOSITORY") == "ec2/lab"
+
+
+def test_poller_main_loads_dotenv(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    (tmp_path / ".env").write_text("GITHUB_REPOSITORY=owner/from-poller\n", encoding="utf-8")
+    monkeypatch.setattr(poll_and_apply, "load_remediation_env", lambda: envload.load_remediation_env(root=tmp_path))
+    monkeypatch.setattr(poll_and_apply, "github_repository", lambda: os.environ["GITHUB_REPOSITORY"])
+    monkeypatch.setattr(poll_and_apply, "list_labeled_issues", lambda *_a, **_k: [])
+    assert poll_and_apply.main(["--once"]) == 0
+    assert os.getenv("GITHUB_REPOSITORY") == "owner/from-poller"

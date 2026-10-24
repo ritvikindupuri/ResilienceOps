@@ -24,6 +24,7 @@ from remediation.github_api import (  # noqa: E402
     list_issue_comments,
     repo_owner_login,
 )
+from remediation.envload import load_remediation_env  # noqa: E402
 from remediation.logutil import emit  # noqa: E402
 
 
@@ -35,6 +36,7 @@ def _load_event() -> dict:
 
 
 def main() -> int:
+    load_remediation_env()
     event = _load_event()
     comment = event.get("comment") or {}
     issue = event.get("issue") or {}

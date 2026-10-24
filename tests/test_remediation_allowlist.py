@@ -122,28 +122,54 @@ def test_rollback_dry_run_uses_snapshot(tmp_path, monkeypatch):
     snapshot = {
         "recorded_at": "2026-10-24T00:00:00+00:00",
         "services": {
-            "api-gw": {"image_id": "sha256:" + "b" * 64},
-            "order-service": {"image_id": "sha256:" + "c" * 64},
-            "payment-service": {"image_id": "sha256:" + "d" * 64},
+            "api-gw": {"image_id": "sha256:" + "b" * 64, "image_name": "lab-api-gw"},
+            "order-service": {"image_id": "sha256:" + "c" * 64, "image_name": "lab-order-service"},
+            "payment-service": {"image_id": "sha256:" + "d" * 64, "image_name": "lab-payment-service"},
         },
     }
     (tmp_path / "last_good_deploy.json").write_text(json.dumps(snapshot), encoding="utf-8")
     result = execute(Proposal("rollback_deploy", "order-service"), dry_run=True)
     assert result.ok
     assert result.steps[0]["image_id"].startswith("sha256:")
+    assert result.steps[0]["image_ref"] == "lab-order-service:last-good"
+    assert result.steps[0]["tag_argv"] == [
+        "docker",
+        "tag",
+        snapshot["services"]["order-service"]["image_id"],
+        "lab-order-service:last-good",
+    ]
     assert "--no-build" in result.steps[0]["argv"]
     assert any("rollback-order-service.yml" in part for part in result.steps[0]["argv"])
 
 
+def test_rollback_both_includes_all_three_app_services(tmp_path, monkeypatch):
+    monkeypatch.setenv("REMEDIATION_STATE_DIR", str(tmp_path))
+    ids = {name: "sha256:" + ch * 64 for name, ch in (("api-gw", "a"), ("order-service", "b"), ("payment-service", "c"))}
+    (tmp_path / "last_good_deploy.json").write_text(
+        json.dumps({"services": {n: {"image_id": i, "image_name": f"lab-{n}"} for n, i in ids.items()}}),
+        encoding="utf-8",
+    )
+    result = execute(Proposal("rollback_deploy", "both"), dry_run=True)
+    assert result.ok
+    assert [s["service"] for s in result.steps] == ["api-gw", "order-service", "payment-service"]
+
+
 def test_rollback_recreates_from_last_good_image(tmp_path, monkeypatch):
-    """Compose must run the stored last-good ID, not the current image."""
+    """Tag last-good as the Compose image name, then up --no-build from the override."""
     from remediation import actions as actions_mod
 
     last_good = "sha256:" + "b" * 64
     current = "sha256:" + "c" * 64
+    image_ref = "lab-order-service:last-good"
     monkeypatch.setenv("REMEDIATION_STATE_DIR", str(tmp_path))
     (tmp_path / "last_good_deploy.json").write_text(
-        json.dumps({"services": {"order-service": {"image_id": last_good}}}),
+        json.dumps(
+            {
+                "services": {
+                    "order-service": {"image_id": last_good, "image_name": "lab-order-service"}
+                }
+            }
+        ),
         encoding="utf-8",
     )
     calls: list[list[str]] = []
@@ -153,10 +179,11 @@ def test_rollback_recreates_from_last_good_image(tmp_path, monkeypatch):
         return {"argv": list(argv), "returncode": 0, "stdout": "", "stderr": ""}
 
     def fake_image(_name: str) -> str:
+        tagged = any(argv[:3] == ["docker", "tag", last_good] and argv[3] == image_ref for argv in calls)
         for argv in calls:
-            if "up" in argv and any(str(part).endswith("rollback-order-service.yml") for part in argv):
+            if "up" in argv and "--no-build" in argv:
                 text = (tmp_path / "rollback-order-service.yml").read_text(encoding="utf-8")
-                if last_good in text and current not in text:
+                if image_ref in text and "pull_policy: never" in text and last_good not in text and tagged:
                     return last_good
         return current
 
@@ -165,8 +192,10 @@ def test_rollback_recreates_from_last_good_image(tmp_path, monkeypatch):
     result = execute(Proposal("rollback_deploy", "order-service"), dry_run=False)
     assert result.ok, result.error
     override = (tmp_path / "rollback-order-service.yml").read_text(encoding="utf-8")
-    assert last_good in override
-    assert current not in override
+    assert f"image: {image_ref}" in override
+    assert "pull_policy: never" in override
+    assert last_good not in override
+    assert any(argv[:3] == ["docker", "tag", last_good] and argv[3] == image_ref for argv in calls)
     assert any("up" in argv and "--no-build" in argv and "--force-recreate" in argv for argv in calls)
     assert result.steps[0]["image_after"] == last_good
     assert result.steps[0]["image_id"] == last_good

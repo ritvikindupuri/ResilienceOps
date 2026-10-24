@@ -25,6 +25,7 @@ from remediation.github_api import (  # noqa: E402
     list_issue_comments,
     list_labeled_issues,
 )
+from remediation.envload import load_remediation_env  # noqa: E402
 from remediation.logutil import emit  # noqa: E402
 from remediation.remediate import main as remediate_main  # noqa: E402
 
@@ -87,6 +88,7 @@ def _apply_one(issue: dict, *, dry_run: bool, via_ssm: bool, verify_timeout: int
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_remediation_env()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--once", action="store_true", help="Scan once and exit (default).")
     parser.add_argument("--loop", action="store_true", help="Poll until interrupted.")

@@ -34,6 +34,7 @@ from remediation.actions import (  # noqa: E402
     validate_proposal_fields,
     verify_recovery,
 )
+from remediation.envload import load_remediation_env  # noqa: E402
 from remediation.logutil import emit  # noqa: E402
 
 
@@ -91,6 +92,7 @@ def _via_ssm(argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_remediation_env()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", choices=["run", "record-last-good"], default="run")
     parser.add_argument("--action", choices=sorted(ACTIONS))

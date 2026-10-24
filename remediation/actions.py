@@ -264,8 +264,20 @@ def last_good_path() -> Path:
     return _state_dir() / LAST_GOOD_NAME
 
 
-def _container_image_id(service: str) -> str:
-    """Resolve the running compose container's image ID (sha256:…)."""
+def _compose_project() -> str:
+    raw = (os.getenv("COMPOSE_PROJECT_NAME") or "").strip()
+    if raw and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", raw):
+        return raw.lower()
+    cleaned = re.sub(r"[^a-z0-9]+", "", REPO_ROOT.name.lower())
+    return cleaned or "resilienceops"
+
+
+def _default_image_name(service: str) -> str:
+    """Name Compose assigns when docker-compose.yml has build: and no image:."""
+    return f"{_compose_project()}-{service}"
+
+
+def _running_container_name(service: str) -> str:
     listed = _compose("ps", "--format", "json", service)
     if listed["returncode"] != 0:
         raise RemediationError(f"compose ps failed for {service}: {listed['stderr']}")
@@ -283,6 +295,12 @@ def _container_image_id(service: str) -> str:
     name = rows[0].get("Name") or rows[0].get("ID")
     if not name:
         raise RemediationError(f"compose ps returned no name for {service}")
+    return str(name)
+
+
+def _container_image_id(service: str) -> str:
+    """Resolve the running compose container's image ID (sha256:…)."""
+    name = _running_container_name(service)
     inspected = _run(["docker", "inspect", "-f", "{{.Image}}", name])
     if inspected["returncode"] != 0:
         raise RemediationError(f"docker inspect failed for {service}")
@@ -290,6 +308,35 @@ def _container_image_id(service: str) -> str:
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
         raise RemediationError(f"unexpected image id for {service}")
     return image_id
+
+
+def _container_image_name(service: str) -> str:
+    """Compose image name (not the sha256 id) so rollback can retag it."""
+    name = _running_container_name(service)
+    inspected = _run(["docker", "inspect", "-f", "{{json .RepoTags}}", name])
+    if inspected["returncode"] != 0:
+        return _default_image_name(service)
+    try:
+        tags = json.loads(inspected["stdout"] or "[]")
+    except json.JSONDecodeError:
+        tags = []
+    if not isinstance(tags, list):
+        tags = []
+    for tag in tags:
+        text = str(tag or "")
+        if not text or text.startswith("sha256:"):
+            continue
+        base = text.split(":", 1)[0]
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,120}", base):
+            return base
+    return _default_image_name(service)
+
+
+def _last_good_ref(service: str, stored_name: str | None = None) -> str:
+    base = (stored_name or _default_image_name(service)).split(":", 1)[0]
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,120}", base):
+        raise RemediationError(f"invalid compose image name for {service}")
+    return f"{base}:last-good"
 
 
 def record_last_good(services: Iterable[str] | None = None) -> dict[str, Any]:
@@ -307,7 +354,10 @@ def record_last_good(services: Iterable[str] | None = None) -> dict[str, Any]:
         "services": {},
     }
     for name in chosen:
-        payload["services"][name] = {"image_id": _container_image_id(name)}
+        payload["services"][name] = {
+            "image_id": _container_image_id(name),
+            "image_name": _container_image_name(name),
+        }
     path = last_good_path()
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
@@ -352,9 +402,14 @@ def _restart_service(target: str, dry_run: bool) -> list[dict[str, Any]]:
     return [step]
 
 
-def _rollback_override_text(service: str, image_id: str) -> str:
-    """Compose overlay that points one service at a recorded image ID."""
-    return f"services:\n  {service}:\n    image: {image_id}\n"
+def _rollback_override_text(service: str, image_ref: str) -> str:
+    """Compose overlay: named tag + pull_policy so --no-build wins over build:."""
+    return (
+        f"services:\n"
+        f"  {service}:\n"
+        f"    image: {image_ref}\n"
+        f"    pull_policy: never\n"
+    )
 
 
 def _rollback_deploy(target: str, dry_run: bool) -> list[dict[str, Any]]:
@@ -369,7 +424,9 @@ def _rollback_deploy(target: str, dry_run: bool) -> list[dict[str, Any]]:
         image_id = info["image_id"]
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
             raise RemediationError(f"invalid image id in snapshot for {name}")
+        image_ref = _last_good_ref(name, info.get("image_name"))
         override_path = _state_dir() / f"rollback-{name}.yml"
+        tag_argv = ["docker", "tag", image_id, image_ref]
         argv = [
             "docker",
             "compose",
@@ -388,14 +445,20 @@ def _rollback_deploy(target: str, dry_run: bool) -> list[dict[str, Any]]:
             "kind": "rollback_deploy",
             "service": name,
             "image_id": image_id,
+            "image_ref": image_ref,
             "override": str(override_path),
+            "tag_argv": tag_argv,
             "argv": argv,
         }
         if dry_run:
             step["dry_run"] = True
             steps.append(step)
             continue
-        override_path.write_text(_rollback_override_text(name, image_id), encoding="utf-8")
+        override_path.write_text(_rollback_override_text(name, image_ref), encoding="utf-8")
+        tagged = _run(tag_argv)
+        step["tag"] = {"returncode": tagged["returncode"], "stderr": tagged["stderr"][-400:]}
+        if tagged["returncode"] != 0:
+            raise RemediationError(f"docker tag failed for {name}")
         rec = _run(argv)
         step["recreate"] = {"returncode": rec["returncode"], "stderr": rec["stderr"][-400:]}
         if rec["returncode"] != 0:

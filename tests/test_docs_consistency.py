@@ -214,7 +214,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "read-only" not in svg.lower()
     assert "Owner ping" in svg
     assert "1–6 diagnosis path" in svg
-    assert "7–9 remediator path" in svg
+    assert "7–10 remediator path" in svg
     assert "Incident Remediation" in svg
     assert "AI Incident Diagnosis" in svg
     assert "Actions" in svg
@@ -302,6 +302,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1480×1340; render_architecture.sh writes 2×.
+    # Native SVG is 1480×1380; render_architecture.sh writes 2×.
     assert width in {1480, 2960}, width
-    assert height in {1180, 1340, 2360, 2680}, height
+    assert height in {1180, 1340, 1380, 2360, 2680, 2760}, height
