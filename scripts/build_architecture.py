@@ -1444,21 +1444,42 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(grok_x - 36, (grok_top + ping_bot) / 2, 6, container="bot")
 
-    # ⑦ GitHub → Remediation, ⑧ Remediation → Owner (blue, real length).
-    scene.arrow(
-        gh_x, gh_y + 48, rem_x, rem_top, rem=True, name="gh-rem",
-        src="icon:GitHub issue",
+    # ⑦ Diagnosis → Remediation (handoff), around GitHub. ⑧ Remediation
+    # comments the proposal on the GitHub issue (left of the labels).
+    handoff_x = 1400
+    grok_right = grok_x + 48
+    grok_mid = grok_y - 32
+    rem_ic = rem_y - 38
+    rem_right = rem_x + 60
+    rem_left = rem_x - 60
+    gh_ic = _ic(gh_y)
+    gh_left = gh_x - ICON / 2 - 4
+    scene.poly(
+        [
+            (grok_right, grok_mid),
+            (handoff_x, grok_mid),
+            (handoff_x, rem_ic),
+            (rem_right, rem_ic),
+        ],
+        rem=True,
+        name="diag-rem",
+        src="icon:grok",
         dst="icon:remediator",
-        touch=("name:GitHub issue", "name:remediator1", "name:remediator2", "cap:remediator"),
     )
-    scene.badge(gh_x + 40, (gh_y + 48 + rem_top) / 2, 7, rem=True, container="bot")
-    scene.arrow(
-        rem_x, rem_bot, own_x, own_top, rem=True, name="rem-own",
+    scene.badge(1420, 720, 7, rem=True, container="bot")
+    scene.poly(
+        [
+            (rem_left, rem_ic),
+            (col_left, rem_ic),
+            (col_left, gh_ic),
+            (gh_left, gh_ic),
+        ],
+        rem=True,
+        name="rem-gh",
         src="icon:remediator",
-        dst="icon:Owner",
-        touch=("name:remediator1", "name:remediator2", "cap:remediator"),
+        dst="icon:GitHub issue",
     )
-    scene.badge(rem_x + 44, rem_bot + 18, 8, rem=True, container="bot")
+    scene.badge(col_left + 28, (rem_ic + gh_ic) / 2, 8, rem=True, container="bot")
 
     # ⑨ Owner /approve → Actions. ⑩ poller → services group.
     act_ic = _ic(act_y)

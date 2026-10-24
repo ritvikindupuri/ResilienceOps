@@ -3,7 +3,7 @@
 An SRE lab: three FastAPI services, real faults, Prometheus alerts, and two importable Grok bots.
 
 - **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** opens a GitHub `incident` issue. It has [no control path into the lab](#read-these-once).
-- **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** comments one allowlisted fix. The fix runs only after `/approve`, on the machine that can see Compose (or [`--via-ssm`](#read-these-once)).
+- **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** is invoked only by the Diagnosis bot. After Diagnosis files or comments on a firing `incident` issue, it asks this teammate to post one allowlisted fix. The fix runs only after `/approve`, on the machine that can see Compose (or [`--via-ssm`](#read-these-once)).
 
 This README is the source of truth. The [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf) is a historical brief. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
 
@@ -37,8 +37,8 @@ Later sections link here instead of repeating these sentences.
 
 - Real kernel and cgroup faults (`tc netem` on `eth0`, heap leaks that can OOM, CFS CPU burn, Redis `maxclients` starvation) — not mock metrics.
 - Optional Red/Blue agents (`orchestrator.py`) that inject, detect, reset, and write `reports/incident_*.md`. They do **not** open GitHub issues.
-- Diagnosis bot: Prometheus → Alertmanager → incident-bridge → webhook → `incident` issue (and a chat ping on firing **critical** alerts).
-- Remediation bot: one allowlisted proposal; owner `/approve`; host poller or [`--via-ssm`](#read-these-once) runs `reset_fault`, `restart_service`, or `rollback_deploy`.
+- Diagnosis bot: Prometheus → Alertmanager → incident-bridge → webhook → `incident` issue (and a chat ping on firing **critical** alerts). Then it asks the Remediation bot to propose a fix.
+- Remediation bot: no webhook and no repo watch. Diagnosis hands off; the teammate comments one allowlisted proposal. Owner `/approve`; host poller or [`--via-ssm`](#read-these-once) runs `reset_fault`, `restart_service`, or `rollback_deploy`.
 - Grafana at 1s scrape on `:3000`. Optional AWS EC2 + k3s sandbox. CloudWatch log groups `/sre/autonomous-agent-audit` and `/sre/autonomous-agent-incidents` (Terraform creates the groups; dashboards are helper scripts).
 
 ## Prerequisites
@@ -197,17 +197,19 @@ On AWS later, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies
 
 ### Incident Remediation
 
-A **second** bot. No webhook. Do not paste anything from it into `GROK_WEBHOOK_*`.
+A **second** bot in the **same Grok account**. It has **no webhook** and does **not** watch the repo. Only the Diagnosis bot’s webhook goes in `.env`. Do not paste anything from this bot into `GROK_WEBHOOK_*`.
+
+After Diagnosis files or comments on a firing `incident` issue, it asks this teammate to post one proposal.
 
 1. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**.
-2. Connect GitHub when the bot asks in its first chat, and grant it access to your fork only.
-3. Name the **same** `owner/name` the diagnosis bot files issues in.
+2. Connect GitHub when the bot asks in its first chat, and grant it access to **the same fork**.
+3. Keep both bots in the same account so Diagnosis can message it.
 4. Enable Actions on that fork (above).
-5. Create the [poller token](#poller-token) and put `GITHUB_REPOSITORY=owner/name` plus `GITHUB_TOKEN` in `.env`.
+5. Create the [poller token](#poller-token) and put `GITHUB_REPOSITORY=owner/name` plus `GITHUB_TOKEN` in `.env`. The `/approve` → Actions → poller path still needs this token.
 
-**You should see:** the bot confirms the repo it will watch. It does not give you a webhook.
+**You should see:** no webhook URL or key. The bot is ready for Diagnosis to hand off an issue.
 
-If no proposal appears within a few minutes, message the Remediation bot: `Check issue #N in owner/name and post a proposal.`
+If no proposal appears within a few minutes, ask the Diagnosis bot to hand off issue #N, or message the Remediation bot directly: `Check issue #N in owner/name and post a proposal.`
 
 `.github/workflows/remediation-approve.yml` must be on the **default** branch (`issue_comment` workflows run from there). It **records** `/approve`. It does not execute the fix. The workflow name is `record remediator approval`.
 
@@ -245,7 +247,7 @@ target: order-service
 
 3. **Read the diagnosis issue.** The diagnosis bot [has no control path into the lab](#read-these-once). Sample hop times: [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
 
-4. **Wait for the remediator proposal.** If no proposal appears within a few minutes, message the Remediation bot: `Check issue #N in owner/name and post a proposal.`
+4. **Wait for the remediator proposal.** Diagnosis should ask its teammate to comment one proposal on that issue. If none appears within a few minutes, ask the Diagnosis bot to hand off issue #N, or message the Remediation bot directly: `Check issue #N in owner/name and post a proposal.`
 
 5. **Approve.** On that issue, comment exactly:
 
@@ -464,6 +466,10 @@ aws iam delete-policy --policy-arn "$POLICY_ARN"
 
 Wrong key, or `GROK_WEBHOOK_AUTH_HEADER` / `GROK_WEBHOOK_AUTH_SCHEME` does not match the routine. Recopy the four values, then `docker compose up -d incident-bridge`.
 
+### No proposal appeared
+
+Diagnosis is the only caller. Ask the Diagnosis bot to hand off issue #N, or message the Remediation bot directly: `Check issue #N in owner/name and post a proposal.` Confirm both bots are in the same account and GitHub is connected to the same fork. The Remediation bot has no webhook and does not watch the repo.
+
 ### `/approve` did nothing
 
 Lone `/approve` on an **issue** (not a PR) labeled `incident`, from the owner or `write` / `maintain` / `admin`. Bots rejected. A valid proposal block must already be on the issue. Actions must be enabled. Check the Actions tab for `record remediator approval`.
@@ -499,14 +505,21 @@ Compose v2 message. The stack still builds with the default docker driver.
 <p align="center">
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps plus the diagnosis and remediator bots work" width="100%" />
 </p>
-<p align="center"><b>Figure 1: How ResilienceOps plus the diagnosis and remediator bots work</b></p>
-<p align="center">Orange ①–⑥ is the diagnosis path. Blue ⑦–⑩ is the remediator path (GitHub issue → remediator → owner → <code>/approve</code> / Actions → host poller / SSM → services). Grey edges are supporting (optional AWS deploy, Grafana, Red/Blue, PromQL query). incident-bridge queries Prometheus. Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
-<p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
+<p align="center"><b>Figure 1.</b> Orange = diagnosis, blue = remediation. Numbers match the steps below.</p>
 
 <p align="center">
   <img src="docs/images/agent_sandbox_architecture.png" alt="Kubernetes Agent Sandbox Architecture & Security Boundary" width="950" />
 </p>
 <p align="center"><b>Figure 2: Kubernetes Agent Sandbox Pod Architecture, Resource Limits & Egress Network Rules</b></p>
+
+<details>
+<summary>Figure source (contributors)</summary>
+
+Grey edges are supporting (optional AWS deploy, Grafana, Red/Blue, PromQL query). incident-bridge queries Prometheus. Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
+
+Rebuild Figure 1 from [`docs/architecture.svg`](docs/architecture.svg) with `scripts/render_architecture.sh` / `scripts/build_architecture.py`. Companion mermaid (same flow, no logos): [`docs/architecture.mmd`](docs/architecture.mmd). See also [docs/README.md](docs/README.md).
+
+</details>
 
 ### How it works, step by step
 
@@ -516,7 +529,7 @@ Figure 1 badges are Path B then Path C. Path A is Red/Blue in one `orchestrator.
 |---|---|---|
 | **A — Blue Team** | `orchestrator.py` | Inject, watch, hold, reset, write `reports/incident_*.md`. No GitHub issues. |
 | **B — Diagnosis** | Prom → AM → bridge → [diagnosis bot](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Webhook in, `incident` issue out. [No lab control](#read-these-once). |
-| **C — Remediation** | [Remediation bot](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) → `/approve` → poller | Actions **records**. Host (or [`--via-ssm`](#read-these-once)) executes. |
+| **C — Remediation** | Diagnosis hands off → [Remediation bot](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) → `/approve` → poller | Actions **records**. Host (or [`--via-ssm`](#read-these-once)) executes. |
 
 1. **Scrape.** Prometheus pulls `/metrics` from **all 3** services every 1s (`dashboards/prometheus.yml`).
 2. **Alert.** Firing rules go to Alertmanager (`dashboards/alertmanager.yml`, compose `alertmanager:9093`, host `127.0.0.1:9093`).
@@ -524,8 +537,8 @@ Figure 1 badges are Path B then Path C. Path A is Red/Blue in one `orchestrator.
 4. **Diagnosis.** The diagnosis bot reads the webhook. [No control path](#read-these-once).
 5. **Issue.** Opens or comments on a GitHub issue labeled `incident` (same fingerprint → comment).
 6. **Owner ping.** Firing **critical** alerts also ping the owner.
-7. **Proposal.** The Remediation bot comments exactly one allowlisted action.
-8. **Owner.** The proposal sits on the issue for the owner (or a write collaborator).
+7. **Handoff.** Diagnosis asks the Remediation bot (same account) to propose a fix. The Remediation bot does not watch the repo.
+8. **Proposal.** Remediation comments one allowlisted action on that GitHub issue.
 9. **Approve.** `/approve`. Actions records; it does not run the fix.
 10. **Fix.** `python3 remediation/poll_and_apply.py` on the lab host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
 
@@ -538,8 +551,9 @@ flowchart LR
   bridge --> diag[Diagnosis bot webhook]
   diag --> gh[GitHub incident issue]
   diag --> chat[Owner chat ping]
-  gh --> rem[Remediation bot proposal]
-  rem --> approve["Owner /approve"]
+  diag --> rem[Remediation bot]
+  rem --> gh
+  gh --> approve["Owner /approve"]
   approve --> host[Host poller or SSM]
   host --> services
 ```
@@ -563,7 +577,7 @@ Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TAR
 
 6. **Issue** — `incident` label; same fingerprint comments. Path A writes `reports/incident_*.md` instead.
 
-7. **Proposal** — Path C: `<!-- resilienceops-proposal:v1 -->` with one allowlisted `action` + `target`. `remediation/actions.py` rejects extras, a second block, and `;|&$\` / `../` / URL injection.
+7. **Handoff / Proposal** — Path C: Diagnosis asks the Remediation bot to comment a `<!-- resilienceops-proposal:v1 -->` block with one allowlisted `action` + `target`. `remediation/actions.py` rejects extras, a second block, and `;|&$\` / `../` / URL injection.
 
 8. **Approval** — lone `/approve`. `remediation/record_approval.py` comments `<!-- resilienceops-approval:v1 -->` and adds `remediation-approved`. **The workflow does not execute the fix.**
 
@@ -728,7 +742,7 @@ Files named `reports/incident_*_unknown_fault.md` are **pre-fix historical** sam
 |---|---|
 | **Path A** | `orchestrator.py` Red/Blue cycle. Writes `reports/incident_*.md`. No GitHub issues. |
 | **Path B** | Prometheus → Alertmanager → incident-bridge → diagnosis bot → GitHub `incident` issue. |
-| **Path C** | Remediation proposal → `/approve` → Actions records → host poller or `--via-ssm`. |
+| **Path C** | Diagnosis hands off to Remediation → proposal on the issue → `/approve` → Actions records → host poller or `--via-ssm`. |
 | **fingerprint** | Alert identity. Same fingerprint + open issue → comment, not a new issue. Bridge also dedupes `fingerprint`+`status` for 5 minutes. |
 | **SSM** | AWS Systems Manager. `send_command` / Session Manager. No SSH. |
 | **IMDSv2** | EC2 metadata (`169.254.169.254`) with a session token. Hop limit 2 so containers can reach it. |

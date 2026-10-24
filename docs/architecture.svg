@@ -281,10 +281,10 @@
   <g transform="translate(1172,630)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">5</text></g>
   <line x1="1280" y1="506" x2="1280" y2="420" class="arrow-inc" marker-end="url(#arr-inc)"/>
   <g transform="translate(1244,463)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">6</text></g>
-  <line x1="1280" y1="788" x2="1280" y2="832" class="arrow-rem" marker-end="url(#arr-rem)"/>
-  <g transform="translate(1320,810)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">7</text></g>
-  <line x1="1280" y1="1032" x2="1280" y2="1134" class="arrow-rem" marker-end="url(#arr-rem)"/>
-  <g transform="translate(1324,1050)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">8</text></g>
+  <polyline points="1328,554 1400,554 1400,882 1340,882" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
+  <g transform="translate(1420,720)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">7</text></g>
+  <polyline points="1220,882 1140,882 1140,702 1248,702" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
+  <g transform="translate(1168,792)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">8</text></g>
   <polyline points="1248,1162 1248,1042 1208,1042" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
   <g transform="translate(1216,1154)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">9</text></g>
   <line x1="1144" y1="1042" x2="856" y2="1042" class="arrow-rem" marker-end="url(#arr-rem)"/>

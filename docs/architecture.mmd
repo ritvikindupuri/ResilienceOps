@@ -39,8 +39,8 @@ flowchart LR
     ACT["GitHub Actions"]
     BOT --> GH
     BOT -.-> PING
-    GH --> REM
-    REM --> OWN
+    BOT --> REM
+    REM --> GH
     OWN --> ACT
   end
   TF --> host
