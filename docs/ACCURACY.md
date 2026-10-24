@@ -57,7 +57,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1480×1380 with a 32px margin; title “How ResilienceOps plus the diagnosis and remediator bots work” (same words as the README figure caption); node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2760. README `<img width="100%">` |
+| Canvas | 1480×1380 with a 32px margin; title “How ResilienceOps plus the diagnosis and remediator bots work”; node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2760. README caption is one short line; rebuild notes live under Figure source |
 | Operator + AWS | One top band “Deploy (optional AWS)”. Two icons only: Terraform `creates the infra` and EC2 `lab host`, plus a drop onto the host. S3 / SSM / Parameter Store / helper-script names stay in the README so the figure is not crowded | Laptop Terraform, not required for Compose. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. Official AWS Architecture Icons + Terraform mark. IAM / CW / IGW / unused subnets are README prose |
 | EC2 host | Purple dashed, “EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16” + “Grafana and API ports from your IP” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to the operator CIDR |
 | k3s group | Small dashed “k3s sandbox (optional)” + “agents in one sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Filename is in the README, not the figure |
@@ -86,18 +86,18 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | k3s | small dashed “k3s sandbox (optional)” / “Optional: runs orchestrator.py in one sandbox pod” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`; only `red-team-sandbox` runs `orchestrator.py` |
 | Red Team | “faults order” / “+ payment” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
 | Blue Team | “watches and resets”; one grey arrow into the Services group (not onto payment-service) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
-| Traffic | “Live load” | `docker-compose.yml:120-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
+| Traffic | “Live load” | `docker-compose.yml:123-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
 | api-gw | “Gateway” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
-| order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:32`); uvicorn `:376` |
-| payment-service | “Payments” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:70`); uvicorn `:135` |
-| Redis | “order-service cache” | compose `redis:7-alpine` `docker-compose.yml:92-95` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
-| PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:103-109`; order-service `POSTGRES_DB` `:39` |
-| Prometheus | “reads metrics” | image `prom/prometheus:v2.52.0` `docker-compose.yml:132`; `dashboards/prometheus.yml:1-12` |
-| Alertmanager | “Groups alerts” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:153`; `dashboards/alertmanager.yml:4-16` |
+| order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:34`); uvicorn `:376` |
+| payment-service | “Payments” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:73`); uvicorn `:135` |
+| Redis | “order-service cache” | compose `redis:7-alpine` `docker-compose.yml:94-98` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
+| PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:105-112`; order-service `POSTGRES_DB` `:39` |
+| Prometheus | “reads metrics” | image `prom/prometheus:v2.52.0` `docker-compose.yml:135`; `dashboards/prometheus.yml:1-12` |
+| Alertmanager | “Groups alerts” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:159-160`; `dashboards/alertmanager.yml:4-16` |
 | incident-bridge | “queries Prometheus” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
-| Grafana | “dashboard” (under Alertmanager; grey edge from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
+| Grafana | “dashboard” (under Alertmanager; grey edge from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:217-222`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
-| Incident Remediation | owner PNG, tilted orange capsule, two white eyes (no pale tile) | `docs/icons/remediation-bot.png` embedded and rotated in `remediator_avatar()`. Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Proposes; does not execute |
+| Incident Remediation | tilted orange capsule, two white capsule eyes (no pale tile) | Drawn in `remediator_avatar()` (same mark as `docs/icons/remediation-bot.png`). Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Invoked only by Diagnosis (no webhook, no repo watch). Proposes; does not execute |
 | GitHub issue | “GitHub issue” | Diagnosis bot files `incident` issues. Sample: issue #5. Path A does **not** open issues (`orchestrator.py` writes `reports/`) |
 | Owner ping | centered above Diagnosis | Diagnosis-bot template at import (not in this repo). Firing critical alerts chat-ping the owner |
 | Owner | “/approve” | `remediation/approval.py` `APPROVE_RE`; workflow `remediation-approve.yml` |
@@ -115,7 +115,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 1 | Terraform → VPC border (L-route just above the stroke, right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf` |
 | 1b | deploy_remote.py lands on the AWS-account **left border** (below the caption) → S3; S3 → VPC/host and SSM → VPC/host drop from the account **bottom border** | (S3 cap `deploy → host`, SSM cap `send_command`) | Zip upload `_upload_payload`; `ssm.send_command` `AWS-RunShellScript`. Drops start on the box stroke so they do not run through satellite captions or the AWS title |
 | 1c | put_lab_secrets.py → Param Store | (satellite cap `secrets → .env`) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
-| 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:124` |
+| 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:127` |
 | 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
 | 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
 | 5 | api-gw → payment-service U-turn | `/api/payments` | `api-gw/main.py:113-132`; generator `/api/payments/payments` `load_generator.py:78` |
@@ -128,8 +128,8 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | ④ | incident-bridge → Diagnosis | badge ④ | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}`; HTTPS to `GROK_WEBHOOK_URL` |
 | ⑤ | Diagnosis → GitHub issue | badge ⑤ | Imported diagnosis bot opens or comments on an `incident` issue |
 | ⑥ | Diagnosis → owner ping | badge ⑥ | Firing critical alerts chat-ping the owner. That bot has no control path into the lab |
-| ⑦ | GitHub → Incident Remediation | badge ⑦ (blue) | Remediator template comments a proposal on the `incident` issue (`remediation/actions.py` `parse_proposal`) |
-| ⑧ | Incident Remediation → Owner | badge ⑧ (blue) | Proposal is on the issue for the owner to read |
+| ⑦ | Diagnosis → Incident Remediation (handoff) | badge ⑦ (blue) | After filing or commenting on a firing `incident` issue, the Diagnosis bot asks its teammate to propose a fix. The Remediation bot has no webhook and does not watch the repo |
+| ⑧ | Incident Remediation → GitHub issue | badge ⑧ (blue) | Remediator comments a proposal on the `incident` issue (`remediation/actions.py` `parse_proposal`) |
 | ⑨ | Owner `/approve` → Actions | badge ⑨ (blue) | Workflow `remediation-approve.yml` records `/approve`; it does not run the fix |
 | ⑩ | host poller → services group | badge ⑩ (blue) | Host poller `remediation/poll_and_apply.py` or `remediate.py --via-ssm` runs the allowlisted action. Arrow lands on the **services group** |
 | (unnumbered, grey) | Prometheus → Grafana | (none) | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml` |
@@ -158,22 +158,22 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 3-agent Red / 3-agent Blue | `orchestrator.py:41-50`; models `agents/config.py:31-39` |
 | Models `claude-sonnet-4-6` / `claude-haiku-4-5-20251001` | `agents/config.py:31-39` |
 | Path A = orchestrator; Path B = Prom → AM → bridge → Grok | `orchestrator.py`; `prometheus.yml` + `alertmanager.yml` + `app.py` |
-| Traffic POSTs api-gw at compose `RPS_TARGET` default **20**; module default **25** if unset | `docker-compose.yml:125`; `load_generator.py:9` |
+| Traffic POSTs api-gw at compose `RPS_TARGET` default **20**; module default **25** if unset | `docker-compose.yml:128`; `load_generator.py:9` |
 | api-gw reverse-proxies `/api/orders*` and `/api/payments*` (prefix stripped) | `api-gw/main.py:92-132` |
 | Order-service writes Redis + Postgres and POSTs `/payments` | `order-service/main.py` create-order |
 | Prometheus scrape 1s, three jobs | `prometheus.yml:2,22-33` |
 | Grafana not on alert path; Prom published `127.0.0.1:9090`; AWS also binds private IP for k3s | `docker-compose.yml` loopback; `docker-compose.prom-lan.yml` `${PROMETHEUS_BIND:?…}` + host `.env` `COMPOSE_FILE`; Grafana depends_on prometheus only |
 | Fault CLI scenarios and substring dispatch | `orchestrator.py:69-74`; `infra_disruptor.py:8-17` |
 | Detection: `/health` ×3, p99/5xx PromQL, SLO 1200ms / 2%, HTTP >= 500, max 9 ticks of 1s; then `FAULT_HOLD_SECONDS` (default 120) before remediation | `monitor.py`; `orchestrator.py` `range(1, 10)` + `hold_fault_for_alerts` |
-| Alertmanager `group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`, compose target `alertmanager:9093`, host `127.0.0.1:9093` | `alertmanager.yml:7-9`; `prometheus.yml:20`; `docker-compose.yml:161` |
-| Bridge drop if URL empty; dedupe 300s; payload ~100KB; source `resilienceops` | `app.py:130-132`; `settings.py:56-58`; `forwarding.py:16-17,107` |
+| Alertmanager `group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`, compose target `alertmanager:9093`, host `127.0.0.1:9093` | `alertmanager.yml:7-9`; `prometheus.yml:20`; `docker-compose.yml:159-168` |
+| Bridge drop if URL empty; dedupe 300s; payload ~100KB; source `resilienceops` | `app.py:130-132`; `settings.py:55-58`; `forwarding.py:19-21,110` |
 | Forward failure: ERROR log, dead-letter, retry queue, no ASGI crash | `app.py:164-187`; `forwarding.py:242-310`; ASGI wrapper `app.py:214-218` |
 | httpx must not log `GROK_WEBHOOK_URL` | `app.py:31-32` `logging.getLogger("httpx").setLevel(logging.WARNING)` |
-| `agent_activity` empty unless agents profile / host orchestrator | compose `agent-sandbox` `profiles: [agents]` `docker-compose.yml:232-234`; logger writes `logs/agent_activity.jsonl` `structured_logger.py:13-33` |
+| `agent_activity` empty unless agents profile / host orchestrator | compose `agent-sandbox` `profiles: [agents]` `docker-compose.yml:239-241`; logger writes `logs/agent_activity.jsonl` `structured_logger.py:13-33` |
 | Path A verify_recovery max 5, latency < 800ms; always `reset_environment` | `remediator.py`; orchestrator holds `FAULT_HOLD_SECONDS` then resets in `finally` so no-incident cycles cannot pile faults |
 | Path A writes `reports/incident_*.md`; does not open GitHub issues | `orchestrator.py` phase 7 writes `reports/` |
 | Diagnosis bot has no lab control path (webhooks in, GitHub issues out); duplicate fingerprint comments; resolved comments; critical owner ping | Imported template (not in this repo). Documented as template behavior. Samples: issues #4 and #5 |
-| Path C = proposal → `/approve` → host poller / SSM; allowlist `reset_fault` / `restart_service` / `rollback_deploy` | `remediation/actions.py`; `.github/workflows/remediation-approve.yml`; `remediation/poll_and_apply.py`; `--via-ssm` reuses `deploy_remote.send_and_wait` |
+| Path C = Diagnosis hands off → proposal → `/approve` → host poller / SSM; allowlist `reset_fault` / `restart_service` / `rollback_deploy` | Diagnosis teammate (not in-repo). `remediation/actions.py`; `.github/workflows/remediation-approve.yml`; `remediation/poll_and_apply.py`; `--via-ssm` reuses `deploy_remote.send_and_wait` |
 
 ---
 
@@ -198,7 +198,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | IMDS hop limit 2, IMDSv2 required | `terraform/main.tf:423-428` |
 | S3 deploy bucket `sre-resilienceops-deploy-<account>-<region>`, 1-day expiry | `terraform/main.tf:336-380` |
 | Outputs `instance_id`, `region`, `deploy_bucket`, `private_ip`, `api_gateway_url` `:8000`, `grafana_url` `:3000`, Prometheus host-local | `terraform/main.tf:482-520` |
-| Operator IAM: customer managed policy `ResilienceOpsDeployer` via `create-policy` + `attach-user-policy` / `attach-role-policy` (inline user policies cap at 2,048 chars); teardown `detach-*-policy` + `delete-policy` | `terraform/deployer-policy.json` minified `< 6144`; README prerequisites + `teardown.sh` / `teardown.ps1` |
+| Operator IAM: customer managed policy `ResilienceOpsDeployer` via `create-policy` + `attach-user-policy` / `attach-role-policy` (inline user policies cap at 2,048 chars); teardown `detach-*-policy` + `delete-policy` | `terraform/deployer-policy.json` minified `< 6144`; README AWS → Two AWS identities + `teardown.sh` / `teardown.ps1` |
 | Host `.env` from Parameter Store SecureString, not SendCommand | `scripts/put_lab_secrets.py`; `deploy_remote.py` `build_host_env_script` (`get-parameter --with-decryption`) |
 | No NAT Gateway / no EKS in this Terraform | No `aws_nat_gateway` / `aws_eks_cluster` resources in `terraform/main.tf` |
 | CloudWatch **log groups** + audit **stream** are Terraform; **dashboards** are not | Groups + `aws_cloudwatch_log_stream.audit` name `audit-stream` in `terraform/main.tf`. Logger `structured_logger.py` `CreateLogStream` if missing then `PutLogEvents`. Compose `agent-sandbox` gets `AWS_REGION`. Host inline `logs:CreateLogStream`/`PutLogEvents`. Helpers `create_cw_dashboard.py` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py` name `SRE-fault-Vectors-Live-Telemetry` |
@@ -211,15 +211,15 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Claim | Evidence |
 |---|---|
 | Python 3.10+ for host; images are `python:3.11-slim` | service Dockerfiles `FROM python:3.11-slim`; CI `python-version: "3.11"` `.github/workflows/ci.yml:23` |
-| Grafana admin vars required (`:?Set GRAFANA_ADMIN_USER`) | `docker-compose.yml:214-215` |
+| Grafana admin vars required (`:?Set GRAFANA_ADMIN_USER`) | `docker-compose.yml:221-222` |
 | Compose interpolates Grafana, Postgres, Grok, bridge tunables, RPS, sandbox key, SLO | `docker-compose.yml` `${…}` + `.env.example`; enforced by `tests/test_docs_consistency.py` |
-| `GROK_WEBHOOK_AUTH_SCHEME-Bearer` (present-but-empty sends raw key) | `docker-compose.yml:183`; `settings.py:23-27` |
-| Host URLs default localhost:8000/8001/8002/9090 | `agents/config.py:4-9`; `.env.example:22-27` |
-| Bridge container Prometheus `http://prometheus:9090` | `docker-compose.yml:185`; `.env.example:28` |
+| `GROK_WEBHOOK_AUTH_SCHEME-Bearer` (present-but-empty sends raw key) | `docker-compose.yml:190`; `settings.py:23-27` |
+| Host URLs default localhost:8000/8001/8002/9090 | `agents/config.py:4-9`; `.env.example:28-33` |
+| Bridge container Prometheus `http://prometheus:9090` | `docker-compose.yml:191`; `.env.example:34` |
 | Ports: api-gw 8000, order 8001, payment 8002, Grafana 3000, Prom `127.0.0.1:9090` (+ private IP on AWS), AM `127.0.0.1:9093`, bridge `127.0.0.1:8088`→8080 | `docker-compose.yml`; `docker-compose.prom-lan.yml` |
 | Redis 6379 / Postgres 5432 published | `docker-compose.yml:93-94,104-105` |
-| `RPS_TARGET` compose 20 / module 25; `CONCURRENCY` compose 8 / module 10 | `docker-compose.yml:125-126`; `load_generator.py:9-10` |
-| `agent-sandbox` profile opt-in; CMD injects faults | `docker-compose.yml:232-234`; `Dockerfile.agent-sandbox` |
+| `RPS_TARGET` compose 20 / module 25; `CONCURRENCY` compose 8 / module 10 | `docker-compose.yml:128-129`; `load_generator.py:9-10` |
+| `agent-sandbox` profile opt-in; CMD injects faults | `docker-compose.yml:239-241`; `Dockerfile.agent-sandbox` |
 | `curl 127.0.0.1:8088/healthz` → `webhook_configured` | `app.py:198-203` |
 | `send_test_alert.py --target alertmanager` → `127.0.0.1:9093/api/v2/alerts` | `scripts/send_test_alert.py:70-77` |
 | `--target bridge` → `127.0.0.1:8088/webhook` | `send_test_alert.py:72,79-80` |
@@ -228,7 +228,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Issue #5 screenshots (public crops, no webhook key) | `docs/images/sample-incident-issue-5-{1,2,3}.png`; fingerprint `279c3ab8f16c75be`; “Agent activity: none attached” |
 | `orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | `orchestrator.py:9-10,118-123` |
 | `deploy_remote.py` zip omits `.env`; includes `reports/` | `deploy_remote.py` `should_exclude` / `INCLUDE_PATHS`; `tests/test_deploy_archive.py` |
-| SSM session, no SSH | `terraform/main.tf:191-192`; README step 10 (`--region`) |
+| SSM session, no SSH | `terraform/main.tf:191-196`; README AWS → Optional k3s sandbox (`--region`) |
 | `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
@@ -246,12 +246,12 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | NetworkPolicy: DNS 53, victim ns `arena.sre.io/role=victim`, TCP 443, VPC Compose 8000–8002/9090 | `k8s/agents/agent-sandbox.yaml:129-172`; victim label `k8s/base/namespace-rbac.yaml:3-6` |
 | Red Role `get/list/watch` on `pods` + `pods/exec` in `sre-target-apps` | `k8s/agents/agent-sandbox.yaml:23-31` |
 | Blue Role pods/logs/events/deployments in `sre-target-apps` | `k8s/base/namespace-rbac.yaml:32-51` |
-| Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README step 10; Role has no `create` on `pods/exec` |
+| Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README AWS → Optional k3s sandbox; Role has no `create` on `pods/exec` |
 | Grafana folder `SRE & Reliability`, dashboard title `SRE Infrastructure & Reliability Performance Monitor` | `dashboards.yaml:6`; `sre-dashboard.json:8` |
 | `liveNow: true`, `refresh: 1s`, window `now-5m` | `sre-dashboard.json:17-21` |
 | Availability threshold 99.9 | `sre-dashboard.json:69` |
-| Memory panel vs 256MB cgroup (compose `memory: 256M`) | compose `docker-compose.yml:47,77`; dashboard query `/ 1024 / 1024` and threshold `256` `sre-dashboard.json:273-312` |
-| Eight panels listed in README | Eight `"title"` entries `sre-dashboard.json:44,85,112,153,200,240,272,327` |
+| Memory panel vs 256MB cgroup (compose `memory: 256M`) | compose `docker-compose.yml:49,80`; dashboard query `/ 1024 / 1024` and threshold `256` `sre-dashboard.json:273-312` |
+| Grafana dashboard panels | Eight `"title"` entries in `sre-dashboard.json:44,85,112,153,200,240,272,327` |
 | FastAPI `0.111.0`, HTTPX `0.27.0`, Pydantic `2.8.2` | `services/api-gw/requirements.txt`; `services/order-service/requirements.txt:1-7` |
 | Prometheus `v2.52.0`, Alertmanager `v0.27.0`, Grafana `10.4.2` | compose image tags |
 | Redis 7 / Postgres 16 | `redis:7-alpine`, `postgres:16-alpine` |
@@ -259,8 +259,8 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | order-service `/ready` requires Redis + Postgres connected | `order-service/main.py:170-181`; `/health` stays 200 during faults `:135-167` |
 | Postgres retry/backoff | `order-service/main.py:78-113` |
 | Containers cannot reach each other (FORWARD / iptables) | Operational; check commands use compose DNS as in `prometheus.yml:25-33` and `alertmanager.yml:14` |
-| Webhook 401/403 = bot rejected auth | `forwarding.py:215-216` does not retry 401; README troubleshooting |
-| Dedupe 5 minutes, resolved is a different status | `forwarding.py:69-77`; `DEDUPE_TTL_SECONDS` default 300 `settings.py:57` |
+| Webhook 401/403 = bot rejected auth | `forwarding.py:218` / `RETRYABLE_STATUS` (`forwarding.py:21`). Non-retryable statuses such as 401/403 are not retried. README troubleshooting |
+| Dedupe 5 minutes, resolved is a different status | `forwarding.py:72-79`; `DEDUPE_TTL_SECONDS` default 300 `settings.py:57` |
 
 ---
 

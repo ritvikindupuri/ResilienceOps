@@ -1,6 +1,6 @@
 # Docs assets
 
-The [root README](../README.md) is the **current source of truth** for setup, architecture, alerting, the Grok Bot **AI Incident Diagnosis** template, and the separate **Incident Remediation** template. Claim-to-evidence (diagram + README vs code): [`ACCURACY.md`](ACCURACY.md).
+The [root README](../README.md) is the **current source of truth** for setup, architecture, alerting, the Grok Bot **AI Incident Diagnosis** template, and the **Incident Remediation** teammate (Diagnosis invokes it; no remediator webhook). Claim-to-evidence (diagram + README vs code): [`ACCURACY.md`](ACCURACY.md).
 
 [ResilienceOps_Technical_Documentation.pdf](ResilienceOps_Technical_Documentation.pdf) is a historical architecture brief (diagrams and earlier design notes). Prefer the README when they disagree — including model IDs in `agents/config.py`, Grafana credentials, Prometheus/Alertmanager localhost binds, and Grok Bot webhook setup.
 
