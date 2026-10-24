@@ -126,6 +126,7 @@ def test_readme_flow_names_match_code_stages():
         "**Enrichment**",
         "**Diagnosis**",
         "**Issue**",
+        "**Handoff**",
         "**Proposal**",
         "**Approval**",
         "**Fix**",

@@ -577,13 +577,15 @@ Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TAR
 
 6. **Issue** — `incident` label; same fingerprint comments. Path A writes `reports/incident_*.md` instead.
 
-7. **Handoff / Proposal** — Path C: Diagnosis asks the Remediation bot to comment a `<!-- resilienceops-proposal:v1 -->` block with one allowlisted `action` + `target`. `remediation/actions.py` rejects extras, a second block, and `;|&$\` / `../` / URL injection.
+7. **Handoff** — Path C: Diagnosis asks the Remediation bot (same account) to propose a fix. The Remediation bot has no webhook and does not watch the repo.
 
-8. **Approval** — lone `/approve`. `remediation/record_approval.py` comments `<!-- resilienceops-approval:v1 -->` and adds `remediation-approved`. **The workflow does not execute the fix.**
+8. **Proposal** — Remediation comments a `<!-- resilienceops-proposal:v1 -->` block with one allowlisted `action` + `target`. `remediation/actions.py` rejects extras, a second block, and `;|&$\` / `../` / URL injection.
 
-9. **Fix** — `poll_and_apply.py` → `remediate.py`. Laptop or EC2; [`--via-ssm`](#read-these-once) on AWS.
+9. **Approval** — lone `/approve`. `remediation/record_approval.py` comments `<!-- resilienceops-approval:v1 -->` and adds `remediation-approved`. **The workflow does not execute the fix.**
 
-10. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service). k8s restart/scale only if `K8sToolKit.k8s_available` **and** pods exist in `sre-target-apps`. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch. Path B: resolved webhook → comment only. Path C: the host remediator is what POSTs `/fault/reset`, restarts one named Compose service, or rolls back.
+10. **Fix** — `poll_and_apply.py` → `remediate.py`. Laptop or EC2; [`--via-ssm`](#read-these-once) on AWS.
+
+11. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service). k8s restart/scale only if `K8sToolKit.k8s_available` **and** pods exist in `sre-target-apps`. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch. Path B: resolved webhook → comment only. Path C: the host remediator is what POSTs `/fault/reset`, restarts one named Compose service, or rolls back.
 
 </details>
 
