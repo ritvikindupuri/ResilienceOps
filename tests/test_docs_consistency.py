@@ -188,6 +188,16 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "examples/live_run_issue5_timeline.md" in readme
     assert "examples/live_run_issue5_bridge.log" in readme
     assert "Blue checks health on all 3 and resets order-service and payment-service" in readme
+    assert "Alert forwarder (Compose service `incident-bridge`)" in readme
+    assert readme.count("Compose service `incident-bridge`") == 1
+    assert "### Key features" not in readme
+    assert "## Key features" not in readme
+    assert "### Fix allowlist" in readme
+    how_at = readme.index("## How it works, step by step")
+    sandbox_at = readme.index("## Agent sandbox")
+    aws_at = readme.index("## AWS (optional)")
+    assert how_at < sandbox_at < aws_at
+    assert readme.index("**Figure 1.**") < readme.index("**Figure 2.**") < readme.index("**Figure 3:")
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     sandbox = (ROOT / "docs" / "sandbox_architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
@@ -244,6 +254,12 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "k3s sandbox (optional)" not in svg
     assert "k3s (optional)" in sandbox
     assert "Compose profile" in sandbox
+    assert "host CLI" in sandbox
+    assert "python3 orchestrator.py" in sandbox
+    assert "api-gw" in sandbox
+    assert "order-service" in sandbox
+    assert "payment-service" in sandbox
+    assert "all 3 services" not in sandbox
     assert "Runs the agents in isolated pods" not in svg
     assert "read-only" not in svg.lower()
     assert "Owner ping" in svg

@@ -2,6 +2,7 @@
 flowchart LR
   subgraph start ["How to start"]
     COMPOSE["Compose profile"]
+    CLI["host CLI"]
     K3S["k3s (optional)"]
   end
   subgraph agents ["Agents"]
@@ -9,10 +10,12 @@ flowchart LR
     BLUE[Blue Team]
   end
   subgraph targets ["Target services"]
+    GW[api-gw]
     OS[order-service]
     PS[payment-service]
-    ALL[all 3 services]
   end
+  PROM[Prometheus]
   RED --> OS
   RED --> PS
-  BLUE --> ALL
+  BLUE --> targets
+  targets --> PROM

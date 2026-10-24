@@ -208,9 +208,9 @@ def test_compose_project_fallback_keeps_hyphen(monkeypatch):
     from remediation import actions as actions_mod
 
     monkeypatch.delenv("COMPOSE_PROJECT_NAME", raising=False)
-    monkeypatch.setattr(actions_mod, "REPO_ROOT", Path("/opt/resilience-ops"))
-    assert actions_mod._compose_project() == "resilience-ops"
-    assert actions_mod._default_image_name("order-service") == "resilience-ops-order-service"
+    monkeypatch.setattr(actions_mod, "REPO_ROOT", Path("/opt/my-app"))
+    assert actions_mod._compose_project() == "my-app"
+    assert actions_mod._default_image_name("order-service") == "my-app-order-service"
 
 
 def test_rollback_fails_if_running_image_stays_current(tmp_path, monkeypatch):

@@ -9,10 +9,19 @@
       .group { font: 600 22px Arial, Helvetica, sans-serif; fill: #6B7280; }
       .name { font: 700 28px Arial, Helvetica, sans-serif; fill: #111827; }
       .cap { font: 24px Arial, Helvetica, sans-serif; fill: #6B7280; }
+      .badge { font: 700 22px Arial, Helvetica, sans-serif; fill: #FFFFFF; }
       .arrow { stroke: #9CA3AF; stroke-width: 2.0; fill: none; }
+      .arrow-inc { stroke: #EA580C; stroke-width: 3.4; fill: none; }
+      .arrow-rem { stroke: #2563EB; stroke-width: 3.4; fill: none; }
     </style>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-inc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#EA580C"/>
+    </marker>
+    <marker id="arr-rem" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563EB"/>
     </marker>
     <symbol id="i-docker" viewBox="0 0 24 24"><path fill="#2496ED" d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/></symbol>
     <symbol id="i-fastapi" viewBox="0 0 24 24"><path fill="#009688" d="M12 0C5.375 0 0 5.375 0 12c0 6.627 5.375 12 12 12 6.626 0 12-5.373 12-12 0-6.625-5.373-12-12-12zm-.624 21.62v-7.528H7.19L13.203 2.38v7.528h4.029L11.376 21.62z"/></symbol>
@@ -128,44 +137,59 @@
   <rect width="1180" height="780" fill="#FFFFFF"/>
     <text x="590" y="72" text-anchor="middle" class="title">Agent sandbox</text>
 
-  <rect x="40" y="96" width="1100" height="160" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
-  <text x="58" y="134" class="group">How to start</text>
-  <g transform="translate(280,204)">
+  <rect x="40" y="100" width="1100" height="190" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text x="58" y="138" class="group">How to start</text>
+  <g transform="translate(200,220)">
     <use href="#i-docker" xlink:href="#i-docker" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">Compose profile</text>
   </g>
-  <g transform="translate(860,204)">
+  <g transform="translate(590,220)">
+    <use href="#i-document" xlink:href="#i-document" x="-28.0" y="-66.0" width="56" height="56"/>
+    <text class="name" y="24" text-anchor="middle">host CLI</text>
+    <text class="cap" y="52" text-anchor="middle">python3 orchestrator.py</text>
+  </g>
+  <g transform="translate(980,220)">
     <use href="#i-k3s" xlink:href="#i-k3s" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">k3s (optional)</text>
   </g>
-  <rect x="40" y="276" width="1100" height="448" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <text x="58" y="314" class="group">Agents</text>
-  <rect x="500" y="308" width="600" height="396" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
-  <text x="518" y="346" class="group">Target services</text>
-  <g transform="translate(200,500)">
+  <g transform="translate(70,220)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">1</text></g>
+  <rect x="40" y="310" width="400" height="430" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="58" y="348" class="group">Agents</text>
+  <rect x="480" y="310" width="380" height="430" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <text x="498" y="348" class="group">Target services</text>
+  <g transform="translate(200,640)">
     <use href="#i-person-red" xlink:href="#i-person-red" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">Red Team</text>
     <text class="cap" y="52" text-anchor="middle">faults order + payment</text>
   </g>
-  <g transform="translate(200,660)">
+  <g transform="translate(200,430)">
     <use href="#i-person-blue" xlink:href="#i-person-blue" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">Blue Team</text>
     <text class="cap" y="52" text-anchor="middle">watches and resets</text>
   </g>
-  <g transform="translate(720,420)">
+  <g transform="translate(670,460)">
+    <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
+    <text class="name" y="24" text-anchor="middle">api-gw</text>
+  </g>
+  <g transform="translate(670,580)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">order-service</text>
   </g>
-  <g transform="translate(980,580)">
+  <g transform="translate(670,700)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">payment-service</text>
   </g>
-  <g transform="translate(840,660)">
-    <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
-    <text class="name" y="24" text-anchor="middle">all 3 services</text>
+  <g transform="translate(1040,580)">
+    <use href="#i-prometheus" xlink:href="#i-prometheus" x="-28.0" y="-66.0" width="56" height="56"/>
+    <text class="name" y="24" text-anchor="middle">Prometheus</text>
+    <text class="cap" y="52" text-anchor="middle">diagnosis path</text>
   </g>
-  <polyline points="232,462 420,462" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round"/>
-  <polyline points="420,462 420,382 688,382" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <polyline points="420,462 420,542 948,542" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
-  <line x1="232" y1="622" x2="808" y2="622" class="arrow" marker-end="url(#arr)"/>
+  <polyline points="232,602 420,602" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline points="420,602 420,542 638,542" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
+  <polyline points="420,602 420,662 638,662" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
+  <g transform="translate(392,572)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">2</text></g>
+  <polyline points="232,392 400,392 400,525 480,525" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
+  <g transform="translate(428,458)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">3</text></g>
+  <line x1="860" y1="542" x2="1004" y2="542" class="arrow-inc" marker-end="url(#arr-inc)"/>
+  <g transform="translate(932,514)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">4</text></g>
 </svg>

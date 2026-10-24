@@ -160,10 +160,10 @@
   <text x="98" y="346" class="cap">Grafana and API ports from your IP</text>
   <rect x="908" y="284" width="540" height="820" rx="18" fill="#FFF7F7" stroke="#FECACA" stroke-width="1.6"/>
   <text x="926" y="322" class="group">External</text>
-  <rect x="48" y="364" width="820" height="520" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <rect x="48" y="364" width="820" height="540" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <use href="#i-docker" xlink:href="#i-docker" x="60" y="374" width="48" height="48"/>
   <text x="114" y="402" class="group">Stack (Docker Compose)</text>
-  <rect x="64" y="428" width="196" height="452" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
+  <rect x="64" y="428" width="196" height="472" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="82" y="466" class="group">Services</text>
   <g transform="translate(162,568)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
@@ -174,7 +174,7 @@
     <text class="name" y="16" text-anchor="middle">order-</text>
     <text class="name" y="50" text-anchor="middle">service</text>
   </g>
-  <g transform="translate(162,810)">
+  <g transform="translate(162,832)">
     <use href="#i-fastapi" xlink:href="#i-fastapi" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="16" text-anchor="middle">payment-</text>
     <text class="name" y="50" text-anchor="middle">service</text>
@@ -204,8 +204,8 @@
       <rect x="-11" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
       <rect x="5" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
-    <text class="name" x="-64" y="40" text-anchor="end">AI Incident</text>
-    <text class="name" x="-64" y="68" text-anchor="end">Diagnosis</text>
+    <text class="name" y="40" text-anchor="middle">AI Incident</text>
+    <text class="name" y="68" text-anchor="middle">Diagnosis</text>
   </g>
   <g transform="translate(1180,388)">
     <use href="#i-bell" xlink:href="#i-bell" x="-20.0" y="-50.0" width="40" height="40"/>
@@ -222,8 +222,8 @@
       <rect x="-18" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
       <rect x="10" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
     </g>
-    <text class="name" x="-72" y="40" text-anchor="end">Incident</text>
-    <text class="name" x="-72" y="68" text-anchor="end">Remediation</text>
+    <text class="name" y="40" text-anchor="middle">Incident</text>
+    <text class="name" y="68" text-anchor="middle">Remediation</text>
   </g>
   <g transform="translate(1392,1000)">
     <use href="#i-person" xlink:href="#i-person" x="-28.0" y="-66.0" width="56" height="56"/>
@@ -241,7 +241,7 @@
     <text class="cap" y="52" text-anchor="middle">or SSM</text>
   </g>
   <line x1="536" y1="168" x2="844" y2="168" class="arrow" marker-end="url(#arr)"/>
-  <line x1="880" y1="268" x2="880" y2="364" class="arrow" marker-end="url(#arr)"/>
+  <polyline points="880,268 896,268 896,392 732,392" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <line x1="260" y1="490" x2="324" y2="490" class="arrow-inc" marker-end="url(#arr-inc)"/>
   <g transform="translate(292,454)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">1</text></g>
   <line x1="396" y1="490" x2="524" y2="490" class="arrow-inc" marker-end="url(#arr-inc)"/>
@@ -254,8 +254,8 @@
   <g transform="translate(1294,454)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">5</text></g>
   <line x1="1180" y1="448" x2="1180" y2="378" class="arrow-inc" marker-end="url(#arr-inc)"/>
   <g transform="translate(1144,413)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">6</text></g>
-  <line x1="1180" y1="544" x2="1180" y2="692" class="arrow-rem" marker-end="url(#arr-rem)"/>
-  <g transform="translate(1216,618)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">7</text></g>
+  <polyline points="1228,618 1310,618 1310,692 1180,692" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
+  <g transform="translate(1338,655)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">7</text></g>
   <polyline points="1240,742 1392,742 1392,518" fill="none" class="arrow-rem" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-rem)"/>
   <g transform="translate(1316,714)"><circle r="15" fill="#2563EB" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">8</text></g>
   <line x1="1360" y1="962" x2="1212" y2="962" class="arrow-rem" marker-end="url(#arr-rem)"/>
