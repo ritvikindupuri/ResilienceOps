@@ -26,18 +26,29 @@ try {
     $env:AWS_REGION = $Region
     $env:AWS_DEFAULT_REGION = $Region
 
-    Write-Host "`n[1/3] Checking current Terraform state..." -ForegroundColor Yellow
+    Write-Host "`n[1/4] Checking current Terraform state..." -ForegroundColor Yellow
     $StateList = terraform state list 2>$null
     if (-not $StateList) {
-        Write-Host "[INFO] No active Terraform resources found. Zero charges running." -ForegroundColor Green
-        Pop-Location
-        exit 0
+        Write-Host "[INFO] No active Terraform resources found." -ForegroundColor Green
+    } else {
+        Write-Host "[2/4] Destroying Terraform resources (EC2, VPC, S3 deploy bucket, log groups, IAM)..." -ForegroundColor Yellow
+        terraform destroy -auto-approve
     }
 
-    Write-Host "[2/3] Destroying Terraform resources (EC2, VPC, S3 deploy bucket, log groups, IAM)..." -ForegroundColor Yellow
-    terraform destroy -auto-approve
+    Write-Host "[3/4] Deleting SSM parameters under /resilienceops (not in Terraform state)..." -ForegroundColor Yellow
+    $ParamNames = aws ssm get-parameters-by-path --path /resilienceops --recursive `
+      --query 'Parameters[].Name' --output text --region $Region 2>$null
+    if (-not $ParamNames) {
+        Write-Host "(no /resilienceops parameters)"
+    } else {
+        $chunks = @($ParamNames -split '\s+' | Where-Object { $_ })
+        for ($i = 0; $i -lt $chunks.Count; $i += 10) {
+            $batch = $chunks[$i..([Math]::Min($i + 9, $chunks.Count - 1))]
+            aws ssm delete-parameters --names $batch --region $Region
+        }
+    }
 
-    Write-Host "[3/3] Verification (expect terminated / empty)..." -ForegroundColor Yellow
+    Write-Host "[4/4] Verification (expect terminated / empty)..." -ForegroundColor Yellow
     aws ec2 describe-instances --region $Region `
       --filters "Name=tag:Name,Values=sre-enterprise-platform-host" `
       --query "Reservations[].Instances[].{id:InstanceId,state:State.Name}" --output table
@@ -45,7 +56,6 @@ try {
     aws logs describe-log-groups --region $Region `
       --log-group-name-prefix "/sre/autonomous-agent" `
       --query "logGroups[].logGroupName" --output text
-    Write-Host "SSM parameters under /resilienceops are not in Terraform state; delete them if you do not want them reused."
     Write-Host "If you attached the operator managed policy, detach and delete it from an admin login:"
     Write-Host "  ACCOUNT_ID=`$(aws sts get-caller-identity --query Account --output text --region `$AWS_REGION)"
     Write-Host "  POLICY_ARN=`"arn:aws:iam::`${ACCOUNT_ID}:policy/ResilienceOpsDeployer`""

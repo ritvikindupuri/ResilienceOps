@@ -34,8 +34,7 @@ def test_grafana_auth_requires_both(monkeypatch):
         config.require_grafana_basic_auth_header()
 
 
-def test_arena_runner_imports():
-    import arena_runner  # noqa: F401
+def test_agent_module_imports():
     from agents.attacker.agent import RedTeamAttackerAgent
     from agents.defender.sentinel import BlueTeamSentinel
     from agents.common.cw_logger import CloudWatchLogger

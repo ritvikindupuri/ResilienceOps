@@ -200,7 +200,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Operator IAM: customer managed policy `ResilienceOpsDeployer` via `create-policy` + `attach-user-policy` / `attach-role-policy` (inline user policies cap at 2,048 chars); teardown `detach-*-policy` + `delete-policy` | `terraform/deployer-policy.json` minified `< 6144`; README AWS → Two AWS identities + `teardown.sh` / `teardown.ps1` |
 | Host `.env` from Parameter Store SecureString, not SendCommand | `scripts/put_lab_secrets.py`; `deploy_remote.py` `build_host_env_script` (`get-parameter --with-decryption`) |
 | No NAT Gateway / no EKS in this Terraform | No `aws_nat_gateway` / `aws_eks_cluster` resources in `terraform/main.tf` |
-| CloudWatch **log groups** + audit **stream** are Terraform; **dashboards** are not | Groups + `aws_cloudwatch_log_stream.audit` name `audit-stream` in `terraform/main.tf`. Logger `structured_logger.py` `CreateLogStream` if missing then `PutLogEvents`. Compose `agent-sandbox` gets `AWS_REGION`. Host inline `logs:CreateLogStream`/`PutLogEvents`. Helpers `create_cw_dashboard.py` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py` name `SRE-fault-Vectors-Live-Telemetry` |
+| CloudWatch **log groups** + audit **stream** are Terraform; **dashboards** are not | Groups + `aws_cloudwatch_log_stream.audit` name `audit-stream` in `terraform/main.tf`. Logger `structured_logger.py` `CreateLogStream` if missing then `PutLogEvents`. Compose `agent-sandbox` gets `AWS_REGION`. Host inline `logs:CreateLogStream`/`PutLogEvents`. Helpers `create_cw_dashboard.py:63-65` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py:5` name `SRE-fault-Vectors-Live-Telemetry`. `dashboards/cloudwatch-dashboard.json` deleted (metrics `ResilienceOps/Agents` + `AWS/ApplicationELB` + `/aws/sre-arena/*` are not produced; no ALB in Terraform) |
 | Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`, cropped to the resource-map cards (VPC / subnets / route tables / IGW) so labels stay readable at README width. Shows Terraform’s 3 subnets. |
 
 ---
@@ -216,7 +216,21 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Host URLs default localhost:8000/8001/8002/9090 | `agents/config.py:4-9`; `.env.example:28-33` |
 | Bridge container Prometheus `http://prometheus:9090` | `docker-compose.yml:191`; `.env.example:34` |
 | Ports: api-gw 8000, order 8001, payment 8002, Grafana 3000, Prom `127.0.0.1:9090` (+ private IP on AWS), AM `127.0.0.1:9093`, bridge `127.0.0.1:8088`→8080 | `docker-compose.yml`; `docker-compose.prom-lan.yml` |
-| Redis 6379 / Postgres 5432 published | `docker-compose.yml:93-94,104-105` |
+| Redis / Postgres published on loopback only | `docker-compose.yml:96-97,107-108` (`127.0.0.1:6379`, `127.0.0.1:5432`) |
+| Local Grafana `http://127.0.0.1:3000`; login `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`; folder `SRE & Reliability`; dashboard `SRE Infrastructure & Reliability Performance Monitor`; provisioned automatically | `docker-compose.yml:218-225`; `dashboards.yaml:6`; `sre-dashboard.json:9` |
+| Alertmanager UI `http://127.0.0.1:9093` | compose bind `127.0.0.1:9093:9093` `docker-compose.yml:167-168` |
+| api-gw `GET /health` + `POST /api/orders/orders` body `{item_id, quantity, amount, user_id}` | `api-gw/main.py:64-66,92-111`; `CreateOrderRequest` `order-service/main.py:129-133`; generator `load_generator.py:52-58` |
+| payment-service `GET /health` returns `status` / `service` / `tc_*` | `payment-service/main.py:39-47` |
+| Fault endpoints + code defaults + `alerts.yml` mapping | `order-service/main.py:277-372` (`connections=55`, `mb=50`, `seconds=15`, `delay=2.5`, `rate=0.5`, crash, reset); `payment-service/main.py:79-131` (`delay_ms=2500`, `jitter_ms=100`, `loss_percent=30.0`, `enabled=True`, reset); rules `dashboards/alerts.yml` |
+| Any critical inhibits same-`service` warning (`/fault/latency` → **PaymentServiceP99LatencySLO** fires; **PaymentServiceLatencyHigh** inhibited) | `alertmanager.yml:18-23` `equal: ["service"]`. Redis row already notes the sibling warning is inhibited |
+| `remediate.py` `--proposal-file` / `--proposal-text` / `--skip-verify` / `--verify-timeout` default 45 | `remediate.py:100-114` |
+| `poll_and_apply.py` `--loop` / `--interval` default 20 (sleep `max(5, interval)`) / `--dry-run` | `poll_and_apply.py:93-118` |
+| `send_test_alert.py` `--alertmanager-url` / `--bridge-url` | `send_test_alert.py:70-72` |
+| `put_lab_secrets.py` `--prefix` / `--env-file` | `put_lab_secrets.py:61-63` |
+| `deploy_remote.py` `--region` / `--bucket` / `--ssm-prefix` / `--profile agents` / `--skip-wait-ssm`; rerun after code changes | `deploy_remote.py:323-334,354-367` (`unzip -o` + `compose up --build -d`) |
+| `deploy_k8s_sandbox.py` `--skip-copy` / `--skip-wait-ssm` | `deploy_k8s_sandbox.py:118-119` |
+| SSM port-forward `AWS-StartPortForwardingSession` for 9090 / 8088 / 3000 | README AWS Terraform; Session Manager document name (not in Terraform) |
+| `python3 -m pytest -q`; CI = pytest `tests/` + `validate_yaml.py` + promtool/amtool + gitleaks | `pytest.ini` `testpaths = tests`; `.github/workflows/ci.yml:31-55,75-78` |
 | `RPS_TARGET` compose 20 / module 25; `CONCURRENCY` compose 8 / module 10 | `docker-compose.yml:128-129`; `load_generator.py:9-10` |
 | `agent-sandbox` profile opt-in; CMD injects faults | `docker-compose.yml:239-241`; `Dockerfile.agent-sandbox` |
 | `curl 127.0.0.1:8088/healthz` → `webhook_configured` | `app.py:198-203` |
@@ -228,7 +242,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | `orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | `orchestrator.py:9-10,118-123` |
 | `deploy_remote.py` zip omits `.env`; includes `reports/` | `deploy_remote.py` `should_exclude` / `INCLUDE_PATHS`; `tests/test_deploy_archive.py` |
 | SSM session, no SSH | `terraform/main.tf:191-196`; README [Agent sandbox](../README.md#agent-sandbox) (`--region`) |
-| `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
+| `teardown.sh` → `terraform destroy -auto-approve` + SSM `delete-parameters` under `/resilienceops` + verify describe-instances / S3 / log groups | `teardown.sh:33-44,47-53`; `teardown.ps1` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
 | Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (2960×2560 main; sandbox 2360×1560) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1480×1280 and 1180×780 |
@@ -246,7 +260,7 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | Red Role `get/list/watch` on `pods` + `pods/exec` in `sre-target-apps` | `k8s/agents/agent-sandbox.yaml:23-31` |
 | Blue Role pods/logs/events/deployments in `sre-target-apps` | `k8s/base/namespace-rbac.yaml:32-51` |
 | Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README [Agent sandbox](../README.md#agent-sandbox); Role has no `create` on `pods/exec` |
-| Grafana folder `SRE & Reliability`, dashboard title `SRE Infrastructure & Reliability Performance Monitor` | `dashboards.yaml:6`; `sre-dashboard.json:8` |
+| Grafana folder `SRE & Reliability`, dashboard title `SRE Infrastructure & Reliability Performance Monitor` | `dashboards.yaml:6`; `sre-dashboard.json:9` |
 | `liveNow: true`, `refresh: 1s`, window `now-5m` | `sre-dashboard.json:17-21` |
 | Availability threshold 99.9 | `sre-dashboard.json:69` |
 | Memory panel vs 256MB cgroup (compose `memory: 256M`) | compose `docker-compose.yml:49,80`; dashboard query `/ 1024 / 1024` and threshold `256` `sre-dashboard.json:273-312` |

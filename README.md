@@ -11,6 +11,7 @@ Two importable Grok bots do the work: [one diagnoses alerts](https://x.ai/bot/fe
 - [Quick start (local)](#quick-start-local)
 - [Set up both bots](#set-up-both-bots)
 - [How to use](#how-to-use)
+  - [Faults you can inject](#faults-you-can-inject)
 - [Agent sandbox](#agent-sandbox)
 - [AWS (optional)](#aws-optional)
 - [Troubleshooting](#troubleshooting)
@@ -18,6 +19,7 @@ Two importable Grok bots do the work: [one diagnoses alerts](https://x.ai/bot/fe
   - [Read these once](#read-these-once)
   - [Fix allowlist](#fix-allowlist)
   - [Full environment table](#full-environment-table)
+  - [Helper scripts](#helper-scripts)
   - [Sample output: a real test run](#sample-output-a-real-test-run)
   - [Glossary](#glossary)
 
@@ -138,6 +140,14 @@ python3 -m pip install -r requirements.txt
 python3 -m pip install -r services/incident-bridge/requirements.txt
 ```
 
+### 4. Run the tests
+
+```bash
+python3 -m pytest -q
+```
+
+`.github/workflows/ci.yml` runs `python -m pytest tests/ -q`, `tests/validate_yaml.py`, promtool/amtool checks, and a working-tree gitleaks scan.
+
 Red/Blue agents are opt-in. See [Agent sandbox](#agent-sandbox).
 
 ## Set up both bots
@@ -199,7 +209,7 @@ Create a token **before** you need the poller. Never commit it. The poller reads
 
 `.github/workflows/remediation-approve.yml` must be on the **default** branch (`issue_comment` workflows run from there). It **records** `/approve`. It does not execute the fix. The workflow name is `record remediator approval`.
 
-The poller and Actions require this exact block (one block, two fields):
+The poller and Actions require this exact block (one `action` and one `target`):
 
 ```
 <!-- resilienceops-proposal:v1 -->
@@ -208,11 +218,43 @@ target: order-service
 <!-- /resilienceops-proposal -->
 ```
 
-**You should see** a remediator comment on the `incident` issue with that block (one `action` and one `target`) after Diagnosis files the issue.
+The same wrapper with the other allowlisted actions:
+
+```
+<!-- resilienceops-proposal:v1 -->
+action: restart_service
+target: payment-service
+<!-- /resilienceops-proposal -->
+```
+
+```
+<!-- resilienceops-proposal:v1 -->
+action: rollback_deploy
+target: order-service
+<!-- /resilienceops-proposal -->
+```
+
+**You should see** a remediator comment on the `incident` issue with that block after Diagnosis files the issue. Manual commands and a rollback walkthrough: [Fix allowlist](#fix-allowlist).
 
 ## How to use
 
 **Before you start: finish setup.** Both bots imported, Compose up (or AWS deploy done), `curl -sS http://127.0.0.1:8088/healthz` shows `"webhook_configured":true`, and `record-last-good` has been run on the machine that owns the stack.
+
+Grafana is provisioned from `dashboards/provisioning` on `docker compose up`. Open `http://127.0.0.1:3000`, sign in with `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`, folder **SRE & Reliability**, dashboard **SRE Infrastructure & Reliability Performance Monitor**. Alertmanager UI: `http://127.0.0.1:9093` (`/-/healthy` is the probe).
+
+```bash
+curl -sS http://127.0.0.1:8000/health
+# {"status":"healthy","service":"api-gateway"}
+
+curl -sS -X POST http://127.0.0.1:8000/api/orders/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"item_id":"prod-macbook-pro","quantity":1,"amount":1999.00,"user_id":"user_001"}'
+
+curl -sS http://127.0.0.1:8002/health
+# {"status":"healthy","service":"payment-service","tc_netem_active":false,"tc_rule":null}
+```
+
+`api-gw` strips `/api/orders` and `/api/payments` and forwards the rest (`/api/orders/orders` → order-service `POST /orders`). Traffic-generator uses the same path and body fields (`item_id`, `quantity`, `amount`, `user_id`).
 
 1. **Confirm the shop is healthy.**
 
@@ -270,7 +312,42 @@ target: order-service
 
 Stop the local stack: `docker compose down -v`.
 
-Synthetic check (no `/fault`): `python3 scripts/send_test_alert.py --target alertmanager` — Alertmanager prints `200`. Confirm the Alert forwarder with `docker compose logs --tail 20 incident-bridge`. `--target bridge` hits `127.0.0.1:8088` (`200 {"accepted":true}`).
+Synthetic check (no `/fault`): `python3 scripts/send_test_alert.py --target alertmanager` — Alertmanager prints `200`. Confirm the Alert forwarder with `docker compose logs --tail 20 incident-bridge`. `--target bridge` hits `127.0.0.1:8088` (`200 {"accepted":true}`). URL overrides: `--alertmanager-url` (default `http://127.0.0.1:9093/api/v2/alerts`) and `--bridge-url` (default `http://127.0.0.1:8088/webhook`).
+
+### Faults you can inject
+
+Defaults are the FastAPI query-parameter defaults. Reset is `POST /fault/reset` on that service unless noted. Alerts come from `dashboards/alerts.yml`.
+
+| Service | Endpoint | Parameter (code default) | Alert it trips | Reset |
+|---|---|---|---|---|
+| order-service | `POST /fault/redis-starvation` | `connections=55` | **RedisConnectionSaturation** (`>= 48`, 5s, critical). **RedisConnectionSaturationWarning** (`>= 40`, 5s, warning) is inhibited while critical fires | `POST /fault/reset` |
+| order-service | `POST /fault/leak-memory` | `mb=50` | **OrderServiceMemoryLeak** (`> 16MiB`, 10s, warning). Default 50MiB is below **OrderServiceMemoryLeakCritical** (`> 64MiB`). **OrderServiceMemoryPressure** (RSS `> 200MiB`, 15s, warning) only if RSS crosses 200MiB | `POST /fault/reset` |
+| order-service | `POST /fault/cpu-burn` | `seconds=15` | **OrderServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical) while the burn runs. Not a standing fault | Ends after `seconds`. `/fault/reset` does not cancel an in-flight burn |
+| order-service | `POST /fault/db-latency` | `delay=2.5` | **OrderServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical) | `POST /fault/reset` |
+| order-service | `POST /fault/error-rate` | `rate=0.5` | **OrderServiceHighErrorRate** (`> 2%` over 30s, 20s, critical) | `POST /fault/reset` |
+| order-service | `POST /fault/crash` | (none) | **ServiceDown** (`up == 0`, 10s, critical) until Compose `restart: unless-stopped` brings the process back | Compose restart. `POST /fault/reset` after it is up |
+| payment-service | `POST /fault/latency` | `delay_ms=2500`, `jitter_ms=100` | **PaymentServiceP99LatencySLO** (p99 `> 1.2s`, 20s, critical). **PaymentServiceLatencyHigh** (p95 `> 1.2s`, 20s, warning) is inhibited while the critical fires (`alertmanager.yml` `equal: ["service"]`) | `POST /fault/reset` |
+| payment-service | `POST /fault/drop-rate` | `loss_percent=30.0` | **PaymentServiceHighErrorRate** (`> 2%` over 30s, 20s, critical) | `POST /fault/reset` |
+| payment-service | `POST /fault/outage` | `enabled=True` | **PaymentServiceOutage** (`503_outage` rate `> 0.05`, 10s, critical) and **PaymentServiceHighErrorRate** | `POST /fault/reset` |
+
+Alert rules (`dashboards/alerts.yml`):
+
+| Alert | Threshold | Severity |
+|---|---|---|
+| ServiceDown | `up == 0` for 10s | critical |
+| APIGatewayHighErrorRate | 5xx share `> 2%` over 30s, for 20s | critical |
+| OrderServiceHighErrorRate | non-success share `> 2%` over 30s, for 20s | critical |
+| PaymentServiceHighErrorRate | non-success share `> 2%` over 30s, for 20s | critical |
+| APIGatewayP99LatencySLO | p99 `> 1.2s`, for 20s | critical |
+| OrderServiceP99LatencySLO | p99 `> 1.2s`, for 20s | critical |
+| PaymentServiceP99LatencySLO | p99 `> 1.2s`, for 20s | critical |
+| OrderServiceMemoryLeak | `active_memory_leak_bytes > 16MiB`, for 10s | warning |
+| OrderServiceMemoryLeakCritical | `active_memory_leak_bytes > 64MiB`, for 10s | critical |
+| OrderServiceMemoryPressure | RSS `> 200MiB`, for 15s | warning |
+| RedisConnectionSaturationWarning | `redis_active_connections_count >= 40`, for 5s | warning |
+| RedisConnectionSaturation | `redis_active_connections_count >= 48`, for 5s | critical |
+| PaymentServiceOutage | `503_outage` rate `> 0.05`, for 10s | critical |
+| PaymentServiceLatencyHigh | p95 `> 1.2s`, for 20s | warning |
 
 ## Agent sandbox
 
@@ -294,6 +371,13 @@ Optional Red/Blue agents inject and clear faults so you can watch the same Prome
 docker compose --profile agents up -d --build agent-sandbox
 ```
 
+View / stop:
+
+```bash
+docker compose --profile agents logs -f --tail=80 agent-sandbox
+docker compose --profile agents stop agent-sandbox
+```
+
 Or on the host: `python3 orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION`.
 
 ### Optional k3s sandbox
@@ -304,7 +388,14 @@ On AWS, default apps stay in **Compose**, not in `k8s/apps/microservices.yaml` (
 python3 deploy_k8s_sandbox.py --region "$AWS_REGION"
 ```
 
-That applies `k8s/base/namespace-rbac.yaml` then `k8s/agents/agent-sandbox.yaml`, copies `agents/`, `orchestrator.py`, and `reports/` into `/app` (`workingDir: /app` in `k8s/agents/agent-sandbox.yaml`), and points `API_*` / `PROMETHEUS_URL` at the **EC2 private IP**. `copy_code_to_sandbox.py` is the copy-only follow-up if the pod was recreated.
+| Flag | Default | What it does |
+|---|---|---|
+| `--region` | `AWS_REGION` / `AWS_DEFAULT_REGION` / `us-east-1` | SSM region |
+| `--apply-microservices` | off | Also apply `k8s/apps/microservices.yaml` (`sre-arena/*` images must already exist) |
+| `--skip-copy` | off | Apply manifests only; do not `kubectl cp` repo code |
+| `--skip-wait-ssm` | off | Do not wait for SSM Online |
+
+That applies `k8s/base/namespace-rbac.yaml` then `k8s/agents/agent-sandbox.yaml`, copies `agents/`, `orchestrator.py`, and `reports/` into `/app` (`workingDir: /app` in `k8s/agents/agent-sandbox.yaml`), and points `API_*` / `PROMETHEUS_URL` at the **EC2 private IP**. `copy_code_to_sandbox.py` is the copy-only follow-up if the pod was recreated (`--region`, `--skip-wait-ssm`).
 
 ```bash
 aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION"
@@ -317,6 +408,16 @@ TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-
 PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
 k3s kubectl exec -it deployment/red-team-sandbox -n sre-agent-sandbox -- \
   python3 orchestrator.py --target-ip "$PRIVATE_IP" --cycles 1 --scenario MEMORY_EXHAUSTION
+```
+
+Status / logs (on the host):
+
+```bash
+k3s kubectl get pods -n sre-agent-sandbox
+k3s kubectl get pods -n sre-target-apps
+k3s kubectl logs -n sre-agent-sandbox -l agent.role=red-team-fault --tail=80
+k3s kubectl logs -n sre-agent-sandbox -l agent.role=blue-team-defender --tail=80
+k3s kubectl scale deployment/red-team-sandbox -n sre-agent-sandbox --replicas=0
 ```
 
 Each cycle honors [`FAULT_HOLD_SECONDS`](#read-these-once).
@@ -374,7 +475,21 @@ cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 
 Set `allowed_cidr` to your `/32` or office CIDR (`curl -sS https://checkip.amazonaws.com`, then append `/32`). `0.0.0.0/0` is rejected. Set `aws_region` to the **same** value as `$AWS_REGION` (Terraform, AWS CLI, and the Python scripts default independently).
 
-Port 22 is closed. SSM Session Manager does not need inbound SSH. Grafana `:3000` and API `:8000` still use `allowed_cidr` unless you SSM port-forward.
+Port 22 is closed. SSM Session Manager does not need inbound SSH. Grafana `:3000` and API `:8000` still use `allowed_cidr` unless you SSM port-forward:
+
+```bash
+aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["9090"],"localPortNumber":["9090"]}'
+
+aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["8088"],"localPortNumber":["8088"]}'
+
+aws ssm start-session --target "$EC2_INSTANCE_ID" --region "$AWS_REGION" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["3000"],"localPortNumber":["3000"]}'
+```
 
 ```bash
 export AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -434,7 +549,13 @@ python3 deploy_remote.py --region "$AWS_REGION"
 python3 deploy_remote.py --region "$AWS_REGION" --profile agents
 ```
 
+`put_lab_secrets.py` flags: `--region` (default `AWS_REGION` / `AWS_DEFAULT_REGION` / `us-east-1`), `--prefix` (default `$SSM_PARAM_PREFIX` or `/resilienceops`), `--env-file` (default `.env`).
+
+`deploy_remote.py` flags: `--region`, `--bucket` (default `$DEPLOY_BUCKET`), `--ssm-prefix` (default `$SSM_PARAM_PREFIX` / `/resilienceops`), `--profile agents`, `--skip-wait-ssm`.
+
 `deploy_remote.py` waits for SSM **Online** and `cloud-init status --wait`, uploads the zip, writes the host `.env` (plus `PROMETHEUS_BIND` / `COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml` / `AWS_REGION`), and runs `docker compose -f docker-compose.yml -f docker-compose.prom-lan.yml up --build -d`.
+
+After code changes, run the same `deploy_remote.py` command again (rebuilds the zip, `unzip -o`, `docker compose up --build -d`). Re-run `put_lab_secrets.py` first only if `.env` webhook or Grafana values changed.
 
 **You should see:** `SSM agent Online on i-…`, then `SSM command … status=Success`, then `Deploy finished. Grafana vars came from Parameter Store; secrets were not in SendCommand.` (`deploy_remote.send_and_wait` requires `Status=Success`.)
 
@@ -453,7 +574,7 @@ Red/Blue on AWS: [Agent sandbox](#agent-sandbox) (Compose `--profile agents` or 
 
 CloudWatch: log group `/sre/autonomous-agent-audit`. Optional `python3 create_cw_dashboard.py` → `SRE-Autonomous-Agent-Security-Audit`; `python3 test_grafana_proxy.py` → `SRE-fault-Vectors-Live-Telemetry`. Dated screenshots used console names `Agent-Command-Log` and `System-Fault-Metrics`.
 
-Then follow [How to use](#how-to-use) against the host (SSM port-forward `127.0.0.1:9090` / `:8088` as needed). Poller: `cd /opt/resilienceops && sudo python3 remediation/poll_and_apply.py --once`.
+Then follow [How to use](#how-to-use) against the host. For Prometheus / Alert forwarder / Grafana on the laptop, use the [SSM port-forward commands](#terraform) (`9090`, `8088`, `3000`). Poller: `cd /opt/resilienceops && sudo python3 remediation/poll_and_apply.py --once`.
 
 ### Teardown
 
@@ -464,7 +585,15 @@ export AWS_DEFAULT_REGION="$AWS_REGION"
 # or: terraform -chdir=terraform destroy
 ```
 
-SSM parameters are **not** in Terraform state. Detach `ResilienceOpsDeployer` from an **admin** login (`terraform destroy` does not delete it):
+SSM parameters are **not** in Terraform state. `./teardown.sh` / `.\teardown.ps1` delete them:
+
+```bash
+aws ssm get-parameters-by-path --path /resilienceops --recursive \
+  --query 'Parameters[].Name' --output text \
+  | xargs -n 10 aws ssm delete-parameters --names
+```
+
+Detach `ResilienceOpsDeployer` from an **admin** login (`terraform destroy` does not delete it):
 
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")
@@ -547,7 +676,39 @@ Rebuild Figure 1 from [`docs/architecture.svg`](docs/architecture.svg) and Figur
 | `restart_service` | `api-gw`, `order-service`, or `payment-service` | `docker compose restart <name>` | Not redis/postgres/Prometheus/Grafana |
 | `rollback_deploy` | those three, or `both` (all three, including api-gw) | Tags recorded last-good as `<project>-<service>:last-good` (`COMPOSE_PROJECT_NAME` or directory name with `[a-z0-9_-]`, so hyphens stay), writes a state-dir override (`image:` + `pull_policy: never`), `up --no-build --force-recreate`. Fails unless image ID equals last-good. Override lives only in `$REMEDIATION_STATE_DIR` | Not `git revert`, not a live-verified run |
 
-`--dry-run` prints steps and exits. Manual: `python3 remediation/remediate.py --dry-run --action reset_fault --target both`. Local E2E (not in CI): `python3 remediation/e2e_local.py`. No secrets printed (`remediation/logutil.py`). Lines go to `$REMEDIATION_STATE_DIR/remediation.jsonl`.
+`--dry-run` prints steps and exits. Manual commands (same blocks as [Propose fixes](#propose-fixes)):
+
+```bash
+python3 remediation/remediate.py --action reset_fault --target order-service
+python3 remediation/remediate.py --action restart_service --target payment-service
+python3 remediation/remediate.py --action rollback_deploy --target order-service
+python3 remediation/remediate.py --dry-run --action reset_fault --target both
+python3 remediation/remediate.py --proposal-file proposal.txt
+python3 remediation/remediate.py --proposal-text "$(cat proposal.txt)"
+```
+
+Simulate a bad deploy, then roll back (needs a prior `record-last-good`):
+
+```bash
+python3 remediation/remediate.py record-last-good
+docker compose build --no-cache order-service
+docker compose up -d --no-deps --force-recreate order-service
+python3 remediation/remediate.py --action rollback_deploy --target order-service
+```
+
+That retags the snapshotted image ID as `<project>-order-service:last-good`, writes `$REMEDIATION_STATE_DIR/rollback-order-service.yml`, and `docker compose -f docker-compose.yml -f <override> up -d --no-build --no-deps --force-recreate order-service`. Fails if the running image ID is not last-good.
+
+| Flag | Script | Default | What it does |
+|---|---|---|---|
+| `--proposal-file` | `remediate.py` | unset | Parse one proposal block from a file |
+| `--proposal-text` | `remediate.py` | unset | Parse one proposal block from a string |
+| `--skip-verify` | `remediate.py` | off | Do not poll Prometheus after the action |
+| `--verify-timeout` | both | `45` | Seconds to poll Prometheus after the action |
+| `--loop` | `poll_and_apply.py` | off | Poll until interrupted (`--once` is the default scan) |
+| `--interval` | `poll_and_apply.py` | `20` | Seconds between `--loop` scans (minimum 5) |
+| `--dry-run` | both | off | Print / skip the host action |
+
+Local E2E (not in CI): `python3 remediation/e2e_local.py`. No secrets printed (`remediation/logutil.py`). Lines go to `$REMEDIATION_STATE_DIR/remediation.jsonl`.
 
 ### Full environment table
 
@@ -603,8 +764,8 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `MODEL_POST_MORTEM` | `agents/config.py` | Default `claude-sonnet-4-6` |
 | `DEFAULT_MODEL` | `agents/config.py` | Default = `MODEL_DIAGNOSTIC_RCA` |
 | `AI_PROVIDER` | `agents/config.py` | Default `anthropic` |
-| `GEMINI_API_KEY` | `agents/config.py` | Unused by default; `arena_runner` import |
-| `OPENAI_API_KEY` | `agents/config.py` | Unused by default; `arena_runner` import |
+| `GEMINI_API_KEY` | `agents/config.py` | Unused by default |
+| `OPENAI_API_KEY` | `agents/config.py` | Unused by default |
 | `CW_LOG_GROUP_ATTACKER` | `agents/config.py` | Default `/sre/autonomous-agent-audit` |
 | `CW_LOG_GROUP_DEFENDER` | `agents/config.py` | Default `/sre/autonomous-agent-audit` |
 | `CW_LOG_GROUP_INCIDENTS` | `agents/config.py` | Default `/sre/autonomous-agent-incidents` |
@@ -615,6 +776,20 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_DB` | order-service | Compose `postgres` / `5432` / `sre_user` / `orders_db` |
 
 Terraform ingress is **not** an env var (`terraform/terraform.tfvars` `allowed_cidr`).
+
+Redis and Postgres are published on loopback only (`127.0.0.1:6379`, `127.0.0.1:5432`). The Compose services talk over the Docker network; nothing on the host needs those ports except optional local clients.
+
+### Helper scripts
+
+| Script | What it does |
+|---|---|
+| `create_cw_dashboard.py` | `put_dashboard` `SRE-Autonomous-Agent-Security-Audit` (Logs Insights on `/sre/autonomous-agent-audit`) |
+| `test_grafana_proxy.py` | `put_dashboard` `SRE-fault-Vectors-Live-Telemetry` (same log group, filtered by fault command) |
+| `copy_code_to_sandbox.py` | Copy-only follow-up after the k3s sandbox pod is recreated (`--region`, `--skip-wait-ssm`) |
+| `scripts/send_test_alert.py` | Synthetic alert to Alertmanager or the Alert forwarder (`--target`, `--alertmanager-url`, `--bridge-url`) |
+| `scripts/generate_example_post_mortem.py` | Writes `reports/example_incident_memory_exhaustion.md` |
+
+CloudWatch **log groups** are Terraform. Those two Python helpers create **dashboards** (not in Terraform). They query `/sre/autonomous-agent-audit`, which the agents write when AWS credentials are present.
 
 ### Sample output: a real test run
 
