@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# AWS Clean Teardown Script for SRE Colosseum
+# AWS Clean Teardown Script for ResilienceOps
 # Destroys Terraform-managed AWS resources to prevent ongoing charges.
 
 set -euo pipefail
 
 echo "=========================================================="
-echo "   SRE COLOSSEUM - AWS CLEAN INFRASTRUCTURE TEARDOWN"
+echo "   RESILIENCEOPS - AWS CLEAN INFRASTRUCTURE TEARDOWN"
 echo "=========================================================="
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

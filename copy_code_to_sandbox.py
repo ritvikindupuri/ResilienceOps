@@ -3,7 +3,7 @@
 Prefer `python3 deploy_k8s_sandbox.py` (apply + wait + copy). This script is
 the copy-only follow-up if the pod was recreated.
 
-ANTHROPIC_API_KEY is read from /opt/sre-colosseum/.env on the host (written by
+ANTHROPIC_API_KEY is read from /opt/resilienceops/.env on the host (written by
 deploy_remote.py from Parameter Store). It is not taken from the SSM shell env
 and is not printed.
 """

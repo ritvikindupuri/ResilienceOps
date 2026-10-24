@@ -9,9 +9,9 @@ with open("dashboards/provisioning/dashboards/sre-dashboard.json", "rb") as f:
 
 ssm = boto3.client("ssm", region_name=AWS_REGION)
 commands = [
-    "cd /opt/sre-colosseum",
+    "cd /opt/resilienceops",
     f"cat << 'EOF' | base64 -d > dashboards/provisioning/dashboards/sre-dashboard.json\n{b64_content}\nEOF",
-    "docker restart sre-colosseum_grafana_1"
+    "docker restart resilienceops_grafana_1"
 ]
 resp = ssm.send_command(
     InstanceIds=[INSTANCE_ID],

@@ -6,10 +6,10 @@ The [root README](../README.md) is the **current source of truth** for setup, ar
 
 Images used by the README live in [`images/`](images/).
 
-The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). It is rebuilt from official marks in [`icons/`](icons/) (AWS Architecture Icons, CNCF/k3s, brand glyphs) plus [`../scripts/build_architecture.py`](../scripts/build_architecture.py) into [`architecture.svg`](architecture.svg), then rasterized:
+The current architecture diagram is [`images/infraattack_platform_architecture.png`](images/infraattack_platform_architecture.png). The agent-sandbox diagram is [`images/agent_sandbox_architecture.png`](images/agent_sandbox_architecture.png). Both are rebuilt from official marks in [`icons/`](icons/) (AWS Architecture Icons, CNCF/k3s, brand glyphs) plus [`../scripts/build_architecture.py`](../scripts/build_architecture.py) into [`architecture.svg`](architecture.svg) and [`sandbox_architecture.svg`](sandbox_architecture.svg), then rasterized:
 
 ```bash
 ./scripts/render_architecture.sh
 ```
 
-That script prefers `rsvg-convert` (`librsvg2-bin` on Debian/Ubuntu) and falls back to headless Chrome. Companion mermaid (same flow, no logos): [`architecture.mmd`](architecture.mmd).
+That script prefers `rsvg-convert` (`librsvg2-bin` on Debian/Ubuntu) and falls back to headless Chrome. Companion mermaid (same flow, no logos): [`architecture.mmd`](architecture.mmd) and [`sandbox_architecture.mmd`](sandbox_architecture.mmd).

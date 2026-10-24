@@ -1,0 +1,18 @@
+%%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
+flowchart LR
+  subgraph start ["How to start"]
+    COMPOSE["Compose profile"]
+    K3S["k3s (optional)"]
+  end
+  subgraph agents ["Agents"]
+    RED[Red Team]
+    BLUE[Blue Team]
+  end
+  subgraph targets ["Target services"]
+    OS[order-service]
+    PS[payment-service]
+    ALL[all 3 services]
+  end
+  RED --> OS
+  RED --> PS
+  BLUE --> ALL

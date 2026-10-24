@@ -57,14 +57,13 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1480×1380 with a 32px margin; title “How ResilienceOps plus the diagnosis and remediator bots work”; node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2760. README caption is one short line; rebuild notes live under Figure source |
-| Operator + AWS | One top band “Deploy (optional AWS)”. Two icons only: Terraform `creates the infra` and EC2 `Compose host`, plus a drop onto the host. S3 / SSM / Parameter Store / helper-script names stay in the README so the figure is not crowded | Laptop Terraform, not required for Compose. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. Official AWS Architecture Icons + Terraform mark. IAM / CW / IGW / unused subnets are README prose |
+| Canvas | 1480×1280 with a 32px margin; title “How ResilienceOps works”; node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2560. README caption is one short line; rebuild notes live under Figure source |
+| Operator + AWS | One top band “Deploy (optional AWS)”. Two icons only: Terraform and EC2, plus a drop onto the host. S3 / SSM / Parameter Store / helper-script names stay in the README so the figure is not crowded | Laptop Terraform, not required for Compose. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. Official AWS Architecture Icons + Terraform mark. IAM / CW / IGW / unused subnets are README prose |
 | EC2 host | Purple dashed, “EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16” + “Grafana and API ports from your IP” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to the operator CIDR |
-| k3s group | Small dashed “k3s sandbox (optional)” + “agents in one sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Filename is in the README, not the figure |
-| Agents group | Narrow “Agents” column (Red above Blue). The Red fault arrows are grey and unnumbered. `--profile agents` stays in the README | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` |
-| Target services | Column group `api-gw` / `order-service` / `payment-service`. Grey Red arrows land on order-service and payment-service only. Orange ① is the scrape out of the services group | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
-| Compose group | “Stack (Docker Compose)” wrapping Agents, Target services, observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
-| External column | Vertical stack: Diagnosis hex → GitHub issue → Remediation capsule → Owner `/approve`, plus a GitHub Actions node. Owner ping is centered above Diagnosis (not on the External edge) | Diagnosis template `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` (no control path into the stack). Remediator template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5` proposes one allowlisted action. Owner `/approve` is recorded by `.github/workflows/remediation-approve.yml`. Never “Your Grok bot” |
+| k3s / Agents | Not on Figure 1. They live on Figure 2 (`docs/sandbox_architecture.svg`) and the README [Agent sandbox](../README.md#agent-sandbox) section | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Compose service `agent-sandbox` `profiles: [agents]` |
+| Target services | Column group `api-gw` / `order-service` / `payment-service`. Orange ① is the scrape out of the services group | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
+| Compose group | “Stack (Docker Compose)” wrapping Target services and observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
+| External column | Diagnosis hex and GitHub share the diagnosis row (arrow ⑤ is straight). Owner ping is above Diagnosis; Remediation is below it; Owner `/approve` and Actions sit on the bottom row | Diagnosis template `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` (no control path into the stack). Remediator template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5` proposes one allowlisted action. Owner `/approve` is recorded by `.github/workflows/remediation-approve.yml`. Never “Your Grok bot” |
 | Unused subnets | Footnote: `app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24` | Created `terraform/main.tf`; instance `subnet_id` is `public_ingress` only |
 
 ---
@@ -73,7 +72,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Node | Caption on figure | Evidence |
 |---|---|---|
-| Terraform | “creates the infra” | AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
+| Terraform | (name only) | AWS is not required for Compose. `terraform/main.tf` is the optional cloud host, run on the operator laptop |
 | Deploy script | “Deploy script” | `deploy_remote.py`: zip, S3 `put_object`, presigned GET, `ssm.send_command` |
 | S3 satellite | “stores the app bundle” | `aws_s3_bucket.deploy`; `deploy_remote.py` `_upload_payload` `put_object` + `generate_presigned_url` (`get_object`, 3600s); host `curl` of that URL |
 | Param Store satellite | “holds secrets” | `scripts/put_lab_secrets.py` SecureString; host `.env` via instance role `GetParameter` |
@@ -83,22 +82,20 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Secrets script satellite | “Secrets script” | `scripts/put_lab_secrets.py`; not an AWS resource |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
-| k3s | small dashed “k3s sandbox (optional)” / “Optional: runs orchestrator.py in one sandbox pod” | `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`; only `red-team-sandbox` runs `orchestrator.py` |
-| Red Team | “faults order” / “+ payment” (inside Agents box) | `orchestrator.py` Red agents; `infra_disruptor.py` / `network_adversary.py` |
-| Blue Team | “watches and resets”; one grey arrow into the Services group (not onto payment-service) | `orchestrator.py` Blue agents; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
+| k3s / Red / Blue | Figure 2 only: “k3s (optional)”, “faults order + payment”, “watches and resets” | `deploy_k8s_sandbox.py`; `orchestrator.py`; `infra_disruptor.py` / `network_adversary.py`; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
 | Traffic | “Live load” | `docker-compose.yml:123-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
 | api-gw | “Gateway” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
 | order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:34`); uvicorn `:376` |
 | payment-service | “Payments” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:73`); uvicorn `:135` |
 | Redis | “order-service cache” | compose `redis:7-alpine` `docker-compose.yml:94-98` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
 | PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:105-112`; order-service `POSTGRES_DB` `:39` |
-| Prometheus | “reads metrics” | image `prom/prometheus:v2.52.0` `docker-compose.yml:135`; `dashboards/prometheus.yml:1-12` |
-| Alertmanager | “Groups alerts” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:159-160`; `dashboards/alertmanager.yml:4-16` |
-| incident-bridge | “queries Prometheus” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
-| Grafana | “dashboard” (under Alertmanager; grey edge from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:217-222`; dashboard `sre-dashboard.json:8-22` |
+| Prometheus | (name only) | image `prom/prometheus:v2.52.0` `docker-compose.yml:135`; `dashboards/prometheus.yml:1-12` |
+| Alertmanager | “Alert” / “manager” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:159-160`; `dashboards/alertmanager.yml:4-16` |
+| Alert forwarder | “Alert” / “forwarder” (no file/service name on the figure) | Compose service `incident-bridge`. `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents`. README names the service once in Reference |
+| Grafana | (name only; grey edge from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:217-222`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
 | Incident Remediation | tilted orange capsule, two white capsule eyes (no pale tile) | Drawn in `remediator_avatar()` (same mark as `docs/icons/remediation-bot.png`). Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Invoked only by Diagnosis (no webhook, no repo watch). Proposes; does not execute |
-| GitHub issue | “GitHub issue” | Diagnosis bot files `incident` issues. Sample: issue #5. Path A does **not** open issues (`orchestrator.py` writes `reports/`) |
+| GitHub issue | “GitHub” | Diagnosis bot files `incident` issues. Sample: issue #5. Path A does **not** open issues (`orchestrator.py` writes `reports/`) |
 | Owner ping | centered above Diagnosis | Diagnosis-bot template at import (not in this repo). Firing critical alerts chat-ping the owner |
 | Owner | “/approve” | `remediation/approval.py` `APPROVE_RE`; workflow `remediation-approve.yml` |
 | Actions | “records” (GitHub icon) | `.github/workflows/remediation-approve.yml` records `/approve`; it does not run the fix |
@@ -120,20 +117,20 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
 | 5 | api-gw → payment-service U-turn | `/api/payments` | `api-gw/main.py:113-132`; generator `/api/payments/payments` `load_generator.py:78` |
 | 6–7 | order-service → Redis / Postgres | (none; fork from order-service) | Redis `setex` and Postgres INSERT in `order-service/main.py` create-order path; compose env `REDIS_HOST=redis`, `POSTGRES_DB=orders_db` |
-| (unnumbered, grey) | Red Team → order-service **and** payment-service | (none; not ①) | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic |
-| (unnumbered, grey) | Blue Team → services group | (none) | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** |
+| (unnumbered, grey; Figure 2) | Red Team → order-service **and** payment-service | (none; not ①) | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic |
+| (unnumbered, grey; Figure 2) | Blue Team → all 3 services | (none) | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:122-132` POSTs `/fault/reset` on **order-service and payment-service only** |
 | ① | Services group → Prometheus (scrape) | badge ① | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s`. Orange pull into Prometheus |
 | ② | Prometheus → Alertmanager | badge ② | `prometheus.yml` `alertmanager:9093`; rules `dashboards/alerts.yml` |
-| ③ | Alertmanager → incident-bridge | badge ③ | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
-| ④ | incident-bridge → Diagnosis | badge ④ | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}`; HTTPS to `GROK_WEBHOOK_URL` |
-| ⑤ | Diagnosis → GitHub issue | badge ⑤ | Imported diagnosis bot opens or comments on an `incident` issue |
+| ③ | Alertmanager → Alert forwarder | badge ③ | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
+| ④ | Alert forwarder → Diagnosis | badge ④ | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}`; HTTPS to `GROK_WEBHOOK_URL` |
+| ⑤ | Diagnosis → GitHub (straight, same row) | badge ⑤ | Imported diagnosis bot opens or comments on an `incident` issue |
 | ⑥ | Diagnosis → owner ping | badge ⑥ | Firing critical alerts chat-ping the owner. That bot has no control path into the stack |
 | ⑦ | Diagnosis → Incident Remediation (handoff) | badge ⑦ (blue) | After filing or commenting on a firing `incident` issue, the Diagnosis bot asks its teammate to propose a fix. The Remediation bot has no webhook and does not watch the repo |
 | ⑧ | Incident Remediation → GitHub issue | badge ⑧ (blue) | Remediator comments a proposal on the `incident` issue (`remediation/actions.py` `parse_proposal`) |
 | ⑨ | Owner `/approve` → Actions | badge ⑨ (blue) | Workflow `remediation-approve.yml` records `/approve`; it does not run the fix |
 | ⑩ | host poller → services group | badge ⑩ (blue) | Host poller `remediation/poll_and_apply.py` or `remediate.py --via-ssm` runs the allowlisted action. Arrow lands on the **services group** |
 | (unnumbered, grey) | Prometheus → Grafana | (none) | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml` |
-| (unnumbered, dashed grey) | incident-bridge ⇢ Prometheus | (none) | `evidence.py` range queries; `app.py` `collect_evidence`. Dashed back-query under the diagnosis row |
+| (omitted) | Alert forwarder ⇢ Prometheus | (none on the figure; README Reference) | `evidence.py` range queries; `app.py` `collect_evidence`. Kept off the figure so the diagnosis row stays a straight line |
 | (omitted) | agents → api-gw `/api/agent-events`; agents → `agent_activity.jsonl` → bridge | Agents caption `POST /api/agent-events · jsonl`; bridge caption `PromQL · agent jsonl (Compose agents)`; CW `agents → CW`. No extra shaft | `structured_logger.py` POST `/api/agent-events` + jsonl; `evidence.py` `collect_agent_activity` |
 | (omitted) | operator → SG `:3000 / :8000` | SG title `SG  ingress + internal  ·  :3000 / :8000`. No IGW→SG arrow | `ingress_sg` Grafana 3000 + API 8000 to `allowed_cidr` |
 
@@ -157,7 +154,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 |---|---|
 | 3-agent Red / 3-agent Blue | `orchestrator.py:41-50`; models `agents/config.py:31-39` |
 | Models `claude-sonnet-4-6` / `claude-haiku-4-5-20251001` | `agents/config.py:31-39` |
-| Path A = orchestrator; Path B = Prom → AM → bridge → Grok | `orchestrator.py`; `prometheus.yml` + `alertmanager.yml` + `app.py` |
+| Path A = orchestrator; Path B = Prom → AM → Alert forwarder → Grok | `orchestrator.py`; `prometheus.yml` + `alertmanager.yml` + `app.py` |
 | Traffic POSTs api-gw at compose `RPS_TARGET` default **20**; module default **25** if unset | `docker-compose.yml:128`; `load_generator.py:9` |
 | api-gw reverse-proxies `/api/orders*` and `/api/payments*` (prefix stripped) | `api-gw/main.py:92-132` |
 | Order-service writes Redis + Postgres and POSTs `/payments` | `order-service/main.py` create-order |
@@ -228,13 +225,13 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Issue #5 screenshots (public crops, no webhook key) | `docs/images/sample-incident-issue-5-{1,2,3}.png`; fingerprint `279c3ab8f16c75be`; “Agent activity: none attached” |
 | `orchestrator.py --cycles 1 --scenario MEMORY_EXHAUSTION` | `orchestrator.py:9-10,118-123` |
 | `deploy_remote.py` zip omits `.env`; includes `reports/` | `deploy_remote.py` `should_exclude` / `INCLUDE_PATHS`; `tests/test_deploy_archive.py` |
-| SSM session, no SSH | `terraform/main.tf:191-196`; README AWS → Optional k3s sandbox (`--region`) |
+| SSM session, no SSH | `terraform/main.tf:191-196`; README [Agent sandbox](../README.md#agent-sandbox) (`--region`) |
 | `teardown.sh` → `terraform destroy -auto-approve` + verify describe-instances / S3 / log groups | `teardown.sh` |
 | k3s sandbox: `deploy_k8s_sandbox.py` applies `namespace-rbac.yaml` then `agent-sandbox.yaml`; copies repo code; `--target-ip` is host private IP | `deploy_k8s_sandbox.py`; `k8s/apps/microservices.yaml` is opt-in `--apply-microservices` |
 | Host pip is **not** required for Compose-only | Service images `pip install -r requirements.txt` in Dockerfiles |
-| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (2960×2760) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1480×1380 |
+| Regen PNG: `scripts/render_architecture.sh` / `rsvg-convert` **2×** (2960×2560 main; sandbox 2360×1560) | `scripts/render_architecture.sh`; `build_architecture.py` viewBox 1480×1280 and 1180×780 |
 
-Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.env.example` and mentioned in the README table — `tests/test_docs_consistency.py:57-72`.
+Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.env.example` and mentioned in the README table — `tests/test_docs_consistency.py:57-72,89-92`.
 
 ---
 
@@ -246,7 +243,7 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 | NetworkPolicy: DNS 53, victim ns `arena.sre.io/role=victim`, TCP 443, VPC Compose 8000–8002/9090 | `k8s/agents/agent-sandbox.yaml:129-172`; victim label `k8s/base/namespace-rbac.yaml:3-6` |
 | Red Role `get/list/watch` on `pods` + `pods/exec` in `sre-target-apps` | `k8s/agents/agent-sandbox.yaml:23-31` |
 | Blue Role pods/logs/events/deployments in `sre-target-apps` | `k8s/base/namespace-rbac.yaml:32-51` |
-| Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README AWS → Optional k3s sandbox; Role has no `create` on `pods/exec` |
+| Operator `kubectl exec` uses **operator** kubeconfig, not the sandbox SA | Host commands in README [Agent sandbox](../README.md#agent-sandbox); Role has no `create` on `pods/exec` |
 | Grafana folder `SRE & Reliability`, dashboard title `SRE Infrastructure & Reliability Performance Monitor` | `dashboards.yaml:6`; `sre-dashboard.json:8` |
 | `liveNow: true`, `refresh: 1s`, window `now-5m` | `sre-dashboard.json:17-21` |
 | Availability threshold 99.9 | `sre-dashboard.json:69` |

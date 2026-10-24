@@ -4,7 +4,7 @@
 Values travel operator-laptop → Parameter Store over the AWS API. They are
 never placed in an SSM SendCommand document (that history is visible).
 deploy_remote.py later has the instance read them with its instance role
-and write /opt/sre-colosseum/.env on the host.
+and write /opt/resilienceops/.env on the host.
 
 Usage (from the repo root, after terraform apply):
 

@@ -66,6 +66,27 @@ def test_env_example_covers_compose_interpolation_names():
     assert missing == [], f"compose interpolates undeclared env vars: {missing}"
 
 
+def test_repo_has_no_legacy_arena_name():
+    skip_dirs = {".git", ".venv", "venv", "__pycache__", ".pytest_cache"}
+    skip_suffix = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".pyc", ".ico"}
+    needle = "colo" + "sseum"
+    hits: list[str] = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in skip_dirs for part in path.parts):
+            continue
+        if path.suffix.lower() in skip_suffix:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        if needle in text.lower():
+            hits.append(str(path.relative_to(ROOT)))
+    assert hits == [], "legacy arena name still present in:\n  " + "\n  ".join(hits)
+
+
 def test_readme_documents_env_example_keys():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     missing = sorted(name for name in _env_example_keys() if f"`{name}`" not in readme)
@@ -93,8 +114,11 @@ def test_readme_referenced_scripts_exist():
         "dashboards/alertmanager.yml",
         "docs/architecture.svg",
         "docs/architecture.mmd",
+        "docs/sandbox_architecture.svg",
+        "docs/sandbox_architecture.mmd",
         "docs/ACCURACY.md",
         "docs/images/infraattack_platform_architecture.png",
+        "docs/images/agent_sandbox_architecture.png",
         "docs/images/sample-incident-issue-1.png",
         "docs/images/sample-incident-issue-2.png",
         "docs/images/sample-incident-issue-3.png",
@@ -119,18 +143,20 @@ def test_readme_referenced_scripts_exist():
 
 def test_readme_flow_names_match_code_stages():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "## Agent sandbox" in readme
+    assert "### Code flow" not in readme
+    assert "## Code flow" not in readme
     for heading in (
-        "**Fault injection**",
-        "**Detection**",
-        "**Alert**",
-        "**Enrichment**",
-        "**Diagnosis**",
-        "**Issue**",
-        "**Handoff**",
-        "**Proposal**",
-        "**Approval**",
-        "**Fix**",
-        "**Resolution**",
+        "**Scrape.**",
+        "**Alert.**",
+        "**Evidence.**",
+        "**Diagnosis.**",
+        "**Issue.**",
+        "**Owner ping.**",
+        "**Handoff.**",
+        "**Proposal.**",
+        "**Approve.**",
+        "**Fix.**",
     ):
         assert heading in readme, heading
     for scenario in (
@@ -163,33 +189,39 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "examples/live_run_issue5_bridge.log" in readme
     assert "Blue checks health on all 3 and resets order-service and payment-service" in readme
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
+    sandbox = (ROOT / "docs" / "sandbox_architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
     assert "optional AWS" in svg
-    assert "watches and resets" in svg
+    assert "watches and resets" not in svg
+    assert "watches and resets" in sandbox
     assert "health on all 3" not in svg
     assert "reset order + payment" not in svg
-    assert "faults order" in svg
+    assert "faults order" not in svg
+    assert "faults order + payment" in sandbox
     assert "→ OS" not in svg
     assert "faults OS+PS" not in svg
     assert "/sre/autonomous-agent-audit" not in svg
     assert "Grok Bot (external)" not in svg
     assert "AI Incident Diagnosis" in svg
-    assert "queries Prometheus" in svg
-    assert "reads metrics" in svg
+    assert "queries Prometheus" not in svg
+    assert "reads metrics" not in svg
+    assert "Alert" in svg
+    assert "forwarder" in svg
+    assert "incident-bridge" not in svg
     assert "PromQL · jsonl" not in svg
-    assert "creates the infra" in svg
+    assert "creates the infra" not in svg
     assert "Secrets script" not in svg
     assert "Deploy script" not in svg
     assert "stores the app bundle" not in svg
     assert "runs deploy commands" not in svg
     assert "holds secrets" not in svg
-    assert "agents in one sandbox pod" in svg
+    assert "agents in one sandbox pod" not in svg
     assert "optional: agents in a sandbox pod" not in svg
     assert "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16" in svg
     assert "1–6 diagnosis path" in svg
     assert "Grey edges are supporting" in readme
-    assert "incident-bridge queries Prometheus" in readme
+    assert "Alert forwarder queries Prometheus" in readme
     assert "allowed_cidr" not in svg
     assert "/metrics" not in svg
     assert "reads Prom" not in svg
@@ -209,9 +241,10 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Grafana and API ports from your IP" in svg
     assert "Stack (Docker Compose)" in svg
     assert "Docker Compose on this host" not in svg
-    assert "k3s sandbox (optional)" in svg
+    assert "k3s sandbox (optional)" not in svg
+    assert "k3s (optional)" in sandbox
+    assert "Compose profile" in sandbox
     assert "Runs the agents in isolated pods" not in svg
-    assert "k3s (optional)" not in svg
     assert "read-only" not in svg.lower()
     assert "Owner ping" in svg
     assert "1–6 diagnosis path" in svg
@@ -221,7 +254,8 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Actions" in svg
     assert "host poller" in svg
     assert "arrow-rem" in svg
-    assert "How ResilienceOps plus the diagnosis and remediator bots work" in svg
+    assert "How ResilienceOps works" in svg
+    assert "How ResilienceOps plus the diagnosis and remediator bots work" not in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
     assert "COMPOSE_FILE" in readme
@@ -323,9 +357,20 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1480×1380; render_architecture.sh writes 2×.
+    # Native SVG is 1480×1280; render_architecture.sh writes 2×.
     assert width in {1480, 2960}, width
-    assert height in {1180, 1340, 1380, 2360, 2680, 2760}, height
+    assert height in {1180, 1280, 1340, 1380, 2360, 2560, 2680, 2760}, height
+
+
+def test_sandbox_png_is_nontrivial():
+    import struct
+
+    data = (ROOT / "docs/images/agent_sandbox_architecture.png").read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(data) > 20_000
+    width, height = struct.unpack(">II", data[16:24])
+    assert width in {1180, 2360}, width
+    assert height in {720, 780, 1440, 1560}, height
 
 
 _ACCURACY_FILE_LINE = re.compile(
@@ -385,6 +430,7 @@ def test_accuracy_readme_section_refs():
         "## Prerequisites",
         "### Two AWS identities",
         "### Optional k3s sandbox",
+        "## Agent sandbox",
         "### No proposal appeared",
         "## Troubleshooting",
     ):

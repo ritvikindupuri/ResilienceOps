@@ -6,10 +6,10 @@ INSTANCE_ID = require_ec2_instance_id()
 
 ssm = boto3.client("ssm", region_name=AWS_REGION)
 cmd_script = [
-    "docker rm -f sre-colosseum_api-gw_1 || true",
-    "docker run -d --name sre-colosseum_api-gw_1 --network sre-colosseum_default --network-alias api-gw -p 8000:8000 -e ORDER_SERVICE_URL=http://order-service:8001 -e PAYMENT_SERVICE_URL=http://payment-service:8002 sre-colosseum_api-gw:latest",
+    "docker rm -f resilienceops_api-gw_1 || true",
+    "docker run -d --name resilienceops_api-gw_1 --network resilienceops_default --network-alias api-gw -p 8000:8000 -e ORDER_SERVICE_URL=http://order-service:8001 -e PAYMENT_SERVICE_URL=http://payment-service:8002 resilienceops_api-gw:latest",
     "sleep 3",
-    "docker restart sre-colosseum_traffic-generator_1 sre-colosseum_prometheus_1",
+    "docker restart resilienceops_traffic-generator_1 resilienceops_prometheus_1",
     "sleep 3",
     "curl -I http://localhost:8000/metrics"
 ]
