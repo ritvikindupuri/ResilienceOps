@@ -23,10 +23,12 @@ flowchart LR
       PROM --> GRAF
       PROM --> AM
       AM --> BR
+      BR -.-> PROM
     end
     subgraph k3sopt ["k3s sandbox (optional)"]
       K3S["agents in one sandbox pod"]
     end
+    POLL["host poller"]
   end
   subgraph ext ["External"]
     BOT["AI Incident Diagnosis"]
@@ -34,13 +36,19 @@ flowchart LR
     PING["Owner ping"]
     REM["Incident Remediation"]
     OWN["Owner /approve"]
+    ACT["GitHub Actions"]
     BOT --> GH
     BOT -.-> PING
     GH --> REM
     REM --> OWN
+    OWN --> ACT
   end
   TF --> host
   RED --> OS
   RED --> PS
+  BLUE --> OS
+  BLUE --> PS
   BR --> BOT
-  OWN --> PS
+  ACT --> POLL
+  POLL --> OS
+  POLL --> PS

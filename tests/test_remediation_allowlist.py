@@ -131,3 +131,64 @@ def test_rollback_dry_run_uses_snapshot(tmp_path, monkeypatch):
     result = execute(Proposal("rollback_deploy", "order-service"), dry_run=True)
     assert result.ok
     assert result.steps[0]["image_id"].startswith("sha256:")
+    assert "--no-build" in result.steps[0]["argv"]
+    assert any("rollback-order-service.yml" in part for part in result.steps[0]["argv"])
+
+
+def test_rollback_recreates_from_last_good_image(tmp_path, monkeypatch):
+    """Compose must run the stored last-good ID, not the current image."""
+    from remediation import actions as actions_mod
+
+    last_good = "sha256:" + "b" * 64
+    current = "sha256:" + "c" * 64
+    monkeypatch.setenv("REMEDIATION_STATE_DIR", str(tmp_path))
+    (tmp_path / "last_good_deploy.json").write_text(
+        json.dumps({"services": {"order-service": {"image_id": last_good}}}),
+        encoding="utf-8",
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(argv, *, cwd=None):
+        calls.append(list(argv))
+        return {"argv": list(argv), "returncode": 0, "stdout": "", "stderr": ""}
+
+    def fake_image(_name: str) -> str:
+        for argv in calls:
+            if "up" in argv and any(str(part).endswith("rollback-order-service.yml") for part in argv):
+                text = (tmp_path / "rollback-order-service.yml").read_text(encoding="utf-8")
+                if last_good in text and current not in text:
+                    return last_good
+        return current
+
+    monkeypatch.setattr(actions_mod, "_run", fake_run)
+    monkeypatch.setattr(actions_mod, "_container_image_id", fake_image)
+    result = execute(Proposal("rollback_deploy", "order-service"), dry_run=False)
+    assert result.ok, result.error
+    override = (tmp_path / "rollback-order-service.yml").read_text(encoding="utf-8")
+    assert last_good in override
+    assert current not in override
+    assert any("up" in argv and "--no-build" in argv and "--force-recreate" in argv for argv in calls)
+    assert result.steps[0]["image_after"] == last_good
+    assert result.steps[0]["image_id"] == last_good
+    assert result.steps[0]["image_after"] != current
+
+
+def test_rollback_fails_if_running_image_stays_current(tmp_path, monkeypatch):
+    from remediation import actions as actions_mod
+
+    last_good = "sha256:" + "b" * 64
+    current = "sha256:" + "c" * 64
+    monkeypatch.setenv("REMEDIATION_STATE_DIR", str(tmp_path))
+    (tmp_path / "last_good_deploy.json").write_text(
+        json.dumps({"services": {"order-service": {"image_id": last_good}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        actions_mod,
+        "_run",
+        lambda argv, *, cwd=None: {"argv": list(argv), "returncode": 0, "stdout": "", "stderr": ""},
+    )
+    monkeypatch.setattr(actions_mod, "_container_image_id", lambda _name: current)
+    result = execute(Proposal("rollback_deploy", "order-service"), dry_run=False)
+    assert result.ok is False
+    assert "did not switch" in (result.error or "")

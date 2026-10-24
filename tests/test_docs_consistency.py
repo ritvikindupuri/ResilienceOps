@@ -217,6 +217,10 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "7–9 remediator path" in svg
     assert "Incident Remediation" in svg
     assert "AI Incident Diagnosis" in svg
+    assert "Actions" in svg
+    assert "host poller" in svg
+    assert "arrow-rem" in svg
+    assert "How ResilienceOps plus the diagnosis and remediator bots work" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
     assert "COMPOSE_FILE" in readme
@@ -298,6 +302,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1480×1180; render_architecture.sh writes 2×.
+    # Native SVG is 1480×1340; render_architecture.sh writes 2×.
     assert width in {1480, 2960}, width
-    assert height in {1180, 2360}, height
+    assert height in {1180, 1340, 2360, 2680}, height

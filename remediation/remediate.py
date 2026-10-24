@@ -73,13 +73,20 @@ def _via_ssm(argv: list[str]) -> int:
             "argv": argv,
         }
     )
-    send_and_wait(
-        ssm,
-        instance_id,
-        remote,
-        timeout_s=300,
-        comment="resilienceops-remediate",
-    )
+    try:
+        send_and_wait(
+            ssm,
+            instance_id,
+            remote,
+            timeout_s=300,
+            comment="resilienceops-remediate",
+        )
+    except SystemExit as exc:
+        emit({"event": "ssm_failed", "error": str(exc), "argv": argv})
+        return 2
+    except Exception as exc:
+        emit({"event": "ssm_failed", "error": str(exc), "argv": argv})
+        return 2
     return 0
 
 
@@ -120,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             remote_argv.append("--dry-run")
         if args.skip_verify:
             remote_argv.append("--skip-verify")
+        remote_argv.extend(["--verify-timeout", str(args.verify_timeout)])
         return _via_ssm(remote_argv)
 
     result = execute(proposal, dry_run=args.dry_run)

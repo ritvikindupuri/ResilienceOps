@@ -64,7 +64,14 @@ def _apply_one(issue: dict, *, dry_run: bool, via_ssm: bool, verify_timeout: int
         argv.append("--via-ssm")
     argv.extend(["--verify-timeout", str(verify_timeout)])
     emit({"event": "apply", "issue": number, "proposal": proposal.as_dict(), "dry_run": dry_run})
-    code = remediate_main(argv)
+    try:
+        code = remediate_main(argv)
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 2
+        emit({"event": "apply_failed", "issue": number, "error": str(exc)})
+    except Exception as exc:
+        code = 2
+        emit({"event": "apply_failed", "issue": number, "error": str(exc)})
     result_body = (
         "<!-- resilienceops-result:v1 -->\n"
         f"ok: {'true' if code == 0 else 'false'}\n"

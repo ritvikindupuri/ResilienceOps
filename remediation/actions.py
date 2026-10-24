@@ -30,14 +30,14 @@ ACTIONS = frozenset(
     {ACTION_RESET_FAULT, ACTION_RESTART_SERVICE, ACTION_ROLLBACK_DEPLOY}
 )
 
-# reset_fault uses the same POST /fault/reset Blue already calls
-# (FaultCatalog.reset_environment / order-service + payment-service).
+# reset_fault POSTs /fault/reset on each named target (order-service,
+# payment-service, or both). That is not Path A FaultCatalog.reset_environment.
 RESET_TARGETS = frozenset({"order-service", "payment-service", "both"})
 
 # docker compose restart — app services only. Not redis/postgres/prom/grafana.
 RESTART_TARGETS = frozenset({"api-gw", "order-service", "payment-service"})
 
-# rollback_deploy retags the last recorded image IDs of those same services.
+# rollback_deploy recreates those services from recorded last-good image IDs.
 ROLLBACK_TARGETS = frozenset({"api-gw", "order-service", "payment-service", "both"})
 
 APP_SERVICES = frozenset({"api-gw", "order-service", "payment-service"})
@@ -352,10 +352,16 @@ def _restart_service(target: str, dry_run: bool) -> list[dict[str, Any]]:
     return [step]
 
 
+def _rollback_override_text(service: str, image_id: str) -> str:
+    """Compose overlay that points one service at a recorded image ID."""
+    return f"services:\n  {service}:\n    image: {image_id}\n"
+
+
 def _rollback_deploy(target: str, dry_run: bool) -> list[dict[str, Any]]:
     snapshot = load_last_good()
     steps: list[dict[str, Any]] = []
     names = targets_for(Proposal(ACTION_ROLLBACK_DEPLOY, target))
+    compose_file = str(REPO_ROOT / "docker-compose.yml")
     for name in names:
         info = snapshot["services"].get(name)
         if not info or not info.get("image_id"):
@@ -363,53 +369,43 @@ def _rollback_deploy(target: str, dry_run: bool) -> list[dict[str, Any]]:
         image_id = info["image_id"]
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
             raise RemediationError(f"invalid image id in snapshot for {name}")
-        tag = f"resilienceops-{name}:last-good"
+        override_path = _state_dir() / f"rollback-{name}.yml"
+        argv = [
+            "docker",
+            "compose",
+            "-f",
+            compose_file,
+            "-f",
+            str(override_path),
+            "up",
+            "-d",
+            "--no-build",
+            "--no-deps",
+            "--force-recreate",
+            name,
+        ]
         step: dict[str, Any] = {
             "kind": "rollback_deploy",
             "service": name,
             "image_id": image_id,
-            "tag": tag,
+            "override": str(override_path),
+            "argv": argv,
         }
         if dry_run:
             step["dry_run"] = True
             steps.append(step)
             continue
-        tagged = _run(["docker", "tag", image_id, tag])
-        step["tag_result"] = {"returncode": tagged["returncode"]}
-        if tagged["returncode"] != 0:
-            raise RemediationError(f"docker tag failed for {name}")
-        # Recreate from the tagged last-good image without rebuilding source.
-        rec = _compose(
-            "up", "-d", "--no-build", "--no-deps", "--force-recreate", name
-        )
-        # compose still uses the build: image name from the compose file. After
-        # tagging last-good onto that local image name, --no-build picks it up
-        # when the compose image matches. If compose built `dir-service`, we
-        # also try to retag that. Best-effort: docker compose images.
+        override_path.write_text(_rollback_override_text(name, image_id), encoding="utf-8")
+        rec = _run(argv)
         step["recreate"] = {"returncode": rec["returncode"], "stderr": rec["stderr"][-400:]}
         if rec["returncode"] != 0:
-            # Fallback: point the compose service at the tagged image via `docker
-            # compose up` after tagging the compose image name too.
-            images = _compose("images", "--format", "json", name)
-            compose_image = ""
-            blob = images["stdout"].strip()
-            rows = []
-            if blob.startswith("["):
-                rows = json.loads(blob or "[]")
-            else:
-                for line in blob.splitlines():
-                    if line.strip():
-                        rows.append(json.loads(line))
-            if rows:
-                compose_image = rows[0].get("Repository") or rows[0].get("ID") or ""
-            if compose_image:
-                _run(["docker", "tag", image_id, compose_image])
-                rec = _compose(
-                    "up", "-d", "--no-build", "--no-deps", "--force-recreate", name
-                )
-                step["recreate_retry"] = {"returncode": rec["returncode"]}
-            if rec["returncode"] != 0:
-                raise RemediationError(f"rollback recreate failed for {name}")
+            raise RemediationError(f"rollback recreate failed for {name}")
+        after = _container_image_id(name)
+        step["image_after"] = after
+        if after != image_id:
+            raise RemediationError(
+                f"rollback did not switch {name} to last-good image ({after} != {image_id})"
+            )
         steps.append(step)
     return steps
 
