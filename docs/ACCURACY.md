@@ -57,14 +57,14 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1600×1224 with a 32px margin; title “How ResilienceOps + AI Incident Diagnosis works”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px). Legend only below the boxes: 1–6 incident path, supporting, and `solid = data flow · dashed = query (arrow points to what's queried)` | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2448. README `<img width="100%">` |
+| Canvas | 1600×1400 with a 32px margin; title “How ResilienceOps + incident bots work”; node names 26px, captions 22px, title 40px (effective ≥13px at 950px). Legend only below the boxes: 1–6 diagnosis path, 7–9 remediator path, supporting, and `solid = data flow · dashed = query (arrow points to what's queried)` | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 3200×2800. README `<img width="100%">` |
 | Operator + AWS | One top band “Deploy (optional AWS)”, ≥20px below the title. Laptop icons on the left (Terraform `creates the infra`, Secrets script, Deploy script); AWS icons on the right (Parameter Store `holds secrets`, S3 `stores the app bundle`, SSM `runs deploy commands`). Each grey has its own riser and lane. One drop into the EC2 host | Laptop scripts, not AWS resources. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. File names live in the README “How it works” section. Official Architecture Icons (Icon-package_07312026). S3 `aws_s3_bucket.deploy` + `deploy_remote.py` `_upload_payload` + presigned GET; SSM `send_command`; Param Store `scripts/put_lab_secrets.py`. IAM / CW / IGW / unused subnets are README prose, not figure footnotes |
 | EC2 host | Purple dashed, “EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16 · SG :3000/:8000 from allowed_cidr” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to `allowed_cidr` |
 | k3s group | Small dashed “k3s sandbox (optional)” + “agents in one sandbox pod” | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Filename is in the README, not the figure |
 | Agents group | Narrow “Agents” + “--profile agents” column (Red above Blue). Orange ① starts at the Red Team icon | One process: `orchestrator.py`. Compose service `agent-sandbox` `profiles: [agents]` |
 | Target services | Column group `api-gw` / `order-service` / `payment-service`. ① lands on order-service and payment-service only; Traffic lands on api-gw; Redis/PG from order-service | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
 | Compose group | “Lab (Docker Compose)” wrapping Agents, Target services, observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
-| External column | “External” + AI Incident Diagnosis hex avatar | Imported template, not hosted in-repo. Bridge needs outbound HTTPS (`GROK_WEBHOOK_URL`); agents also call Anthropic. Never “Your Grok bot” |
+| External column | “External” + AI Incident Diagnosis hex avatar + Incident Remediation orange capsule + Owner `/approve` | Diagnosis template `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` (no lab control path). Remediator template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5` proposes one allowlisted action. Owner `/approve` is recorded by `.github/workflows/remediation-approve.yml`. Never “Your Grok bot” |
 | Unused subnets | Footnote: `app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24` | Created `terraform/main.tf`; instance `subnet_id` is `public_ingress` only |
 
 ---
@@ -97,8 +97,10 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | incident-bridge | “adds evidence” | `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents` |
 | Grafana | (no caption; under the payment-service column, reads from Prometheus) | `grafana/grafana:10.4.2` `docker-compose.yml:210-212`; dashboard `sre-dashboard.json:8-22` |
 | AI Incident Diagnosis | Grok hex avatar | Imported template; not source in this repo. README link `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` |
-| GitHub issue | “label: incident” | Bot behavior (imported template). Sample: issue #5 label `incident`. Path A does **not** open issues (`orchestrator.py:112-115` writes `reports/`) |
-| Owner ping | “Firing critical” | Bot template at import (not in this repo). README `:40`, `:666` |
+| Incident Remediation | orange capsule PNG | Attached mark `docs/icons/remediation-bot.png`. Template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5`. Proposes; does not execute |
+| GitHub issue | “incident” / “issue” | Diagnosis bot files `incident` issues. Sample: issue #5. Path A does **not** open issues (`orchestrator.py` writes `reports/`) |
+| Owner ping | “critical” | Diagnosis-bot template at import (not in this repo) |
+| Owner | “/approve” | `remediation/approval.py` `APPROVE_RE`; workflow `remediation-approve.yml` |
 
 ---
 
@@ -125,7 +127,10 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | 14 | Prometheus → Grafana | `reads` | Grafana is **not** on the alert path. Datasource provisioning `dashboards/provisioning/datasources/prometheus.yaml`. Host Grafana `:3000` (`docker-compose.yml:212`) |
 | 15 | incident-bridge ⇢ Prometheus (dashed) | `PromQL` | `evidence.py:29-67` range queries; `app.py` `collect_evidence` |
 | 16 | incident-bridge → Grok avatar | `enriched JSON` | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}` (`:155-160`); HTTPS to `GROK_WEBHOOK_URL` |
-| 17–18 | AI Incident Diagnosis → GitHub / owner ping | badge ⑥ | Imported bot. Opening an issue is a write. Firing critical alerts also chat-ping the owner. The bot has no control path into the lab (webhook in, GitHub issue + owner ping out) |
+| 17–18 | AI Incident Diagnosis → GitHub / owner ping | badge ⑥ | Imported diagnosis bot. Opening an issue is a write. Firing critical alerts also chat-ping the owner. That bot has no control path into the lab |
+| 19 | GitHub → Incident Remediation | badge ⑦ | Remediator template comments a proposal on the `incident` issue (`remediation/actions.py` `parse_proposal`) |
+| 20 | Incident Remediation → Owner | badge ⑧ | Owner (or write collaborator) comments `/approve` (`remediation/approval.py`) |
+| 21 | Owner → Lab (Docker Compose) | badge ⑨ | Host poller `remediation/poll_and_apply.py` or `remediate.py --via-ssm` runs the allowlisted action on the Compose stack |
 | (omitted) | agents → api-gw `/api/agent-events`; agents → `agent_activity.jsonl` → bridge | Agents caption `POST /api/agent-events · jsonl`; bridge caption `PromQL · agent jsonl (Compose agents)`; CW `agents → CW`. No extra shaft | `structured_logger.py` POST `/api/agent-events` + jsonl; `evidence.py` `collect_agent_activity` |
 | (omitted) | operator → SG `:3000 / :8000` | SG title `SG  ingress + internal  ·  :3000 / :8000`. No IGW→SG arrow | `ingress_sg` Grafana 3000 + API 8000 to `allowed_cidr` |
 
@@ -164,7 +169,8 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | `agent_activity` empty unless agents profile / host orchestrator | compose `agent-sandbox` `profiles: [agents]` `docker-compose.yml:232-234`; logger writes `logs/agent_activity.jsonl` `structured_logger.py:13-33` |
 | Path A verify_recovery max 5, latency < 800ms; always `reset_environment` | `remediator.py`; orchestrator holds `FAULT_HOLD_SECONDS` then resets in `finally` so no-incident cycles cannot pile faults |
 | Path A writes `reports/incident_*.md`; does not open GitHub issues | `orchestrator.py` phase 7 writes `reports/` |
-| Bot has no lab control path (webhooks in, GitHub issues out); duplicate fingerprint comments; resolved comments; critical owner ping | Imported template (not in this repo). Documented as template behavior. Samples: issues #4 and #5 |
+| Diagnosis bot has no lab control path (webhooks in, GitHub issues out); duplicate fingerprint comments; resolved comments; critical owner ping | Imported template (not in this repo). Documented as template behavior. Samples: issues #4 and #5 |
+| Path C = proposal → `/approve` → host poller / SSM; allowlist `reset_fault` / `restart_service` / `rollback_deploy` | `remediation/actions.py`; `.github/workflows/remediation-approve.yml`; `remediation/poll_and_apply.py`; `--via-ssm` reuses `deploy_remote.send_and_wait` |
 
 ---
 

@@ -51,9 +51,15 @@ flowchart LR
     BOT["AI Incident Diagnosis"]
     GH["GitHub issue"]
     PING["Owner ping"]
+    REM["Incident Remediation"]
+    OWN["Owner /approve"]
     BOT --> GH
     BOT --> PING
+    GH --> REM
+    REM --> OWN
   end
+  OWN --> OS
+  OWN --> PS
 
   DEPLOY --> S3
   DEPLOY --> SSM

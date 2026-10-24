@@ -15,6 +15,6 @@ Icons in this folder are inlined into `docs/architecture.svg` by
 | `docker.svg`, `fastapi.svg`, `redis.svg`, `postgresql.svg`, `prometheus.svg`, `grafana.svg`, `kubernetes.svg`, `github.svg`, `terraform.svg` | Official brand glyphs via [Simple Icons](https://simpleicons.org/) (CC0 1.0), colored with each project’s documented brand hex. |
 
 Generic person / clock / bell / document / traffic marks, and the red Grok
-hexagon avatar (`#FF3E51`, copied from the Identity Mapper shape in
-[grok-bot-aws-attack-path-team](https://github.com/ritvikindupuri/grok-bot-aws-attack-path-team)),
-are drawn in `scripts/build_architecture.py`.
+hexagon avatar (`#FB2B3E`, tilted ~23°, two upright white capsule eyes),
+are drawn in `scripts/build_architecture.py`. The Incident Remediation
+avatar is the attached orange capsule PNG (`remediation-bot.png`).

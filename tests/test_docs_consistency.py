@@ -107,6 +107,8 @@ def test_readme_referenced_scripts_exist():
         "docs/ResilienceOps_Technical_Documentation.pdf",
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
+        "remediation/remediate.py",
+        ".github/workflows/remediation-approve.yml",
     ]
     for rel in required:
         assert (ROOT / rel).is_file(), rel
@@ -123,6 +125,9 @@ def test_readme_flow_names_match_code_stages():
         "**Enrichment**",
         "**Diagnosis**",
         "**Issue**",
+        "**Proposal**",
+        "**Approval**",
+        "**Fix**",
         "**Resolution**",
     ):
         assert heading in readme, heading
@@ -203,7 +208,10 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "k3s (optional)" not in svg
     assert "read-only" not in svg.lower()
     assert "Owner ping" in svg
-    assert "1–6 incident path" in svg
+    assert "1–6 diagnosis path" in svg
+    assert "7–9 remediator path" in svg
+    assert "Incident Remediation" in svg
+    assert "AI Incident Diagnosis" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
     assert "COMPOSE_FILE" in readme
@@ -285,6 +293,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1600×1224; render_architecture.sh writes 2×.
+    # Native SVG is 1600×1400; render_architecture.sh writes 2×.
     assert width in {1600, 3200}, width
-    assert height in {1224, 2448}, height
+    assert height in {1224, 1400, 2448, 2800}, height

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="1600" height="1224" viewBox="0 0 1600 1224" role="img"
-     aria-label="How ResilienceOps plus AI Incident Diagnosis works">
+     width="1600" height="1400" viewBox="0 0 1600 1400" role="img"
+     aria-label="How ResilienceOps plus AI Incident Diagnosis and remediator bots work">
+  <desc>AI Incident Diagnosis and Incident Remediation bots</desc>
   <defs>
     <style>
       .title { font: 700 40px Arial, Helvetica, sans-serif; fill: #111827; }
@@ -134,8 +135,8 @@
             d="M8 22h24v2H8zm4-4h16v2H12zm-2 8h20v2H10zm10-16l8 6H12z"/>
     </symbol>
   </defs>
-  <rect width="1600" height="1224" fill="#FFFFFF"/>
-    <text x="800" y="72" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
+  <rect width="1600" height="1400" fill="#FFFFFF"/>
+    <text x="800" y="72" text-anchor="middle" class="title">How ResilienceOps + incident bots work</text>
 
   <rect x="24" y="104" width="1552" height="172" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6"/>
   <use href="#i-aws-logo" xlink:href="#i-aws-logo" x="36" y="112" width="22" height="22"/>
@@ -176,11 +177,11 @@
           style="font:700 22px Arial, Helvetica, sans-serif">SSM</text>
     <text class="cap" y="61" text-anchor="middle">runs deploy commands</text>
   </g>
-  <rect x="24" y="276" width="1192" height="820" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="2.2" stroke-dasharray="7 5"/>
+  <rect x="24" y="276" width="1192" height="996" rx="8" fill="#FFFFFF" stroke="#8C4FFF" stroke-width="2.2" stroke-dasharray="7 5"/>
   <use href="#i-aws-ec2" xlink:href="#i-aws-ec2" x="36" y="284" width="22" height="22"/>
   <text x="64" y="304" class="group-vpc">EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16</text>
   <text x="64" y="326" class="cap">SG :3000/:8000 from allowed_cidr</text>
-  <rect x="1232" y="276" width="344" height="820" rx="18" fill="#FFF7F7" stroke="#FECACA" stroke-width="1.6"/>
+  <rect x="1232" y="276" width="344" height="996" rx="18" fill="#FFF7F7" stroke="#FECACA" stroke-width="1.6"/>
   <text x="1250" y="304" class="group">External</text>
   <rect x="36" y="356" width="1168" height="636" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <use href="#i-docker" xlink:href="#i-docker" x="48" y="364" width="22" height="22"/>
@@ -190,10 +191,10 @@
   <text x="62" y="462" class="cap">--profile agents</text>
   <rect x="408" y="412" width="228" height="422" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="426" y="440" class="group">Target services</text>
-  <rect x="36" y="1004" width="1168" height="68" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
-  <use href="#i-k3s" xlink:href="#i-k3s" x="48" y="1012" width="22" height="22"/>
-  <text x="76" y="1032" class="group">k3s sandbox (optional)</text>
-  <text x="76" y="1058" class="cap">agents in one sandbox pod</text>
+  <rect x="36" y="1180" width="1168" height="68" rx="8" fill="#FAFBFC" stroke="#94A3B8" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <use href="#i-k3s" xlink:href="#i-k3s" x="48" y="1188" width="22" height="22"/>
+  <text x="76" y="1208" class="group">k3s sandbox (optional)</text>
+  <text x="76" y="1234" class="cap">agents in one sandbox pod</text>
   <g transform="translate(182,560)">
     <use href="#i-person-red" xlink:href="#i-person-red" x="-26.0" y="-62.0" width="52" height="52"/>
     <text class="name" y="24" text-anchor="middle">Red Team</text>
@@ -274,10 +275,21 @@
     <text class="name" y="42" text-anchor="middle">issue</text>
     <text class="cap" y="66" text-anchor="middle">incident</text>
   </g>
-  <g transform="translate(1500,880)">
+  <g transform="translate(1328,880)">
     <use href="#i-bell" xlink:href="#i-bell" x="-26.0" y="-62.0" width="52" height="52"/>
     <text class="name" y="24" text-anchor="middle">Owner ping</text>
     <text class="cap" y="52" text-anchor="middle">critical</text>
+  </g>
+  <g transform="translate(1476,1040)">
+    <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKwAAABfCAYAAAB1NyxvAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAAEnQAABJ0Ad5mH3gAAAjeSURBVHhe7d1pbFXHGQbgd8651zZmqRcwNktCwuIazGpqkyAaJYS0dEsQStTQtChpS0vVJahVqxRVDYpaRUJVpTRBLUoVJYTSNIgisSZUNCTIEDBLcGIMMcaAMXjBYLMYfM+Z6Y9LHN+v2D7XYN+Zud/zB+md+WGLV8dz1hGe5ykwZgiHBozpjAvLjMKFZUbhwjKjcGGZUbiwzChcWGYULiwziuAbB/pRTeWQFyqgWk9DiE45XDhZ+UDGuOi/SYgLm2Cq8Qjkub1QTUcgLxyFaiqnU7oksgshsibAGTYNzthvQQwaQadYhwvbz1TLyWg5z5dB1u6Caq6kU3pN5M2CO2kx3PEL6ZA1uLD9QDUcgjz3IfzKf9zRgnZFZObDLVgEd+JiIJxOh43Ghe0D8uwHUHWlkHV7IOsPAP4NOqVfiIyxCM9bDTF0Mh0yFhf2DlDXGqDO74M8vw/y1A6oSyfolIRyC59BaM6LNDYSF7aX/Mp1kGf+C1VfBnW5lg5rRwydjPD8NyAGjaRDRuHCBqCuX4SqfQ+q8Qj8+oNQjYcA7zqdpj2Rlh0tbe6X6JAxuLBdUK01kMffhjx/APLMTjpstPD8NXDGfIXGRuDCEvL0f+AdfAnq3F46pA2RngN34vcgcqZH18/n9sKv2hjXyV3Kgi1GHmm5sDep1hp4u5dDntpBh7QisgoQXrAJImVITK4un4G35duQFz+Nybsi0rIQXvguxJC76JDW+FkCAN7+lWhfW6x9WQHAnbLk/8oKAGLwaIQe2xS4gOp6MyLbnjJuLZ7UhVWNR9C+bhb8spV0SF9uCk06iLQshOeuAkSw/1bVXAlv93M01lqw38xC8uQ2tK9/GOpSNR3SmqzZTqMYIrcY7rgFNO6Sf3Qt5MmtNNZWUhbW/+Q1RLYvprERZPWWHk8InaJlADo95tUDb9evoG5corGWkq6w3v6V8N7/DY37hhNCaM6LSP3RWaQubUDq0gakPLkXbv4TdGZwSiKyr/u7Vk7mBLj5j9O4S6qtCfLQSzTWUlIV1i9b2a/rVXfmr+EWPgM44Y5MZNyL0EMvw531u5i58VB1pT0eZd0ZcR5ly/9uxFE2aQorqzfD299/ZQUAd+T9NOoQmv4zuAWLaBxYZPdyGsUQGWPhjH6Qxl3z2uBXrKGpdpKisKr1NLydP6dxn1NXz9MoRmj2HyEGDqdxIKqpHLKulMYx3MKnadQtWfE6AL0vyydFYSM7fggVuULjPud99FcaxQqnw5mylKaB+UdW0yiGM+YRiPRhNO6Saj0Nde5DGmvF+sJ6h/4C1XCIxv1C1ZdBnnmPxjFChU9DpGXSOBBZsx3qWgONOxFwxj1Gw2751ZtppBWrC6uunIW/9wUa9ytv93OA9Gj8udCAuP90d1AS/tG1NI0R1zoW0P5un9WF9Q8m/lKNunQCftW/aRzDmfJjiNQMGgeiqjbQKIbInUWjbqmWk1BX62msDWsLq67UwT/6Jo0Twj+8ikYxRGpGr68YyOZj3T5ALkJpcV3eAgB1Ifibu/3N2sL6h18GZITGCaEufNLjGX28a83O/PKuT75Uy4m4z/xVwCe+EsHawsrjb9MoofzyV2kUQwybBvGFe2gciF/+KmTtLhoDAY7ut6JaamikDSsLK09ug7rRQuOEkjXvQLU10TiGM6GXt2ylh8jW78A7vKrjIW51uRbezp/Cr1xHZ/dItTXSSBt2FvbUOzRKPBmBX/lPmsZw755Ho+D8dvh7nkf764WIvDUH7W8WwT/2LzormPZWmmjDzsL2cO0zUeTx9TSKITIn0Chu6kYLZPOxuNetnSm/nUbasK6w6mo91JU6GmtBNVdANX5E4w66/CkWAR8ATwR9f7JeUs0VNNKK182NDFmjyVImNIAm2rCwsMdopBVZ+z68w6/QOHrd+OCfaZwQIj2HRtqwr7CXT9NIO/6eFYi8+wPIE5ug6krhV6xBZOM3oa5psiQYPIpG2rDuNe/IjiWQVRtpzOIQnrf6tm5k9CXrjrCmvbaspexJNNGGfYVVkiYsDiJlCJzM8TTWhn2FdT9/f4rFT4x+gEZasa6wImUwjVgcnDHzaaQV+wqb3rt3pFiUM+arNNKKdYXFkDE0YQG5+U9ApAyisVasK6yTXUAjFoRw4Ex/lqbasa6wImcGjVgA7viFcDLH0Vg71hUWgJEf6k00Z8YyGmnJysK6o+bQiHUjVLTMiKMrbC2sM/ZRGrEuiMx8uMXmfCPWysKKrAKt79Zow01F6JHu3zXTjZWFBQCn8Ps0YkTogT8Ztyu4tYV1v/hkrz8BlAxC035ye9+pTRBrC4vQAKPWZv3JnboU7n3P09gI1j0PS0XemnPzpTwGAG7JcoRm/ILGxrD3CHuTO/sPNEpa4Xl/M7qsSIbCOqO+DHfKEhonFTF4FFIWbIYTx+4yurJ+SfCZ9g1fg6ovo7H1QkXPwi36JeCm0iEjJU1h1bUGRNbP1fpTkneSM/ohuLNfsO56dNIUFgDUhY/RvuHrgNdGh6zhjH0UoZLf9vrDcrpLqsICgDy7O7rHauQaHTKSSMuGGHEf3AmPQ+SVQKRl0SlWSbrCAtEdWCJbFxm7PBC5xXBzZ8K59xsQw2fSYaslZWGB6O5/kW3fhao/QIe0IwYOh8gthjP6QbgFT9HhpJK0hf2Mv2fFLT8dlEhi6GQ4eSVw8kogcoq0/hJLf0v6wgLRjTO8PSt63Cm7L4m8WXBHzoYzcTHEwFw6zG7iwnai6koRKf19t5/EvCPcVDh3zY2uRfOKk24deju4sLcgqzfD//g1yLMf0KFeEznT4eTOhBg6Fc7dD1t/Nt9XuLDdUG1NkFUboRoORrcXagq+HZDIngQneyLEiPvhjl8IhNLoFNYLXNg4yYufApeqIJsrIRTZ4XDQqGhJh02Nzdkdw4VlRrH+aS1mFy4sMwoXlhmFC8uMwoVlRuHCMqNwYZlRuLDMKFxYZhQuLDMKF5YZhQvLjMKFZUbhwjKjcGGZUbiwzChcWGYULiwzCheWGYULy4zChWVG+R9USBGzK11hSgAAAABJRU5ErkJggg==" x="-36.0" y="-48.0" width="72" height="40"/>
+    <text class="name" y="36" text-anchor="middle">Incident</text>
+    <text class="name" y="64" text-anchor="middle">Remediation</text>
+    <text class="cap" y="88" text-anchor="middle">proposes a fix</text>
+  </g>
+  <g transform="translate(1328,1040)">
+    <use href="#i-person" xlink:href="#i-person" x="-26.0" y="-62.0" width="52" height="52"/>
+    <text class="name" y="24" text-anchor="middle">Owner</text>
+    <text class="cap" y="52" text-anchor="middle">/approve</text>
   </g>
   <polyline points="340,183 340,160 560,160 560,183" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <polyline points="792,183 824,183 824,172 1080,172 1080,183" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
@@ -296,8 +308,14 @@
   <line x1="1144" y1="524" x2="1280" y2="524" class="arrow-inc" marker-end="url(#arr-inc)"/>
   <g transform="translate(1254,496)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">5</text></g>
   <polyline points="1376,524 1438,524 1438,664 1466,664" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
-  <polyline points="1438,664 1438,844 1466,844" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
+  <polyline points="1438,664 1438,844 1294,844" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
   <g transform="translate(1438,496)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">6</text></g>
+  <polyline points="1500,690 1500,976 1476,976 1476,992" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
+  <g transform="translate(1528,833)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">7</text></g>
+  <line x1="1440" y1="1004" x2="1358" y2="1004" class="arrow-inc" marker-end="url(#arr-inc)"/>
+  <g transform="translate(1402,976)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">8</text></g>
+  <polyline points="1328,1030 1328,1132 1100,1132 1100,992" fill="none" class="arrow-inc" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr-inc)"/>
+  <g transform="translate(1070,1122)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">9</text></g>
   <polyline points="1110,498 1110,412 800,412 800,498" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6" marker-end="url(#arr)"/>
   <line x1="800" y1="628" x2="800" y2="662" class="arrow" marker-end="url(#arr)"/>
   <polyline points="552,615 648,615 648,840 420,840 420,863" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
@@ -310,5 +328,5 @@
   <polyline points="358,524 358,605 492,605" fill="none" class="arrow-thin" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <polyline points="330,739 330,730 492,730" fill="none" class="arrow-thin" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#arr)"/>
   <polyline points="330,739 330,996 910,996 910,550 826,550" fill="none" class="arrow" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6" marker-end="url(#arr)"/>
-  <line x1="36" y1="1124" x2="70" y2="1124" class="arrow-inc"/>  <text x="80" y="1130" class="legend">1–6 incident path</text>  <line x1="300" y1="1124" x2="334" y2="1124" class="arrow"/>  <text x="344" y="1130" class="legend">supporting</text>  <line x1="36" y1="1150" x2="80" y2="1150" class="arrow"/>  <line x1="88" y1="1150" x2="132" y2="1150" class="arrow" stroke-dasharray="7 6"/>  <text x="144" y="1156" class="legend">solid = data flow · dashed = query (arrow points to what's queried)</text>
+  <line x1="36" y1="1300" x2="70" y2="1300" class="arrow-inc"/>  <text x="80" y="1306" class="legend">1–6 diagnosis path</text>  <line x1="320" y1="1300" x2="354" y2="1300" class="arrow-inc"/>  <text x="364" y="1306" class="legend">7–9 remediator path</text>  <line x1="620" y1="1300" x2="654" y2="1300" class="arrow"/>  <text x="664" y="1306" class="legend">supporting</text>  <line x1="36" y1="1326" x2="80" y2="1326" class="arrow"/>  <line x1="88" y1="1326" x2="132" y2="1326" class="arrow" stroke-dasharray="7 6"/>  <text x="144" y="1332" class="legend">solid = data flow · dashed = query (arrow points to what's queried)</text>
 </svg>

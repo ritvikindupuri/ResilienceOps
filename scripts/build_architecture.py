@@ -18,6 +18,7 @@ fill #FB2B3E, with two upright white capsule eyes.
 
 from __future__ import annotations
 
+import base64
 import math
 import re
 from pathlib import Path
@@ -214,6 +215,19 @@ def _rounded_hexagon_path(radius: float = 42, corner: float = 7) -> str:
         parts.append(f"Q {cur[0]:.2f},{cur[1]:.2f} {p2[0]:.2f},{p2[1]:.2f}")
     parts.append("Z")
     return " ".join(parts)
+
+
+def remediator_avatar(x: float, y: float) -> str:
+    """Orange capsule with two white eyes — the attached remediator mark."""
+    png = (ICONS / "remediation-bot.png").read_bytes()
+    href = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    w, h = 72.0, 40.0
+    return f"""  <g transform="translate({x:.0f},{y:.0f})">
+    <image href="{href}" x="{-w / 2:.1f}" y="{-h - 8:.1f}" width="{w:.0f}" height="{h:.0f}"/>
+    <text class="name" y="36" text-anchor="middle">Incident</text>
+    <text class="name" y="64" text-anchor="middle">Remediation</text>
+    <text class="cap" y="88" text-anchor="middle">proposes a fix</text>
+  </g>"""
 
 
 def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
@@ -720,6 +734,13 @@ class Scene:
         self.text(x, y + 36, "AI Incident", NAME_PX, bold=True, anchor="middle", name="name:grok1", container=container)
         self.text(x, y + 64, "Diagnosis", NAME_PX, bold=True, anchor="middle", name="name:grok2", container=container)
 
+    def remediator_at(self, x: float, y: float, container: str = "") -> None:
+        self.add(remediator_avatar(x, y))
+        self.box(x - 36, y - 48, 72, 40, "icon:remediator", "icon", container=container)
+        self.text(x, y + 36, "Incident", NAME_PX, bold=True, anchor="middle", name="name:remediator1", container=container)
+        self.text(x, y + 64, "Remediation", NAME_PX, bold=True, anchor="middle", name="name:remediator2", container=container)
+        self.text(x, y + 88, "proposes a fix", CAP_PX, anchor="middle", name="cap:remediator", container=container)
+
     def badge(self, x: float, y: float, n: int, container: str = "") -> None:
         r = 15
         self.add(
@@ -875,7 +896,7 @@ def build() -> str:
 
 
 def build_scene() -> tuple[str, list[str]]:
-    W, H = 1600, 1224
+    W, H = 1600, 1400
     scene = Scene(W, H)
 
     # One deploy band, ≥20px below the title. Laptop icons left, AWS right.
@@ -889,12 +910,12 @@ def build_scene() -> tuple[str, list[str]]:
     drop_x = 930
     lane_ssm, lane_par, lane_s3 = 148, 160, 172
 
-    host_x, host_y, host_w, host_h = 24, 276, 1192, 820
-    bot_x, bot_y, bot_w, bot_h = 1232, 276, 344, 820
+    host_x, host_y, host_w, host_h = 24, 276, 1192, 996
+    bot_x, bot_y, bot_w, bot_h = 1232, 276, 344, 996
 
     compose_x, compose_y = 36, 356
     compose_w, compose_h = 1168, 636
-    k3s_x, k3s_y, k3s_w, k3s_h = 36, 1004, 1168, 68
+    k3s_x, k3s_y, k3s_w, k3s_h = 36, 1180, 1168, 68
 
     agents_x, agents_y, agents_w, agents_h = 48, 412, 272, 490
     red_x, red_y = 182, 560
@@ -915,12 +936,14 @@ def build_scene() -> tuple[str, list[str]]:
     tg_x, tg_y = 720, 424
 
     grok_x, grok_y = 1328, 560
-    gh_x, ping_x, gh_y, ping_y = 1500, 1500, 700, 880
+    # Ping sits under the diagnosis bot so GitHub can drop to the remediator.
+    gh_x, ping_x, gh_y, ping_y = 1500, 1328, 700, 880
 
     scene.add(f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img"
-     aria-label="How ResilienceOps plus AI Incident Diagnosis works">
+     aria-label="How ResilienceOps plus AI Incident Diagnosis and remediator bots work">
+  <desc>AI Incident Diagnosis and Incident Remediation bots</desc>
   <defs>
     <style>
       .title {{ font: 700 {TITLE_PX}px Arial, Helvetica, sans-serif; fill: #111827; }}
@@ -945,9 +968,9 @@ def build_scene() -> tuple[str, list[str]]:
 {symbols()}
   </defs>
   <rect width="{W}" height="{H}" fill="#FFFFFF"/>
-    <text x="{W / 2:.0f}" y="72" text-anchor="middle" class="title">How ResilienceOps + AI Incident Diagnosis works</text>
+    <text x="{W / 2:.0f}" y="72" text-anchor="middle" class="title">How ResilienceOps + incident bots work</text>
 ''')
-    scene.text(W / 2, 72, "How ResilienceOps + AI Incident Diagnosis works", TITLE_PX, bold=True, anchor="middle", name="title")
+    scene.text(W / 2, 72, "How ResilienceOps + incident bots work", TITLE_PX, bold=True, anchor="middle", name="title")
 
     scene.add(group(dep_x0, dep_y, dep_w, dep_h, "Deploy (optional AWS)", icon="aws-logo", style="account"))
     scene.container("deploy", dep_x0, dep_y, dep_w, dep_h)
@@ -1027,6 +1050,10 @@ def build_scene() -> tuple[str, list[str]]:
     scene.grok_at(grok_x, grok_y, "AI Incident Diagnosis", container="bot")
     scene.node_at(gh_x, gh_y, "github", "GitHub", "incident", name2="issue", name_size=22, container="bot")
     scene.node_at(ping_x, ping_y, "bell", "Owner ping", "critical", name_size=22, container="bot")
+    rem_x, rem_y = 1476, 1040
+    own_x, own_y = 1328, 1040
+    scene.remediator_at(rem_x, rem_y, container="bot")
+    scene.node_at(own_x, own_y, "person", "Owner", "/approve", name_size=22, container="bot")
 
     red_right = red_x + ICON / 2 + 4
     blue_right = blue_x + ICON / 2 + 4
@@ -1173,6 +1200,60 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(fork_bot, badge_y, 6, container="bot")
 
+    # ⑦–⑨ GitHub issue → remediator proposal → owner /approve → fix on the lab.
+    # Leave GitHub from the icon bottom (bot-gh already owns gh_ic). Stay off
+    # the Blue query floor (y=996) and the Red tick ys. Land on Compose,
+    # where remediate.py actually runs.
+    rem_top = rem_y - 48.0
+    rem_left = rem_x - 36
+    own_right = own_x + ICON / 2 + 4
+    own_ic = _ic(own_y)
+    own_bot = _icon_top(own_y) + ICON
+    gh_bot = _icon_top(gh_y) + ICON
+    rem_drop_y = rem_top - 16
+    fix_y = 1132
+    fix_up_x = 1100
+    compose_bot = compose_y + compose_h
+    scene.poly(
+        [
+            (gh_x, gh_bot),
+            (gh_x, rem_drop_y),
+            (rem_x, rem_drop_y),
+            (rem_x, rem_top),
+        ],
+        inc=True,
+        name="gh-rem",
+        src="icon:GitHub",
+        dst="icon:remediator",
+        touch=("name:remediator1", "name:remediator2", "cap:remediator"),
+    )
+    scene.badge(gh_x + 28, (gh_bot + rem_drop_y) / 2, 7, container="bot")
+    scene.arrow(
+        rem_left,
+        own_ic,
+        own_right,
+        own_ic,
+        inc=True,
+        name="rem-own",
+        src="icon:remediator",
+        dst="icon:Owner",
+        touch=("name:remediator1", "name:remediator2", "cap:remediator"),
+    )
+    scene.badge((rem_x + own_x) / 2, own_ic - 28, 8, container="bot")
+    scene.poly(
+        [
+            (own_x, own_bot),
+            (own_x, fix_y),
+            (fix_up_x, fix_y),
+            (fix_up_x, compose_bot),
+        ],
+        inc=True,
+        name="fix-lab",
+        src="icon:Owner",
+        dst="icon:order-",
+    )
+    scene.badge(fix_up_x - 30, fix_y - 10, 9, container="host")
+
     scene.poly(
         [
             (br_x, prom_top),
@@ -1308,16 +1389,19 @@ def build_scene() -> tuple[str, list[str]]:
     leg_y2 = leg_y + 26
     scene.add(
         f'  <line x1="36" y1="{leg_y}" x2="70" y2="{leg_y}" class="arrow-inc"/>'
-        f'  <text x="80" y="{leg_y + 6}" class="legend">1–6 incident path</text>'
-        f'  <line x1="300" y1="{leg_y}" x2="334" y2="{leg_y}" class="arrow"/>'
-        f'  <text x="344" y="{leg_y + 6}" class="legend">supporting</text>'
+        f'  <text x="80" y="{leg_y + 6}" class="legend">1–6 diagnosis path</text>'
+        f'  <line x1="320" y1="{leg_y}" x2="354" y2="{leg_y}" class="arrow-inc"/>'
+        f'  <text x="364" y="{leg_y + 6}" class="legend">7–9 remediator path</text>'
+        f'  <line x1="620" y1="{leg_y}" x2="654" y2="{leg_y}" class="arrow"/>'
+        f'  <text x="664" y="{leg_y + 6}" class="legend">supporting</text>'
         f'  <line x1="36" y1="{leg_y2}" x2="80" y2="{leg_y2}" class="arrow"/>'
         f'  <line x1="88" y1="{leg_y2}" x2="132" y2="{leg_y2}" class="arrow" stroke-dasharray="7 6"/>'
         f'  <text x="144" y="{leg_y2 + 6}" class="legend">'
         f"solid = data flow · dashed = query (arrow points to what's queried)</text>"
     )
-    scene.text(80, leg_y + 6, "1–6 incident path", CAP_PX, name="legend-inc")
-    scene.text(344, leg_y + 6, "supporting", CAP_PX, name="legend-sup")
+    scene.text(80, leg_y + 6, "1–6 diagnosis path", CAP_PX, name="legend-inc")
+    scene.text(364, leg_y + 6, "7–9 remediator path", CAP_PX, name="legend-rem")
+    scene.text(664, leg_y + 6, "supporting", CAP_PX, name="legend-sup")
     scene.text(
         144,
         leg_y2 + 6,

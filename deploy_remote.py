@@ -40,6 +40,7 @@ INCLUDE_PATHS = [
     "docker-compose.prom-lan.yml",
     "agents",
     "orchestrator.py",
+    "remediation",
     "requirements.txt",
     ".env.example",
     "k8s",
