@@ -106,6 +106,17 @@ def test_rollback_fails_closed_without_snapshot(tmp_path, monkeypatch):
     assert "no last-good snapshot" in (result.error or "")
 
 
+def test_http_json_wraps_connection_reset(monkeypatch):
+    from remediation import actions as actions_mod
+
+    def boom(*_a, **_k):
+        raise ConnectionResetError("peer reset")
+
+    monkeypatch.setattr(actions_mod, "urlopen", boom)
+    with pytest.raises(RemediationError, match="request failed"):
+        actions_mod._http_json("GET", "http://127.0.0.1:8001/health")
+
+
 def test_rollback_dry_run_uses_snapshot(tmp_path, monkeypatch):
     monkeypatch.setenv("REMEDIATION_STATE_DIR", str(tmp_path))
     snapshot = {

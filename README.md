@@ -1043,6 +1043,12 @@ python3 remediation/remediate.py --dry-run --action reset_fault --target both
 python3 remediation/remediate.py --action reset_fault --target order-service
 ```
 
+Local Compose end-to-end script (not run in CI; needs Docker and a healthy stack). It injects Redis starvation, parses a proposal, simulates owner `/approve`, runs `reset_fault`, and checks Prometheus. A live run is pending owner go-ahead.
+
+```bash
+python3 remediation/e2e_local.py
+```
+
 ---
 
 ## Troubleshooting

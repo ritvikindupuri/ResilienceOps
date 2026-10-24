@@ -203,8 +203,11 @@ def _http_json(method: str, url: str, timeout: float = 8.0) -> dict[str, Any]:
             status = getattr(resp, "status", 200)
     except HTTPError as exc:
         raise RemediationError(f"HTTP {exc.code} from {url}") from exc
-    except URLError as exc:
-        raise RemediationError(f"request failed: {exc.reason}") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        # ConnectionResetError while a just-restarted container is still
+        # binding is retryable; the verify loop treats RemediationError as fail.
+        reason = getattr(exc, "reason", exc)
+        raise RemediationError(f"request failed: {reason}") from exc
     try:
         body: Any = json.loads(raw) if raw else {}
     except json.JSONDecodeError:

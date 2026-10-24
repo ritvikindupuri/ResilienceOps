@@ -8,6 +8,7 @@ __pycache__/
 .terraform/
 .terraform.lock.hcl
 logs/*.jsonl
+logs/last_good_deploy.json
 *.tar.gz
 !reports/incident_20261006_010119_unknown_fault.md
 !reports/example_incident_memory_exhaustion.md

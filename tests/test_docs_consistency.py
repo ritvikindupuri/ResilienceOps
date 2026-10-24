@@ -108,6 +108,7 @@ def test_readme_referenced_scripts_exist():
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
         "remediation/remediate.py",
+        "remediation/e2e_local.py",
         ".github/workflows/remediation-approve.yml",
     ]
     for rel in required:
