@@ -145,9 +145,9 @@ def test_readme_flow_names_match_code_stages():
 def test_readme_sample_post_mortem_is_current_generator():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     sample = (ROOT / "reports" / "example_incident_memory_exhaustion.md").read_text(encoding="utf-8")
-    assert "Operating the lab on AWS" in readme
-    assert "[Installation and quick start](#installation-and-quick-start)" in readme
-    assert "[Operating the lab on AWS](#operating-the-lab-on-aws)" in readme
+    assert "AWS (optional)" in readme
+    assert "[Quick start (local)](#quick-start-local)" in readme
+    assert "[AWS (optional)](#aws-optional)" in readme
     assert "reports/example_incident_memory_exhaustion.md" in readme
     assert "pre-fix historical" in readme
     assert "# Incident Post-Mortem Report: UNKNOWN_FAULT" not in readme
