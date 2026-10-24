@@ -24,7 +24,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Memory panel threshold `256000000` while the PromQL already divides to MB | Threshold is now `256` with unit `none` (`sre-dashboard.json:293-312`) |
 | CloudWatch dashboards named `Agent-Command-Log` / `System-Fault-Metrics` as if Terraform created them | README now names helper scripts `SRE-Autonomous-Agent-Security-Audit` and `SRE-fault-Vectors-Live-Telemetry`. RESULTS.md names are a dated snapshot |
 | RBAC described as verbs `get, list, watch, pods/exec` | `pods/exec` is a **resource**. Red Role: `get/list/watch` on `pods` + `pods/exec`. Blue Role is separate (`namespace-rbac.yaml`) |
-| Figure 3 console card “Subnets (5)” | Caption: Terraform creates **three** subnets; prefer `main.tf` |
+| Figure 3 cropped to the resource-map cards | Cropped Figure 3 shows Terraform’s **three** subnets (`main.tf`) |
 | Step 4 implied host `pip install` is required for Compose | Marked “host agents / tests only” |
 | Step 7 “Equivalent curl” sat under the bridge test but posted to `:9093` | Split AM curl vs bridge curl |
 | Fault injection looked required | Step 7 + bottom cards: optional; real outages use the same Path B |
@@ -64,7 +64,7 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Target services | Column group `api-gw` / `order-service` / `payment-service`. Orange ① is the scrape out of the services group | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
 | Compose group | “Stack (Docker Compose)” wrapping Target services and observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
 | External column | Diagnosis hex and GitHub share the diagnosis row (arrow ⑤ is straight). Owner ping is above Diagnosis; Remediation is below it; Owner `/approve` and Actions sit on the bottom row | Diagnosis template `https://x.ai/bot/feQpDSeSki7HVgkDCBUaY` (no control path into the stack). Remediator template `https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5` proposes one allowlisted action. Owner `/approve` is recorded by `.github/workflows/remediation-approve.yml`. Never “Your Grok bot” |
-| Unused subnets | Footnote: `app_workloads 10.0.10.0/24 · data_persistence 10.0.20.0/24` | Created `terraform/main.tf`; instance `subnet_id` is `public_ingress` only |
+| Unused subnets | not on Figure 1 (README / this table) | Created `terraform/main.tf`; instance `subnet_id` is `public_ingress` only. CIDRs `app_workloads 10.0.10.0/24` and `data_persistence 10.0.20.0/24` |
 
 ---
 
@@ -82,13 +82,13 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 | Secrets script satellite | “Secrets script” | `scripts/put_lab_secrets.py`; not an AWS resource |
 | SG box | “ingress + internal” around the host | `aws_security_group.ingress_sg` / `internal_app_sg` |
 | IGW satellite | “public RT only”, straddling the VPC **right** border; labels in the VPC–Grok gutter | `aws_internet_gateway.igw`; public RT `0.0.0.0/0` via IGW; association **only** `public_ingress`. SG `ingress_sg` opens Grafana 3000 + API 8000 to `allowed_cidr` (SG title `:3000 / :8000`, no operator-port arrow) |
-| k3s / Red / Blue | Figure 2 only: start options “Compose profile”, “host CLI” / `python3 orchestrator.py`, “k3s (optional)”; Target services `api-gw` / `order-service` / `payment-service` (no “all 3 services” node); badges 1–4 match the README steps; “faults order + payment”, “watches and resets” | `deploy_k8s_sandbox.py`; `orchestrator.py`; `infra_disruptor.py` / `network_adversary.py`; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
-| Traffic | “Live load” | `docker-compose.yml:123-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
-| api-gw | “Gateway” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
-| order-service | “Orders” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:34`); uvicorn `:376` |
-| payment-service | “Payments” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:73`); uvicorn `:135` |
-| Redis | “order-service cache” | compose `redis:7-alpine` `docker-compose.yml:94-98` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
-| PostgreSQL | “orders_db” | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:105-112`; order-service `POSTGRES_DB` `:39` |
+| k3s / Red / Blue | Figure 2 only: start options “Compose profile”, “host CLI” / `python3 orchestrator.py`, “k3s (optional)”; Target services `api-gw` / `order-service` / `payment-service` (no “all 3 services” node); orange badge ① on How to start; orange badge ② Red → order-service and payment-service; blue badge ③ Blue → Target services group; orange badge ④ Target services → Prometheus; “faults order + payment”, “watches and resets” | `deploy_k8s_sandbox.py`; `orchestrator.py`; `infra_disruptor.py` / `network_adversary.py`; `monitor.py`; `remediator.py` always `FaultCatalog.reset_environment()` after the hold |
+| Traffic | not on Figure 1 (README only) | `docker-compose.yml:123-129` `traffic-generator`; `traffic-generator/load_generator.py:8-12` |
+| api-gw | “api-gw” | `services/api-gw/main.py`; compose port `8000:8000` (`docker-compose.yml:6`); uvicorn `:136` |
+| order-service | “order-” / “service” | `services/order-service/main.py`; compose `8001:8001` (`docker-compose.yml:34`); uvicorn `:376` |
+| payment-service | “payment-” / “service” | `services/payment-service/main.py`; compose `8002:8002` (`docker-compose.yml:73`); uvicorn `:135` |
+| Redis | not on Figure 1 (README only) | compose `redis:7-alpine` `docker-compose.yml:94-98` (`maxclients 50`); order-service `REDIS_HOST` `:25-32`, `setex` around create-order |
+| PostgreSQL | not on Figure 1 (README only) | compose `postgres:16-alpine` `POSTGRES_DB=orders_db` `docker-compose.yml:105-112`; order-service `POSTGRES_DB` `:39` |
 | Prometheus | (name only) | image `prom/prometheus:v2.52.0` `docker-compose.yml:135`; `dashboards/prometheus.yml:1-12` |
 | Alertmanager | “Alert” / “manager” | image `prom/alertmanager:v0.27.0` `docker-compose.yml:159-160`; `dashboards/alertmanager.yml:4-16` |
 | Alert forwarder | “Alert” / “forwarder” (no file/service name on the figure) | Compose service `incident-bridge`. `services/incident-bridge/app.py`; `evidence.py` PromQL + `collect_agent_activity`. Compose image has no `kubernetes` / kubeconfig. jsonl only with `--profile agents`. README names the service once at first mention (Quick start) |
@@ -105,20 +105,22 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 ## 3. Diagram arrows and pills
 
-IAM has no chain arrow (Terraform creates the role + instance profile). SG is a box, not an arrow. Numbering matches comments in `build_architecture.py`.
+IAM has no chain arrow (Terraform creates the role + instance profile). SG is a box, not an arrow. Figure 1 badges are ①–⑩ (orange diagnosis, blue remediator). Figure 2 badges ①–④ are a separate count. Request-path edges below are **not** drawn on Figure 1.
 
 | # | Arrow | Pill | Evidence |
 |---|---|---|---|
-| 1 | Terraform → VPC border (L-route just above the stroke, right of the VPC title) | (none) | Operator laptop, outside AWS. `terraform/main.tf` |
-| 1b | deploy_remote.py lands on the AWS-account **left border** (below the caption) → S3; S3 → VPC/host and SSM → VPC/host drop from the account **bottom border** | (S3 cap `deploy → host`, SSM cap `send_command`) | Zip upload `_upload_payload`; `ssm.send_command` `AWS-RunShellScript`. Drops start on the box stroke so they do not run through satellite captions or the AWS title |
-| 1c | put_lab_secrets.py → Param Store | (satellite cap `secrets → .env`) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
-| 2 | Traffic → api-gw | `requests` | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:127` |
-| 3 | api-gw → order-service | `/api/orders` | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
-| 4 | order-service → payment-service | `POST /payments` | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
-| 5 | api-gw → payment-service U-turn | `/api/payments` | `api-gw/main.py:113-132`; generator `/api/payments/payments` `load_generator.py:78` |
-| 6–7 | order-service → Redis / Postgres | (none; fork from order-service) | Redis `setex` and Postgres INSERT in `order-service/main.py` create-order path; compose env `REDIS_HOST=redis`, `POSTGRES_DB=orders_db` |
-| (unnumbered, grey; Figure 2) | Red Team → order-service **and** payment-service | (none; not ①) | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic |
-| (unnumbered, blue; Figure 2) | Blue Team → Target services group (not a fake “all 3 services” node) | badge ③ | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:125-128` POSTs `/fault/reset` on **order-service and payment-service only** |
+| (omitted from Figure 1) | Terraform → VPC border (prior figure) | (none) | Operator laptop, outside AWS. `terraform/main.tf`. Current Figure 1: grey Terraform → EC2, then a straight grey vertical into the host |
+| (omitted from Figure 1) | deploy_remote.py → S3 / SSM (prior figure) | (none) | Zip upload `_upload_payload`; `ssm.send_command` `AWS-RunShellScript`. Not drawn on the current figure |
+| (omitted from Figure 1) | put_lab_secrets.py → Param Store | (none) | `scripts/put_lab_secrets.py` SecureString; host `GetParameter` in `build_host_env_script`. Empty values stored as `__EMPTY__` |
+| (omitted from Figure 1) | Traffic → api-gw | (none) | `load_generator.py:40`, `:58`, `:78`; compose `GATEWAY_URL=http://api-gw:8000` `docker-compose.yml:127` |
+| (omitted from Figure 1) | api-gw → order-service | (none) | `api-gw/main.py:92-111` strips prefix and proxies to `ORDER_SERVICE_URL`; generator POSTs `/api/orders/orders` `load_generator.py:58` |
+| (omitted from Figure 1) | order-service → payment-service | (none) | `order-service/main.py:250` `POST {PAYMENT_SERVICE_URL}/payments` |
+| (omitted from Figure 1) | api-gw → payment-service | (none) | `api-gw/main.py:113-132`; generator `/api/payments/payments` `load_generator.py:78` |
+| (omitted from Figure 1) | order-service → Redis / Postgres | (none) | Redis `setex` and Postgres INSERT in `order-service/main.py` create-order path; compose env `REDIS_HOST=redis`, `POSTGRES_DB=orders_db` |
+| ② (orange; Figure 2) | Red Team → order-service **and** payment-service | badge ② | Infra faults hit order-service (`infra_disruptor.py:40-47`, catalog `/fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`). Network faults hit payment-service (`fault_catalog.py:45-80` `/fault/latency`, `/fault/drop-rate` on `eth0`). **Not** Traffic |
+| ③ (blue; Figure 2) | Blue Team → Target services group | badge ③ | `GET /health` on api-gw (4s), order, payment: `monitor.py:52-95`. Reset: `fault_catalog.py:125-128` POSTs `/fault/reset` on **order-service and payment-service only** |
+| ① (orange; Figure 2) | How to start | badge ① on the “How to start” group label | Compose profile, host CLI (`python3 orchestrator.py`), or k3s |
+| ④ (orange; Figure 2) | Target services → Prometheus | badge ④ | Continues on the diagnosis path (`orchestrator.py` hold, then Path B) |
 | ① | Services group → Prometheus (scrape) | badge ① | `prometheus.yml:22-33` jobs `api-gw:8000`, `order-service:8001`, `payment-service:8002`; scrape `1s`. Orange pull into Prometheus |
 | ② | Prometheus → Alertmanager | badge ② | `prometheus.yml` `alertmanager:9093`; rules `dashboards/alerts.yml` |
 | ③ | Alertmanager → Alert forwarder | badge ③ | `alertmanager.yml:14-16` `http://incident-bridge:8080/webhook` `send_resolved: true` |
@@ -199,7 +201,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Host `.env` from Parameter Store SecureString, not SendCommand | `scripts/put_lab_secrets.py`; `deploy_remote.py` `build_host_env_script` (`get-parameter --with-decryption`) |
 | No NAT Gateway / no EKS in this Terraform | No `aws_nat_gateway` / `aws_eks_cluster` resources in `terraform/main.tf` |
 | CloudWatch **log groups** + audit **stream** are Terraform; **dashboards** are not | Groups + `aws_cloudwatch_log_stream.audit` name `audit-stream` in `terraform/main.tf`. Logger `structured_logger.py` `CreateLogStream` if missing then `PutLogEvents`. Compose `agent-sandbox` gets `AWS_REGION`. Host inline `logs:CreateLogStream`/`PutLogEvents`. Helpers `create_cw_dashboard.py` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py` name `SRE-fault-Vectors-Live-Telemetry` |
-| Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`, cropped to the resource-map cards (VPC / subnets / route tables / IGW) so labels stay readable at README width. Console “Subnets (5)” ≠ Terraform’s 3 subnets — prefer `main.tf` |
+| Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`, cropped to the resource-map cards (VPC / subnets / route tables / IGW) so labels stay readable at README width. Shows Terraform’s 3 subnets. |
 
 ---
 
@@ -267,13 +269,13 @@ Env-var inventory: every `os.getenv` / `_env_int` / `_env_float` name is in `.en
 |---|---|
 | Unused subnets are a caption, not empty boxes | Avoids blank green rectangles; CIDRs are on the VPC title row (not the `public_ingress` header) |
 | IAM has no arrow | Terraform creates the role + instance profile; drawing Terraform→IAM would cross the account strip |
-| One Red flyover + `faults` pill | Covers four order-service `/fault/*` plus two payment-service `tc netem` endpoints without six arrows |
-| Prometheus node has no caption | Space under the observability row is Grafana; scrape/rule detail is the `3 scrape jobs` / `alerts` pills |
-| One scrape edge + `3 scrape jobs` | Three Prometheus jobs share one merge bar under the service captions, then one gutter drop into Prometheus. Separate from Blue’s health/reset bus |
+| Two Red forks on Figure 2 (orange badge ②); no `faults` pill | Covers four order-service `/fault/*` plus two payment-service `tc netem` endpoints without six arrows |
+| Prometheus node has no caption | Space under the observability row is Grafana; scrape detail is orange badge ① on Figure 1 |
+| One scrape edge (Figure 1 badge ①) | Three Prometheus jobs share one orange edge out of the services group. Separate from Figure 2’s Blue arrow (badge ③) onto the Target services group |
 | Grok `incident` label, duplicate-comment, owner ping | Implemented by the **imported** Grok template, not this repository. Samples #4/#5 show the behavior |
 | “Eliminates NAT ($32/mo) / EKS ($72/mo)” | Cost comparison: those resources are not in `main.tf`. Not a bill guarantee |
 | Teardown “under 60 seconds” / “100% protected” host daemons | Timing and absolute guarantees are not asserted by tests |
-| Figure 3 AWS console screenshot | Dated live capture; subnet count in the console chrome may not match Terraform |
+| Figure 3 AWS console screenshot | Dated live capture; shows Terraform's 3 subnets. |
 
 ---
 
