@@ -26,16 +26,25 @@ export AWS_REGION="$REGION"
 export AWS_DEFAULT_REGION="$REGION"
 
 echo ""
-echo "[1/3] Checking current Terraform state..."
+echo "[1/4] Checking current Terraform state..."
 if [ -z "$(terraform state list 2>/dev/null || true)" ]; then
-    echo "[INFO] No active Terraform resources found. Zero charges running."
-    exit 0
+    echo "[INFO] No active Terraform resources found."
+else
+    echo "[2/4] Destroying Terraform resources (EC2, VPC, S3 deploy bucket, log groups, IAM)..."
+    terraform destroy -auto-approve
 fi
 
-echo "[2/3] Destroying Terraform resources (EC2, VPC, S3 deploy bucket, log groups, IAM)..."
-terraform destroy -auto-approve
+echo "[3/4] Deleting SSM parameters under /resilienceops (not in Terraform state)..."
+PARAM_NAMES="$(aws ssm get-parameters-by-path --path /resilienceops --recursive \
+  --query 'Parameters[].Name' --output text --region "$REGION" 2>/dev/null || true)"
+if [ -z "${PARAM_NAMES//[[:space:]]/}" ]; then
+    echo "(no /resilienceops parameters)"
+else
+    # delete-parameters accepts at most 10 names.
+    echo "$PARAM_NAMES" | tr '\t' '\n' | sed '/^$/d' | xargs -n 10 aws ssm delete-parameters --region "$REGION" --names
+fi
 
-echo "[3/3] Verification (expect terminated / empty)..."
+echo "[4/4] Verification (expect terminated / empty)..."
 aws ec2 describe-instances --region "$REGION" \
   --filters "Name=tag:Name,Values=sre-enterprise-platform-host" \
   --query "Reservations[].Instances[].{id:InstanceId,state:State.Name}" --output table || true
@@ -43,7 +52,6 @@ aws s3 ls --region "$REGION" | grep sre-resilienceops-deploy || echo "(no deploy
 aws logs describe-log-groups --region "$REGION" \
   --log-group-name-prefix "/sre/autonomous-agent" \
   --query "logGroups[].logGroupName" --output text || true
-echo "SSM parameters under /resilienceops are not in Terraform state; delete them if you do not want them reused."
 echo "If you attached the operator managed policy, detach and delete it from an admin login:"
 echo "  ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text --region \"\$AWS_REGION\")"
 echo "  POLICY_ARN=\"arn:aws:iam::\${ACCOUNT_ID}:policy/ResilienceOpsDeployer\""

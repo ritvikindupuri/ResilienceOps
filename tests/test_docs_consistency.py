@@ -134,6 +134,9 @@ def test_readme_referenced_scripts_exist():
         "remediation/remediate.py",
         "remediation/e2e_local.py",
         ".github/workflows/remediation-approve.yml",
+        "create_cw_dashboard.py",
+        "test_grafana_proxy.py",
+        ".github/workflows/ci.yml",
     ]
     for rel in required:
         assert (ROOT / rel).is_file(), rel
@@ -320,6 +323,26 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "bounces the container" not in readme
     assert "MTTD: 2.14s" not in readme
     assert "MTTR: 3.42s" not in readme
+    assert "http://127.0.0.1:3000" in readme
+    assert "http://127.0.0.1:9093" in readme
+    assert "/api/orders/orders" in readme
+    assert "### Faults you can inject" in readme
+    assert "### Helper scripts" in readme
+    assert "python3 -m pytest -q" in readme
+    assert "AWS-StartPortForwardingSession" in readme
+    assert "--proposal-file" in readme
+    assert "--alertmanager-url" in readme
+    assert "--skip-copy" in readme
+    assert "127.0.0.1:6379" in readme
+    assert "delete-parameters" in readme
+    assert not (ROOT / "dashboards" / "cloudwatch-dashboard.json").exists()
+    assert not (ROOT / "push_dashboard.py").exists()
+    assert not (ROOT / "arena_runner.py").exists()
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert '"127.0.0.1:6379:6379"' in compose
+    assert '"127.0.0.1:5432:5432"' in compose
+    assert '"6379:6379"' not in compose
+    assert '"5432:5432"' not in compose
 
 
 def test_live_run_artifacts_redact_webhook_url():

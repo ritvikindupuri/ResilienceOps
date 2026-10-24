@@ -422,3 +422,5 @@ def test_teardown_detaches_managed_policy():
         assert "delete-policy" in text
         assert "delete-user-policy" not in text
         assert "ResilienceOpsDeployer" in text
+        assert "delete-parameters" in text
+        assert "/resilienceops" in text

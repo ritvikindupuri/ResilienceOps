@@ -13,13 +13,13 @@ LOGS_DIR = os.getenv("LOGS_DIR", "logs")
 SLO_MAX_P99_LATENCY_MS = float(os.getenv("SLO_MAX_P99_LATENCY_MS", "1200.0"))
 SLO_MAX_ERROR_RATE_PERCENT = float(os.getenv("SLO_MAX_ERROR_RATE_PERCENT", "2.0"))
 
-# AWS / CloudWatch (imported by arena_runner, defender, attacker, cw_logger)
+# AWS / CloudWatch (imported by defender, attacker, cw_logger)
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 CW_LOG_GROUP_ATTACKER = os.getenv("CW_LOG_GROUP_ATTACKER", "/sre/autonomous-agent-audit")
 CW_LOG_GROUP_DEFENDER = os.getenv("CW_LOG_GROUP_DEFENDER", "/sre/autonomous-agent-audit")
 CW_LOG_GROUP_INCIDENTS = os.getenv("CW_LOG_GROUP_INCIDENTS", "/sre/autonomous-agent-incidents")
 
-# Optional / unused-by-default providers kept so arena_runner imports succeed
+# Optional / unused-by-default providers
 AI_PROVIDER = os.getenv("AI_PROVIDER", "anthropic")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
