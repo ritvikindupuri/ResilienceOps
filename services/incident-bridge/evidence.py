@@ -87,11 +87,17 @@ def redact_secrets(value: Any) -> Any:
     return value
 
 
+import math
+
 def _to_float(raw: Any) -> Optional[float]:
     try:
-        return float(raw)
+        val = float(raw)
+        if math.isnan(val) or math.isinf(val):
+            return None
+        return val
     except (TypeError, ValueError):
         return None
+
 
 
 def summarize_matrix(result: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
