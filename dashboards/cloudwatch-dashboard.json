@@ -8,9 +8,9 @@
       "height": 6,
       "properties": {
         "metrics": [
-          [ "SREColosseum/Agents", "AttackCount", { "label": "Red Team Attacks", "color": "#d62728" } ],
-          [ "SREColosseum/Agents", "IncidentCount", { "label": "Incidents Declared", "color": "#ff7f0e" } ],
-          [ "SREColosseum/Agents", "RemediationCount", { "label": "Blue Team Remediations", "color": "#2ca02c" } ]
+          [ "ResilienceOps/Agents", "AttackCount", { "label": "Red Team Attacks", "color": "#d62728" } ],
+          [ "ResilienceOps/Agents", "IncidentCount", { "label": "Incidents Declared", "color": "#ff7f0e" } ],
+          [ "ResilienceOps/Agents", "RemediationCount", { "label": "Blue Team Remediations", "color": "#2ca02c" } ]
         ],
         "view": "timeSeries",
         "stacked": false,

@@ -15,7 +15,7 @@ from agents.defender.post_mortem import PostMortemGenerator
 
 def run_battle_round(round_num: int, vector_override: str = None):
     print("\n" + "="*80)
-    print(f">> SRE COLOSSEUM: ARENA BATTLE ROUND #{round_num} STARTING <<")
+    print(f">> RESILIENCEOPS: ARENA BATTLE ROUND #{round_num} STARTING <<")
     print("="*80)
 
     attacker = RedTeamAttackerAgent()
@@ -85,7 +85,7 @@ def run_battle_round(round_num: int, vector_override: str = None):
     print("="*80 + "\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="SRE Colosseum Live Arena Runner")
+    parser = argparse.ArgumentParser(description="ResilienceOps Live Arena Runner")
     parser.add_argument("--rounds", type=int, default=3, help="Number of battle rounds to execute")
     parser.add_argument("--vector", type=str, default=None, help="Force specific fault vector (e.g. MEMORY_LEAK_OOM, CASCADING_NETWORK_LATENCY)")
     parser.add_argument("--delay", type=int, default=5, help="Seconds to wait between rounds")

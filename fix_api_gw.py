@@ -6,7 +6,7 @@ INSTANCE_ID = require_ec2_instance_id()
 
 ssm = boto3.client("ssm", region_name=AWS_REGION)
 cmd_script = [
-    "cd /opt/sre-colosseum",
+    "cd /opt/resilienceops",
     "python3 -c \"content = open('services/api-gw/main.py').read().replace('from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST', 'from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST'); open('services/api-gw/main.py', 'w').write(content)\"",
     "docker-compose build --no-cache api-gw",
     "docker-compose up -d api-gw",

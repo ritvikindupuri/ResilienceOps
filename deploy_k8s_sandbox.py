@@ -28,7 +28,7 @@ def sandbox_host_script(*, apply_microservices: bool, skip_copy: bool) -> str:
     if apply_microservices:
         micro = """
 echo '[warn] applying k8s/apps/microservices.yaml (images sre-arena/* must already exist on the node)'
-k3s kubectl apply -f /opt/sre-colosseum/k8s/apps/microservices.yaml
+k3s kubectl apply -f /opt/resilienceops/k8s/apps/microservices.yaml
 """
     copy = ""
     if not skip_copy:
@@ -36,13 +36,13 @@ k3s kubectl apply -f /opt/sre-colosseum/k8s/apps/microservices.yaml
 POD=$(k3s kubectl get pod -n sre-agent-sandbox -l agent.role=red-team-fault -o jsonpath='{.items[0].metadata.name}')
 echo "sandbox pod=$POD"
 k3s kubectl exec -n sre-agent-sandbox "$POD" -- mkdir -p /app/reports /app/agents
-k3s kubectl cp /opt/sre-colosseum/agents "sre-agent-sandbox/${POD}:/app/agents"
-k3s kubectl cp /opt/sre-colosseum/orchestrator.py "sre-agent-sandbox/${POD}:/app/orchestrator.py"
-if [ -d /opt/sre-colosseum/reports ]; then
-  k3s kubectl cp /opt/sre-colosseum/reports "sre-agent-sandbox/${POD}:/app/reports"
+k3s kubectl cp /opt/resilienceops/agents "sre-agent-sandbox/${POD}:/app/agents"
+k3s kubectl cp /opt/resilienceops/orchestrator.py "sre-agent-sandbox/${POD}:/app/orchestrator.py"
+if [ -d /opt/resilienceops/reports ]; then
+  k3s kubectl cp /opt/resilienceops/reports "sre-agent-sandbox/${POD}:/app/reports"
 fi
-if [ -f /opt/sre-colosseum/requirements.txt ]; then
-  k3s kubectl cp /opt/sre-colosseum/requirements.txt "sre-agent-sandbox/${POD}:/app/requirements.txt"
+if [ -f /opt/resilienceops/requirements.txt ]; then
+  k3s kubectl cp /opt/resilienceops/requirements.txt "sre-agent-sandbox/${POD}:/app/requirements.txt"
   k3s kubectl exec -n sre-agent-sandbox "$POD" -- pip install -r /app/requirements.txt python-dotenv || \
     k3s kubectl exec -n sre-agent-sandbox "$POD" -- pip install httpx pydantic python-dotenv kubernetes anthropic prometheus-client
 else
@@ -55,10 +55,10 @@ echo "  (pod workingDir is /app; orchestrator.py is copied there)"
 """
     return f"""
 set -euo pipefail
-test -f /opt/sre-colosseum/k8s/base/namespace-rbac.yaml
-test -f /opt/sre-colosseum/k8s/agents/agent-sandbox.yaml
-k3s kubectl apply -f /opt/sre-colosseum/k8s/base/namespace-rbac.yaml
-k3s kubectl apply -f /opt/sre-colosseum/k8s/agents/agent-sandbox.yaml
+test -f /opt/resilienceops/k8s/base/namespace-rbac.yaml
+test -f /opt/resilienceops/k8s/agents/agent-sandbox.yaml
+k3s kubectl apply -f /opt/resilienceops/k8s/base/namespace-rbac.yaml
+k3s kubectl apply -f /opt/resilienceops/k8s/agents/agent-sandbox.yaml
 {micro}
 TOKEN=$(curl -sS -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')
 PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
@@ -72,26 +72,26 @@ k3s kubectl set env deployment/red-team-sandbox -n sre-agent-sandbox \
 # Compose publishes Prometheus on 127.0.0.1:9090. Also bind the private IP
 # so this pod can query http://$PRIVATE_IP:9090. Never 0.0.0.0; ingress_sg
 # does not open 9090 (same-host k3s is local delivery).
-if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
+if [ -f /opt/resilienceops/docker-compose.prom-lan.yml ]; then
   case "$PRIVATE_IP" in
     ''|0.0.0.0|127.*) echo "[warn] skipping Prometheus LAN bind for '$PRIVATE_IP'" ;;
     *)
-      if grep -q '^PROMETHEUS_BIND=' /opt/sre-colosseum/.env 2>/dev/null; then
-        sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
+      if grep -q '^PROMETHEUS_BIND=' /opt/resilienceops/.env 2>/dev/null; then
+        sed -i '/^PROMETHEUS_BIND=/d' /opt/resilienceops/.env
       fi
-      printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
-      if grep -q '^COMPOSE_FILE=' /opt/sre-colosseum/.env 2>/dev/null; then
-        sed -i '/^COMPOSE_FILE=/d' /opt/sre-colosseum/.env
+      printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/resilienceops/.env
+      if grep -q '^COMPOSE_FILE=' /opt/resilienceops/.env 2>/dev/null; then
+        sed -i '/^COMPOSE_FILE=/d' /opt/resilienceops/.env
       fi
-      printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/sre-colosseum/.env
-      (cd /opt/sre-colosseum && docker compose up -d prometheus)
+      printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/resilienceops/.env
+      (cd /opt/resilienceops && docker compose up -d prometheus)
       echo "[ok] Prometheus also published on $PRIVATE_IP:9090 for k3s"
       ;;
   esac
 fi
-if [ -f /opt/sre-colosseum/.env ] && grep -q '^ANTHROPIC_API_KEY=.\\+' /opt/sre-colosseum/.env; then
+if [ -f /opt/resilienceops/.env ] && grep -q '^ANTHROPIC_API_KEY=.\\+' /opt/resilienceops/.env; then
   umask 077
-  grep '^ANTHROPIC_API_KEY=' /opt/sre-colosseum/.env > /tmp/sandbox-anthropic.env
+  grep '^ANTHROPIC_API_KEY=' /opt/resilienceops/.env > /tmp/sandbox-anthropic.env
   k3s kubectl create secret generic sandbox-anthropic -n sre-agent-sandbox \
     --from-env-file=/tmp/sandbox-anthropic.env --dry-run=client -o yaml | k3s kubectl apply -f -
   rm -f /tmp/sandbox-anthropic.env

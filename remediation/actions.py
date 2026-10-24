@@ -268,7 +268,7 @@ def _compose_project() -> str:
     raw = (os.getenv("COMPOSE_PROJECT_NAME") or "").strip()
     if raw and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", raw):
         return raw.lower()
-    # Compose project names keep [a-z0-9_-] (hyphens stay: sre-colosseum).
+    # Compose project names keep [a-z0-9_-] (hyphens stay: my-app).
     cleaned = re.sub(r"[^a-z0-9_-]+", "", REPO_ROOT.name.lower())
     cleaned = re.sub(r"^[^a-z0-9]+", "", cleaned)
     return cleaned or "resilienceops"

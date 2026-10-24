@@ -3,7 +3,7 @@
 The zip is uploaded to the Terraform deploy bucket so SSM SendCommand stays
 under the 100 KB document limit. Secrets never go in the zip or in SendCommand
 history: the instance reads SSM Parameter Store SecureStrings with its instance
-role and writes /opt/sre-colosseum/.env.
+role and writes /opt/resilienceops/.env.
 
 Usage (from the repo root, after terraform apply):
 
@@ -205,7 +205,7 @@ def send_and_wait(
 
 
 def build_host_env_script(prefix: str, region: str) -> str:
-    """Shell that writes /opt/sre-colosseum/.env from Parameter Store.
+    """Shell that writes /opt/resilienceops/.env from Parameter Store.
 
     Parameter *names* appear in SendCommand history. Values are read on the
     host via the instance role and are never interpolated into this script.
@@ -215,8 +215,8 @@ def build_host_env_script(prefix: str, region: str) -> str:
     return f"""
 PREFIX='{prefix}'
 REGION='{region}'
-ENV_FILE=/opt/sre-colosseum/.env
-mkdir -p /opt/sre-colosseum
+ENV_FILE=/opt/resilienceops/.env
+mkdir -p /opt/resilienceops
 umask 077
 : > "$ENV_FILE"
 for KEY in {keys}; do
@@ -283,17 +283,17 @@ case "$PRIVATE_IP" in
     COMPOSE_FILES='-f docker-compose.yml'
     ;;
   *)
-    if grep -q '^PROMETHEUS_BIND=' /opt/sre-colosseum/.env 2>/dev/null; then
-      sed -i '/^PROMETHEUS_BIND=/d' /opt/sre-colosseum/.env
+    if grep -q '^PROMETHEUS_BIND=' /opt/resilienceops/.env 2>/dev/null; then
+      sed -i '/^PROMETHEUS_BIND=/d' /opt/resilienceops/.env
     fi
-    printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/sre-colosseum/.env
-    if grep -q '^COMPOSE_FILE=' /opt/sre-colosseum/.env 2>/dev/null; then
-      sed -i '/^COMPOSE_FILE=/d' /opt/sre-colosseum/.env
+    printf 'PROMETHEUS_BIND=%s\n' "$PRIVATE_IP" >> /opt/resilienceops/.env
+    if grep -q '^COMPOSE_FILE=' /opt/resilienceops/.env 2>/dev/null; then
+      sed -i '/^COMPOSE_FILE=/d' /opt/resilienceops/.env
     fi
-    printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/sre-colosseum/.env
+    printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml\n' >> /opt/resilienceops/.env
     export COMPOSE_FILE=docker-compose.yml:docker-compose.prom-lan.yml
     echo "[ok] PROMETHEUS_BIND=$PRIVATE_IP COMPOSE_FILE=$COMPOSE_FILE"
-    if [ -f /opt/sre-colosseum/docker-compose.prom-lan.yml ]; then
+    if [ -f /opt/resilienceops/docker-compose.prom-lan.yml ]; then
       COMPOSE_FILES='-f docker-compose.yml -f docker-compose.prom-lan.yml'
     else
       COMPOSE_FILES='-f docker-compose.yml'
@@ -306,7 +306,7 @@ export COMPOSE_FILES
 
 def _compose_up_commands(with_agents: bool) -> list[str]:
     commands = [
-        "cd /opt/sre-colosseum",
+        "cd /opt/resilienceops",
         "docker compose version",
         _prometheus_lan_bind_script().strip(),
         'docker compose ${COMPOSE_FILES:- -f docker-compose.yml} up --build -d',
@@ -355,14 +355,14 @@ def main(argv: list[str] | None = None) -> int:
         "set -euo pipefail",
         "export AWS_DEFAULT_REGION=" + region,
         "cloud-init status --wait || true",
-        "mkdir -p /opt/sre-colosseum",
-        "cd /opt/sre-colosseum",
+        "mkdir -p /opt/resilienceops",
+        "cd /opt/resilienceops",
         build_host_env_script(prefix, region).strip(),
         # Presigned URL is fetched on the host; the zip has no secrets.
-        f"curl -fsSL -o /opt/sre-colosseum/deploy_payload.zip '{url}'",
+        f"curl -fsSL -o /opt/resilienceops/deploy_payload.zip '{url}'",
         "command -v unzip >/dev/null || apt-get install -y unzip",
-        "unzip -o /opt/sre-colosseum/deploy_payload.zip -d /opt/sre-colosseum",
-        "test -d /opt/sre-colosseum/reports || mkdir -p /opt/sre-colosseum/reports",
+        "unzip -o /opt/resilienceops/deploy_payload.zip -d /opt/resilienceops",
+        "test -d /opt/resilienceops/reports || mkdir -p /opt/resilienceops/reports",
         *_compose_up_commands(with_agents),
     ]
     send_and_wait(

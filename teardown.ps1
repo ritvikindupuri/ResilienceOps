@@ -1,9 +1,9 @@
-# Cross-platform AWS Teardown Script for SRE Colosseum
+# Cross-platform AWS Teardown Script for ResilienceOps
 # Destroys Terraform-managed AWS resources to prevent ongoing charges.
 
 $ErrorActionPreference = "Stop"
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "   SRE COLOSSEUM - AWS CLEAN INFRASTRUCTURE TEARDOWN" -ForegroundColor Cyan
+Write-Host "   RESILIENCEOPS - AWS CLEAN INFRASTRUCTURE TEARDOWN" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path

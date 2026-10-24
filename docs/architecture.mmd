@@ -4,29 +4,21 @@ flowchart LR
   subgraph aws ["Deploy (optional AWS)"]
     TF
   end
-  subgraph host ["EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16 · Grafana and API ports from your IP"]
+  subgraph host ["EC2 host · 10.0.1.0/24 · 10.0.0.0/16 · Grafana and API ports from your IP"]
     subgraph compose ["Stack (Docker Compose)"]
-      subgraph agents ["Agents · --profile agents"]
-        RED[Red Team]
-        BLUE[Blue Team]
-      end
       GW[api-gw]
       OS[order-service]
       PS[payment-service]
       PROM[Prometheus]
       GRAF[Grafana]
       AM[Alertmanager]
-      BR["incident-bridge"]
+      BR["Alert forwarder"]
       GW -.-> PROM
       OS -.-> PROM
       PS -.-> PROM
       PROM --> GRAF
       PROM --> AM
       AM --> BR
-      BR -.-> PROM
-    end
-    subgraph k3sopt ["k3s sandbox (optional)"]
-      K3S["agents in one sandbox pod"]
     end
     POLL["host poller"]
   end
@@ -44,9 +36,6 @@ flowchart LR
     OWN --> ACT
   end
   TF --> host
-  RED --> OS
-  RED --> PS
-  BLUE --> GW
   BR --> BOT
   ACT --> POLL
   POLL --> GW

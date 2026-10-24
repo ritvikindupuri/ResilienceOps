@@ -62,7 +62,7 @@ def _via_ssm(argv: list[str]) -> int:
     # Reconstruct a safe argv (already allowlisted tokens only).
     remote = [
         "set -euo pipefail",
-        "cd /opt/sre-colosseum",
+        "cd /opt/resilienceops",
         "python3 remediation/remediate.py " + shlex.join(argv),
     ]
     ssm = boto3.client("ssm", region_name=region)

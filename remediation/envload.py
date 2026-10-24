@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EC2_ENV = Path("/opt/sre-colosseum/.env")
+EC2_ENV = Path("/opt/resilienceops/.env")
 
 
 def _try_parse_dotenv(path: Path) -> dict[str, str] | None:
@@ -42,7 +42,7 @@ def load_remediation_env(
 ) -> list[str]:
     """Read repo `.env`, then the EC2 host `.env`. Existing env wins.
 
-    Unreadable paths (PermissionError / OSError on `/opt/sre-colosseum/.env`)
+    Unreadable paths (PermissionError / OSError on `/opt/resilienceops/.env`)
     are skipped with no output so a non-root poller cannot leak secrets.
     """
     candidates = [(root or REPO_ROOT) / ".env", EC2_ENV]

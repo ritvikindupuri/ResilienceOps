@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ICONS = ROOT / "docs" / "icons"
 OUT = ROOT / "docs" / "architecture.svg"
+SANDBOX_OUT = ROOT / "docs" / "sandbox_architecture.svg"
 
 GROK_RED = "#FB2B3E"  # rgb(251, 43, 62) — actual bot fill
 INC_ORANGE = "#EA580C"
@@ -422,17 +423,14 @@ def remediator_avatar(x: float, y: float) -> str:
       <rect x="-18" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
       <rect x="10" y="-14" width="8" height="18" rx="4" fill="#FFFFFF"/>
     </g>
-    <text class="name" y="36" text-anchor="middle">Incident</text>
-    <text class="name" y="64" text-anchor="middle">Remediation</text>
-    <text class="cap" y="88" text-anchor="middle">proposes a fix</text>
+    <text class="name" y="40" text-anchor="middle">Incident</text>
+    <text class="name" y="68" text-anchor="middle">Remediation</text>
   </g>"""
 
 
 def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
+    """Red tilted hex, two white capsule eyes — the diagnosis mark."""
     path = _rounded_hexagon_path()
-    cap_svg = (
-        f'    <text class="cap" y="70" text-anchor="middle">{cap}</text>\n' if cap else ""
-    )
     return f"""  <g transform="translate({x:.0f},{y:.0f})">
     <title>AI Incident Diagnosis</title>
     <g transform="translate(0,-32) rotate(23)">
@@ -440,9 +438,9 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
       <rect x="-11" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
       <rect x="5" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
-    <text class="name" y="36" text-anchor="middle">AI Incident</text>
-    <text class="name" y="64" text-anchor="middle">Diagnosis</text>
-{cap_svg}  </g>"""
+    <text class="name" x="-58" y="40" text-anchor="end">AI Incident</text>
+    <text class="name" x="-58" y="68" text-anchor="end">Diagnosis</text>
+  </g>"""
 
 
 def group(
@@ -973,15 +971,26 @@ class Scene:
     def grok_at(self, x: float, y: float, name: str, container: str = "") -> None:
         self.add(grok_avatar(x, y, name, ""))
         self.box(x - 48, y - 80, 96, 96, "icon:grok", "icon", container=container)
-        self.text(x, y + 36, "AI Incident", NAME_PX, bold=True, anchor="middle", name="name:grok1", container=container)
-        self.text(x, y + 64, "Diagnosis", NAME_PX, bold=True, anchor="middle", name="name:grok2", container=container)
+        self.text(
+            x - 58, y + 40, "AI Incident", NAME_PX, bold=True, anchor="end",
+            name="name:grok1", container=container,
+        )
+        self.text(
+            x - 58, y + 68, "Diagnosis", NAME_PX, bold=True, anchor="end",
+            name="name:grok2", container=container,
+        )
 
     def remediator_at(self, x: float, y: float, container: str = "") -> None:
         self.add(remediator_avatar(x, y))
         self.box(x - 60, y - 88, 120, 90, "icon:remediator", "icon", container=container)
-        self.text(x, y + 36, "Incident", NAME_PX, bold=True, anchor="middle", name="name:remediator1", container=container)
-        self.text(x, y + 64, "Remediation", NAME_PX, bold=True, anchor="middle", name="name:remediator2", container=container)
-        self.text(x, y + 88, "proposes a fix", CAP_PX, anchor="middle", name="cap:remediator", container=container)
+        self.text(
+            x, y + 40, "Incident", NAME_PX, bold=True, anchor="middle",
+            name="name:remediator1", container=container,
+        )
+        self.text(
+            x, y + 68, "Remediation", NAME_PX, bold=True, anchor="middle",
+            name="name:remediator2", container=container,
+        )
 
     def badge(self, x: float, y: float, n: int, container: str = "", rem: bool = False) -> None:
         r = 15
@@ -1059,6 +1068,7 @@ class Scene:
             "group:compose",
             "group:bot",
             "group:k3s",
+            "group:start",
         }
         solid_groups = {"group:agents", "group:services"}
         for s in self.segments:
@@ -1142,49 +1152,43 @@ def build() -> str:
 
 def build_scene() -> tuple[str, list[str]]:
     # Cropped canvas: content fills the frame so 24px captions read ~15px at README width.
-    W, H = 1480, 1380
+    # Agents / k3s live on the sandbox figure. This page is the alert + fix path.
+    W, H = 1480, 1280
     scene = Scene(W, H)
 
-    dep_x0, dep_y, dep_w, dep_h = 32, 98, 1416, 204
-    tf_x, ec2_x, dep_node_y = 500, 880, 226
-    drop_x = 880
+    dep_x0, dep_y, dep_w, dep_h = 32, 88, 1416, 176
+    tf_x, ec2_x, dep_node_y = 500, 760, 206
+    drop_x = 760
 
-    host_x, host_y, host_w, host_h = 32, 318, 1056, 890
-    bot_x, bot_y, bot_w, bot_h = 1112, 318, 336, 948
+    host_x, host_y, host_w, host_h = 32, 284, 852, 820
+    bot_x, bot_y, bot_w, bot_h = 908, 284, 540, 820
 
-    compose_x, compose_y, compose_w, compose_h = 48, 402, 1024, 536
-    k3s_x, k3s_y, k3s_w, k3s_h = 48, 1090, 490, 72
+    compose_x, compose_y, compose_w, compose_h = 48, 364, 820, 540
 
-    agents_x, agents_y, agents_w, agents_h = 62, 466, 250, 456
-    red_x, red_y = 187, 586
-    blue_x, blue_y = 187, 846
+    svc_x, svc_y, svc_w, svc_h = 64, 428, 196, 472
+    svc_cx = 162
+    gw_y, os_y, ps_y = 568, 690, 832
 
-    svc_x, svc_y, svc_w, svc_h = 336, 466, 214, 456
-    svc_cx = 443
-    gw_y, os_y, ps_y = 586, 716, 846
+    # Evenly spaced diagnosis row: Prom → Alertmanager → Alert forwarder.
+    prom_x, am_x, br_x = 360, 560, 760
+    prom_y = am_y = br_y = 528
+    graf_x, graf_y = 560, 780
 
-    prom_x, am_x, br_x = 640, 800, 950
-    prom_y = am_y = br_y = 586
-    graf_x, graf_y = 800, 846
-
-    # External column: Diagnosis → GitHub → Remediation → Owner / Actions.
-    # Owner ping sits above Diagnosis; label is beside the bell so it
-    # cannot sit on the External header / top border.
-    grok_x, grok_y = 1280, 586
-    ping_x, ping_y = 1280, 430
-    gh_x, gh_y = 1280, 740
-    rem_x, rem_y = 1280, 920
-    own_x, own_y = 1280, 1200
-    act_x, act_y = 1176, 1080
-    poll_x, poll_y = 820, 1075
-    corridor_x = 578
-    col_left = 1140
+    # External: Diagnosis and GitHub share the diagnosis row so arrow 5 is straight.
+    grok_x, grok_y = 1180, 528
+    ping_x, ping_y = 1180, 388
+    gh_x, gh_y = 1392, 528
+    rem_x, rem_y = 1180, 780
+    own_x, own_y = 1392, 1000
+    act_x, act_y = 1180, 1000
+    poll_x, poll_y = 560, 1000
+    corridor_x = 300
 
     scene.add(f"""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img"
-     aria-label="How ResilienceOps plus the diagnosis and remediator bots work">
-  <desc>How ResilienceOps plus the diagnosis and remediator bots work</desc>
+     aria-label="How ResilienceOps works">
+  <desc>How ResilienceOps works</desc>
   <defs>
     <style>
       .title {{ font: 700 {TITLE_PX}px Arial, Helvetica, sans-serif; fill: #111827; }}
@@ -1214,10 +1218,10 @@ def build_scene() -> tuple[str, list[str]]:
 {symbols()}
   </defs>
   <rect width="{W}" height="{H}" fill="#FFFFFF"/>
-    <text x="{W / 2:.0f}" y="68" text-anchor="middle" class="title">How ResilienceOps plus the diagnosis and remediator bots work</text>
+    <text x="{W / 2:.0f}" y="68" text-anchor="middle" class="title">How ResilienceOps works</text>
 """)
     scene.text(
-        W / 2, 68, "How ResilienceOps plus the diagnosis and remediator bots work",
+        W / 2, 68, "How ResilienceOps works",
         TITLE_PX, bold=True, anchor="middle", name="title",
     )
 
@@ -1228,10 +1232,10 @@ def build_scene() -> tuple[str, list[str]]:
         GROUP_PX, bold=True, name="group:deploy", container="deploy",
     )
 
-    scene.node_at(tf_x, dep_node_y, "terraform", "Terraform", "creates the infra", container="deploy")
-    scene.node_at(ec2_x, dep_node_y, "aws-ec2", "EC2", "Compose host", container="deploy")
+    scene.node_at(tf_x, dep_node_y, "terraform", "Terraform", "", container="deploy")
+    scene.node_at(ec2_x, dep_node_y, "aws-ec2", "EC2", "", container="deploy")
 
-    host_title = "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16"
+    host_title = "EC2 host · 10.0.1.0/24 · 10.0.0.0/16"
     host_sg = "Grafana and API ports from your IP"
     scene.add(group(host_x, host_y, host_w, host_h, host_title, icon="aws-ec2", style="host"))
     scene.container("host", host_x, host_y, host_w, host_h)
@@ -1252,46 +1256,23 @@ def build_scene() -> tuple[str, list[str]]:
         GROUP_PX, bold=True, name="group:compose", container="compose",
     )
 
-    scene.add(group(agents_x, agents_y, agents_w, agents_h, "Agents", style=None))
-    scene.container("agents", agents_x, agents_y, agents_w, agents_h)
-    scene.text(agents_x + 18, agents_y + 38, "Agents", GROUP_PX, bold=True, name="group:agents", container="agents")
-
     scene.add(group(svc_x, svc_y, svc_w, svc_h, "Services", style=None))
     scene.container("services", svc_x, svc_y, svc_w, svc_h)
     scene.text(svc_x + 18, svc_y + 38, "Services", GROUP_PX, bold=True, name="group:services", container="services")
 
-    k3s_title = "k3s sandbox (optional)"
-    k3s_sub = "agents in one sandbox pod"
-    scene.add(group(k3s_x, k3s_y, k3s_w, k3s_h, k3s_title, icon="k3s", style="optional"))
-    scene.container("k3s", k3s_x, k3s_y, k3s_w, k3s_h)
-    scene.text(
-        k3s_x + 18 + GROUP_ICON, k3s_y + 38, k3s_title,
-        GROUP_PX, bold=True, name="group:k3s", container="k3s",
-    )
-    scene.add(f'  <text x="{k3s_x + 18 + GROUP_ICON:.0f}" y="{k3s_y + 62:.0f}" class="cap">{k3s_sub}</text>')
-    scene.text(k3s_x + 18 + GROUP_ICON, k3s_y + 62, k3s_sub, CAP_PX, name="k3s-sub", container="k3s")
-
-    scene.node_at(
-        red_x, red_y, "person-red", "Red Team", "faults order", cap2="+ payment", container="agents"
-    )
-    scene.node_at(
-        blue_x, blue_y, "person-blue", "Blue Team", "watches and resets", container="agents"
-    )
     scene.node_at(svc_cx, gw_y, "fastapi", "api-gw", "", container="services")
     scene.node_at(svc_cx, os_y, "fastapi", "order-", "", name2="service", container="services")
     scene.node_at(svc_cx, ps_y, "fastapi", "payment-", "", name2="service", container="services")
-    scene.node_at(prom_x, prom_y, "prometheus", "Prometheus", "reads metrics", container="compose")
+    scene.node_at(prom_x, prom_y, "prometheus", "Prometheus", "", container="compose")
     scene.node_at(am_x, am_y, "alertmanager", "Alert", "", name2="manager", container="compose")
-    scene.node_at(
-        br_x, br_y, "document", "incident-", "queries Prometheus", name2="bridge", container="compose"
-    )
-    scene.node_at(graf_x, graf_y, "grafana", "Grafana", "dashboard", container="compose")
+    scene.node_at(br_x, br_y, "document", "Alert", "", name2="forwarder", container="compose")
+    scene.node_at(graf_x, graf_y, "grafana", "Grafana", "", container="compose")
     scene.grok_at(grok_x, grok_y, "AI Incident Diagnosis", container="bot")
     scene.node_at(
         ping_x, ping_y, "bell", "Owner ping", "", size=40, name_size=22,
         cap_size=CAP_PX, container="bot", label_beside=True,
     )
-    scene.node_at(gh_x, gh_y, "github", "GitHub issue", "", container="bot")
+    scene.node_at(gh_x, gh_y, "github", "GitHub", "", container="bot", label_above=True)
     scene.remediator_at(rem_x, rem_y, container="bot")
     scene.node_at(own_x, own_y, "person", "Owner", "/approve", container="bot")
     scene.node_at(
@@ -1302,13 +1283,7 @@ def build_scene() -> tuple[str, list[str]]:
         poll_x, poll_y, "clock", "host poller", "or SSM", container="host"
     )
 
-    row_a = _ic(gw_y)
-    red_right = red_x + ICON / 2 + 4
-    blue_right = blue_x + ICON / 2 + 4
-    os_left = svc_cx - ICON / 2 - 4
-    os_ic = _ic(os_y)
-    ps_ic = _ic(ps_y)
-    svc_left = svc_x
+    row_a = _ic(prom_y)
     svc_right = svc_x + svc_w
     prom_left = prom_x - ICON / 2 - 8
     prom_right = prom_x + ICON / 2 + 8
@@ -1317,29 +1292,23 @@ def build_scene() -> tuple[str, list[str]]:
     br_left = br_x - ICON / 2 - 8
     br_right = br_x + ICON / 2 + 8
     grok_left = grok_x - 48
+    grok_right = grok_x + 48
     grok_top = grok_y - 80
+    grok_bot = grok_y + 16
     ping_bot = ping_y - 10
-    gh_top = _icon_top(gh_y)
-    gh_ic = _ic(gh_y)
+    gh_bot = _icon_top(gh_y) + ICON
     gh_left = gh_x - ICON / 2 - 4
     rem_top = rem_y - 88
-    rem_bot = rem_y + 112
-    own_top = _icon_top(own_y)
+    rem_ic = rem_y - 38
+    rem_right = rem_x + 60
     own_left = own_x - ICON / 2 - 4
     own_ic = _ic(own_y)
     act_right = act_x + ICON / 2 + 4
     act_left = act_x - ICON / 2 - 4
     poll_right = poll_x + ICON / 2 + 8
     poll_left = poll_x - ICON / 2 - 8
-    poll_ic = _ic(poll_y)
-    fork_x = 320
-    fork_ps_x = 290
-    badge_y = row_a - 32
-    query_y = 688
-    blue_lane_y = 820
-    blue_drop_x = 326
-    blue_enter_y = 928
-    svc_mid_x = svc_cx
+    badge_y = row_a - 36
+    hex_cy = grok_y - 32
 
     scene.arrow(
         tf_x + ICON / 2 + 8,
@@ -1350,56 +1319,18 @@ def build_scene() -> tuple[str, list[str]]:
         src="icon:Terraform",
         dst="icon:EC2",
     )
-    # Drop from under the EC2 caption into the host — starts below "Compose host".
+    # One straight vertical, well inside the purple host border (not on the
+    # dashed right edge, no left/right crossing). EC2 sits on the same x.
     scene.arrow(
         drop_x,
-        dep_node_y + 80,
+        dep_y + dep_h + 4,
         drop_x,
-        host_y + 88,
+        host_y + 108,
         name="aws-host",
         src="icon:EC2",
     )
 
-    # Red Team faults stay grey and unnumbered (not part of ①–⑥).
-    # Payment drops at x=290 (west of the OS fork at 320) so the two
-    # shafts stay a lane apart and do not meet the Blue gutter (x=326).
-    scene.poly(
-        [(red_right, row_a), (fork_x, row_a)],
-        marked=False,
-        name="fault-stem",
-        src="icon:Red Team",
-    )
-    scene.poly(
-        [(fork_x, row_a), (fork_x, os_ic), (os_left, os_ic)],
-        name="fault-os",
-        src="icon:Red Team",
-        dst="icon:order-",
-    )
-    scene.poly(
-        [(fork_ps_x, row_a), (fork_ps_x, ps_ic), (os_left, ps_ic)],
-        name="fault-ps",
-        src="icon:Red Team",
-        dst="icon:payment-",
-    )
-
-    # Blue health-check / reset: one arrow into the services group box
-    # (not onto payment-service). Gutter x=326, east of the Red payment
-    # shaft (x=290) and east of the "resets" caption.
-    scene.poly(
-        [
-            (blue_right, _ic(blue_y)),
-            (blue_right, blue_lane_y),
-            (blue_drop_x, blue_lane_y),
-            (blue_drop_x, blue_enter_y),
-            (svc_mid_x, blue_enter_y),
-            (svc_mid_x, svc_y + svc_h),
-        ],
-        name="blue-svc",
-        src="icon:Blue Team",
-        dst="group:services",
-    )
-
-    # ①–④ diagnosis row: scrape → alert → bridge → diagnosis bot.
+    # ①–⑤ diagnosis row is one straight line: scrape → alert → forwarder → diagnosis → GitHub.
     scene.arrow(
         svc_right, row_a, prom_left, row_a, inc=True, name="scrape",
         src="icon:api-gw", dst="icon:Prometheus",
@@ -1412,34 +1343,19 @@ def build_scene() -> tuple[str, list[str]]:
     scene.badge((prom_x + am_x) / 2, badge_y, 2, container="compose")
     scene.arrow(
         am_right, row_a, br_left, row_a, inc=True, name="am-br",
-        src="icon:Alert", dst="icon:incident-",
+        src="icon:Alert", dst="icon:Alert",
     )
     scene.badge((am_x + br_x) / 2, badge_y, 3, container="compose")
     scene.arrow(
         br_right, row_a, grok_left, row_a, inc=True, name="br-bot",
-        src="icon:incident-", dst="icon:grok",
+        src="icon:Alert", dst="icon:grok",
     )
-    scene.badge(bot_x + 36, badge_y, 4, container="bot")
-
-    # ⑤ Diagnosis → GitHub. Leave the hex on its left side (not the
-    # bottom-left corner) and land on the GitHub icon's left, above
-    # arrow ⑧, so the head stays off the Diagnosis name.
-    hex_cy = grok_y - 32
-    issue_left_y = gh_ic - 22
-    issue_col = col_left + 24
-    scene.poly(
-        [
-            (grok_left, hex_cy),
-            (issue_col, hex_cy),
-            (issue_col, issue_left_y),
-            (gh_left, issue_left_y),
-        ],
-        inc=True,
-        name="bot-gh",
-        src="icon:grok",
-        dst="icon:GitHub issue",
+    scene.badge((br_right + grok_left) / 2, badge_y, 4, container="bot")
+    scene.arrow(
+        grok_right, hex_cy, gh_left, hex_cy, inc=True, name="bot-gh",
+        src="icon:grok", dst="icon:GitHub",
     )
-    scene.badge(issue_col - 32, (hex_cy + issue_left_y) / 2, 5, container="bot")
+    scene.badge((grok_right + gh_left) / 2, badge_y, 5, container="bot")
 
     # ⑥ Diagnosis → owner ping. Label is beside the bell, so the shaft
     # hits the icon only.
@@ -1449,88 +1365,68 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(grok_x - 36, (grok_top + ping_bot) / 2, 6, container="bot")
 
-    # ⑦ Diagnosis → Remediation (handoff), around GitHub. ⑧ Remediation
-    # comments the proposal on the GitHub issue (left of the labels).
-    handoff_x = 1400
-    grok_right = grok_x + 48
-    grok_mid = grok_y - 32
-    rem_ic = rem_y - 38
-    rem_right = rem_x + 60
-    rem_left = rem_x - 60
-    scene.poly(
-        [
-            (grok_right, grok_mid),
-            (handoff_x, grok_mid),
-            (handoff_x, rem_ic),
-            (rem_right, rem_ic),
-        ],
-        rem=True,
-        name="diag-rem",
-        src="icon:grok",
-        dst="icon:remediator",
+    # ⑦ Diagnosis hex bottom → Remediation icon, one straight vertical.
+    # Labels sit to the left of the hex so the shaft does not clip them.
+    scene.arrow(
+        grok_x, grok_bot, grok_x, rem_top, rem=True, name="diag-rem",
+        src="icon:grok", dst="icon:remediator",
     )
-    scene.badge(1420, 720, 7, rem=True, container="bot")
+    scene.badge(grok_x + 36, (grok_bot + rem_top) / 2, 7, rem=True, container="bot")
     scene.poly(
         [
-            (rem_left, rem_ic),
-            (col_left, rem_ic),
-            (col_left, gh_ic),
-            (gh_left, gh_ic),
+            (rem_right, rem_ic),
+            (gh_x, rem_ic),
+            (gh_x, gh_bot),
         ],
         rem=True,
         name="rem-gh",
         src="icon:remediator",
-        dst="icon:GitHub issue",
+        dst="icon:GitHub",
     )
-    scene.badge(col_left + 28, (rem_ic + gh_ic) / 2, 8, rem=True, container="bot")
+    scene.badge((rem_right + gh_x) / 2 + 24, rem_ic - 28, 8, rem=True, container="bot")
 
     # ⑨ Owner /approve → Actions. ⑩ poller → services group.
     act_ic = _ic(act_y)
     highway_y = act_ic
-    scene.poly(
-        [(own_left, own_ic), (own_left, highway_y), (act_right, highway_y)],
-        rem=True,
-        name="own-act",
-        src="icon:Owner",
-        dst="icon:Actions",
+    scene.arrow(
+        own_left, highway_y, act_right, highway_y, rem=True, name="own-act",
+        src="icon:Owner", dst="icon:Actions",
     )
-    scene.badge(own_left - 32, own_ic - 8, 9, rem=True, container="bot")
+    scene.badge((own_left + act_right) / 2, highway_y - 32, 9, rem=True, container="bot")
     scene.arrow(
         act_left, highway_y, poll_right, highway_y, rem=True, name="act-poll",
         src="icon:Actions",
         dst="icon:host poller",
     )
+    enter_y = 620
     scene.poly(
         [
             (poll_left, highway_y),
             (corridor_x, highway_y),
-            (corridor_x, 790),
-            (svc_right, 790),
+            (corridor_x, enter_y),
+            (svc_right, enter_y),
         ],
         rem=True,
         name="poll-svc",
         src="icon:host poller",
         dst="group:services",
     )
-    scene.badge(corridor_x + 28, 900, 10, rem=True, container="host")
+    scene.badge(corridor_x + 28, (highway_y + enter_y) / 2, 10, rem=True, container="host")
 
-    # Supporting: Grafana read + dashed PromQL query (below the diagnosis row).
+    # Supporting: Grafana reads Prometheus (not on the alert path).
+    graf_ic = _ic(graf_y)
     scene.poly(
         [
-            (prom_x, query_y + 28),
-            (prom_x, _ic(graf_y)),
-            (graf_x - ICON / 2 - 8, _ic(graf_y)),
+            (prom_x, prom_y + 58),
+            (prom_x, graf_ic),
+            (graf_x - ICON / 2 - 8, graf_ic),
         ],
         name="prom-graf",
         src="icon:Prometheus",
         dst="icon:Grafana",
     )
-    scene.arrow(
-        br_x - ICON / 2, query_y, prom_x + 10, query_y, dashed=True, name="promql",
-        src="icon:incident-", dst="icon:Prometheus",
-    )
 
-    leg_y = 1316
+    leg_y = 1224
     scene.add(
         f'  <line x1="36" y1="{leg_y}" x2="70" y2="{leg_y}" class="arrow-inc"/>'
         f'  <text x="80" y="{leg_y + 6}" class="legend">1–6 diagnosis path</text>'
@@ -1546,16 +1442,191 @@ def build_scene() -> tuple[str, list[str]]:
     return "\n".join(scene.parts), scene.check()
 
 
+def build_sandbox_scene() -> tuple[str, list[str]]:
+    """Red/Blue agent sandbox. Separate from the main alert-path figure."""
+    W, H = 1180, 780
+    scene = Scene(W, H)
+
+    start_x, start_y, start_w, start_h = 40, 100, 1100, 190
+    compose_x, cli_x, k3s_x, start_node_y = 200, 590, 980, 220
+
+    box_x, box_y, box_w, box_h = 40, 310, 400, 430
+    blue_x, blue_y = 200, 430
+    red_x, red_y = 200, 640
+
+    tgt_x, tgt_y, tgt_w, tgt_h = 480, 310, 380, 430
+    gw_x, gw_y = 670, 460
+    os_x, os_y = 670, 580
+    ps_x, ps_y = 670, 700
+    fork_x = 420
+    blue_jog = 400
+
+    prom_x, prom_y = 1040, 580
+
+    scene.add(f"""<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img"
+     aria-label="Agent sandbox">
+  <desc>Optional Red and Blue agents. Compose profile, host CLI, or k3s.</desc>
+  <defs>
+    <style>
+      .title {{ font: 700 {TITLE_PX}px Arial, Helvetica, sans-serif; fill: #111827; }}
+      .group {{ font: 600 {GROUP_PX}px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .name {{ font: 700 {NAME_PX}px Arial, Helvetica, sans-serif; fill: #111827; }}
+      .cap {{ font: {CAP_PX}px Arial, Helvetica, sans-serif; fill: #6B7280; }}
+      .badge {{ font: 700 22px Arial, Helvetica, sans-serif; fill: #FFFFFF; }}
+      .arrow {{ stroke: #9CA3AF; stroke-width: 2.0; fill: none; }}
+      .arrow-inc {{ stroke: {INC_ORANGE}; stroke-width: 3.4; fill: none; }}
+      .arrow-rem {{ stroke: {REM_BLUE}; stroke-width: 3.4; fill: none; }}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF"/>
+    </marker>
+    <marker id="arr-inc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="{INC_ORANGE}"/>
+    </marker>
+    <marker id="arr-rem" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="{REM_BLUE}"/>
+    </marker>
+{symbols()}
+  </defs>
+  <rect width="{W}" height="{H}" fill="#FFFFFF"/>
+    <text x="{W / 2:.0f}" y="72" text-anchor="middle" class="title">Agent sandbox</text>
+""")
+    scene.text(
+        W / 2, 72, "Agent sandbox", TITLE_PX, bold=True, anchor="middle", name="title",
+    )
+
+    scene.add(group(start_x, start_y, start_w, start_h, "How to start", style="optional"))
+    scene.container("start", start_x, start_y, start_w, start_h)
+    scene.text(
+        start_x + 18, start_y + 38, "How to start",
+        GROUP_PX, bold=True, name="group:start", container="start",
+    )
+    scene.node_at(
+        compose_x, start_node_y, "docker", "Compose profile", "",
+        container="start", name_size=22,
+    )
+    scene.node_at(
+        cli_x, start_node_y, "document", "host CLI", "python3 orchestrator.py",
+        container="start", name_size=22, cap_size=22,
+    )
+    scene.node_at(
+        k3s_x, start_node_y, "k3s", "k3s (optional)", "",
+        container="start", name_size=22,
+    )
+    scene.badge(
+        start_x + 18 + _tw("How to start", GROUP_PX, True) + 22,
+        start_y + 32,
+        1,
+        container="start",
+    )
+
+    scene.add(group(box_x, box_y, box_w, box_h, "Agents", style=None))
+    scene.container("agents", box_x, box_y, box_w, box_h)
+    scene.text(
+        box_x + 18, box_y + 38, "Agents",
+        GROUP_PX, bold=True, name="group:agents", container="agents",
+    )
+
+    scene.add(group(tgt_x, tgt_y, tgt_w, tgt_h, "Target services", style=None))
+    scene.container("services", tgt_x, tgt_y, tgt_w, tgt_h)
+    scene.text(
+        tgt_x + 18, tgt_y + 38, "Target services",
+        GROUP_PX, bold=True, name="group:services", container="services",
+    )
+
+    scene.node_at(
+        red_x, red_y, "person-red", "Red Team", "faults order + payment",
+        container="agents", name_size=22, cap_size=22,
+    )
+    scene.node_at(
+        blue_x, blue_y, "person-blue", "Blue Team", "watches and resets",
+        container="agents", name_size=22, cap_size=22,
+    )
+    scene.node_at(gw_x, gw_y, "fastapi", "api-gw", "", container="services", name_size=22)
+    scene.node_at(os_x, os_y, "fastapi", "order-service", "", container="services", name_size=22)
+    scene.node_at(ps_x, ps_y, "fastapi", "payment-service", "", container="services", name_size=22)
+    scene.node_at(
+        prom_x, prom_y, "prometheus", "Prometheus", "diagnosis path",
+        name_size=22, cap_size=22,
+    )
+
+    red_right = red_x + ICON / 2 + 4
+    blue_right = blue_x + ICON / 2 + 4
+    os_left = os_x - ICON / 2 - 4
+    ps_left = ps_x - ICON / 2 - 4
+    tgt_left = tgt_x
+    tgt_right = tgt_x + tgt_w
+    red_ic = _ic(red_y)
+    blue_ic = _ic(blue_y)
+    os_ic = _ic(os_y)
+    ps_ic = _ic(ps_y)
+    prom_left = prom_x - ICON / 2 - 8
+    prom_ic = _ic(prom_y)
+    group_mid = tgt_y + tgt_h / 2
+
+    scene.poly(
+        [(red_right, red_ic), (fork_x, red_ic)],
+        marked=False,
+        inc=True,
+        name="red-stem",
+        src="icon:Red Team",
+    )
+    scene.poly(
+        [(fork_x, red_ic), (fork_x, os_ic), (os_left, os_ic)],
+        inc=True,
+        name="red-os",
+        src="icon:Red Team",
+        dst="icon:order-service",
+    )
+    scene.poly(
+        [(fork_x, red_ic), (fork_x, ps_ic), (ps_left, ps_ic)],
+        inc=True,
+        name="red-ps",
+        src="icon:Red Team",
+        dst="icon:payment-service",
+    )
+    scene.badge(fork_x - 28, (red_ic + os_ic) / 2, 2, container="agents")
+    scene.poly(
+        [
+            (blue_right, blue_ic),
+            (blue_jog, blue_ic),
+            (blue_jog, group_mid),
+            (tgt_left, group_mid),
+        ],
+        rem=True,
+        name="blue-svc",
+        src="icon:Blue Team",
+        dst="group:services",
+    )
+    scene.badge(blue_jog + 28, (blue_ic + group_mid) / 2, 3, rem=True)
+    scene.arrow(
+        tgt_right, prom_ic, prom_left, prom_ic, inc=True, name="svc-prom",
+        src="group:services", dst="icon:Prometheus",
+    )
+    scene.badge((tgt_right + prom_left) / 2, prom_ic - 28, 4)
+
+    scene.add("</svg>\n")
+    return "\n".join(scene.parts), scene.check()
+
+
 def check_geometry() -> list[str]:
-    _svg, violations = build_scene()
-    return list(violations) + check_icon_png_corners()
+    hits: list[str] = []
+    for label, builder in (("main", build_scene), ("sandbox", build_sandbox_scene)):
+        _svg, violations = builder()
+        hits.extend(f"{label}: {item}" for item in violations)
+    return hits + check_icon_png_corners()
 
 
 def main() -> int:
     svg, violations = build_scene()
     OUT.write_text(svg, encoding="utf-8")
     print(f"wrote {OUT}")
-    violations = list(violations) + check_icon_png_corners()
+    sandbox, sandbox_hits = build_sandbox_scene()
+    SANDBOX_OUT.write_text(sandbox, encoding="utf-8")
+    print(f"wrote {SANDBOX_OUT}")
+    violations = list(violations) + list(sandbox_hits) + check_icon_png_corners()
     if violations:
         print(f"{len(violations)} geometry violation(s):")
         for item in violations[:80]:

@@ -1,0 +1,21 @@
+%%{init: { "theme": "base", "flowchart": { "curve": "basis" } }}%%
+flowchart LR
+  subgraph start ["How to start"]
+    COMPOSE["Compose profile"]
+    CLI["host CLI"]
+    K3S["k3s (optional)"]
+  end
+  subgraph agents ["Agents"]
+    RED[Red Team]
+    BLUE[Blue Team]
+  end
+  subgraph targets ["Target services"]
+    GW[api-gw]
+    OS[order-service]
+    PS[payment-service]
+  end
+  PROM[Prometheus]
+  RED --> OS
+  RED --> PS
+  BLUE --> targets
+  targets --> PROM

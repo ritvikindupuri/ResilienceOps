@@ -8,10 +8,10 @@ instance_id = INSTANCE_ID
 
 commands = [
     "echo '=== [1] LIVE PROCESS RESIDENT MEMORY (RAM) BEFORE FAULT ==='",
-    "docker exec sre-colosseum_order-service_1 cat /proc/self/status | grep -E 'VmRSS|VmSize'",
+    "docker exec resilienceops_order-service_1 cat /proc/self/status | grep -E 'VmRSS|VmSize'",
     "echo ''",
     "echo '=== [2] RECENT DOCKER LOGS: INJECTIONS & REMEDIATIONS ==='",
-    "docker-compose -f /opt/sre-colosseum/docker-compose.yml logs --tail=25 order-service payment-service | grep -E 'fault|POST|reset|leak'",
+    "docker-compose -f /opt/resilienceops/docker-compose.yml logs --tail=25 order-service payment-service | grep -E 'fault|POST|reset|leak'",
     "echo ''",
     "echo '=== [3] KUBERNETES AGENT SANDBOX PODS (RUNNING ON K3S) ==='",
     "k3s kubectl get pods -A 2>&1 || true"
