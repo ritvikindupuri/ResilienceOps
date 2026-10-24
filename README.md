@@ -62,7 +62,7 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
   <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps plus the diagnosis and remediator bots work" width="100%" />
 </p>
 <p align="center"><b>Figure 1: How ResilienceOps plus the diagnosis and remediator bots work</b></p>
-<p align="center">Orange ①–⑥ is the diagnosis path. Orange ⑦–⑨ is the remediator path (GitHub issue → proposal → owner <code>/approve</code> → allowlisted fix on the stack). Grey edges are supporting (optional AWS deploy, Grafana). Bridge queries Prometheus (dashed). Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
+<p align="center">Orange ①–⑥ is the diagnosis path. Orange ⑦–⑨ is the remediator path (GitHub issue → proposal → owner <code>/approve</code> → allowlisted fix on the target services). Grey edges are supporting (optional AWS deploy, Grafana). incident-bridge queries Prometheus. Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
 
 ### How it works (plain English)
@@ -126,7 +126,7 @@ The numbered path in Figure 1 is Path B (Prometheus → bot). Path A is Red/Blue
 1. **Fault injection.** Red Team faults **order-service and payment-service only** (not api-gw). `orchestrator.py` holds the fault for `FAULT_HOLD_SECONDS` (default **120**) so Prometheus `for:` windows can fire. `FaultCatalog.reset_environment()` still runs in `finally`.
 2. **Scrape.** Prometheus pulls `/metrics` from **all 3** services (`api-gw`, `order-service`, `payment-service`) every 1s (`dashboards/prometheus.yml`).
 3. **Alert.** Firing rules go to Alertmanager (`alertmanager:9093`), which POSTs to `incident-bridge:8080/webhook`.
-4. **Evidence.** incident-bridge adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host `orchestrator.py` is writing it). Bridge queries Prometheus (dashed). No Kubernetes client in the Compose bridge image.
+4. **Evidence.** incident-bridge adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host `orchestrator.py` is writing it). incident-bridge queries Prometheus. No Kubernetes client in the Compose bridge image.
 5. **Diagnosis.** The imported Grok template **AI Incident Diagnosis** reads the webhook. That diagnosis bot has **no control path** into the lab: webhook in, GitHub issue + owner ping out.
 6. **Issue + ping.** The diagnosis bot opens or updates a GitHub issue labeled `incident`. Firing **critical** alerts also ping the owner.
 7. **Proposal.** The separate **Incident Remediation** template comments exactly one allowlisted action on that issue.

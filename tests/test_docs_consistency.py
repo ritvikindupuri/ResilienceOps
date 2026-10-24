@@ -165,15 +165,17 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
     assert "optional AWS" in svg
-    assert "health on all 3" in svg
-    assert "reset order + payment" in svg
+    assert "watches and resets" in svg
+    assert "health on all 3" not in svg
+    assert "reset order + payment" not in svg
     assert "faults order" in svg
     assert "→ OS" not in svg
     assert "faults OS+PS" not in svg
     assert "/sre/autonomous-agent-audit" not in svg
     assert "Grok Bot (external)" not in svg
     assert "AI Incident Diagnosis" in svg
-    assert "adds evidence" in svg
+    assert "queries Prometheus" in svg
+    assert "reads metrics" in svg
     assert "PromQL · jsonl" not in svg
     assert "creates the infra" in svg
     assert "Secrets script" not in svg
@@ -184,9 +186,12 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "agents in one sandbox pod" in svg
     assert "optional: agents in a sandbox pod" not in svg
     assert "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16" in svg
-    assert "solid = data flow" in svg
+    assert "1–6 diagnosis path" in svg
     assert "Grey edges are supporting" in readme
-    assert "Bridge queries Prometheus (dashed)" in readme
+    assert "incident-bridge queries Prometheus" in readme
+    assert "allowed_cidr" not in svg
+    assert "/metrics" not in svg
+    assert "reads Prom" not in svg
     for filename in (
         "put_lab_secrets.py",
         "deploy_remote.py",
@@ -200,8 +205,7 @@ def test_readme_sample_post_mortem_is_current_generator():
         "data_persistence",
     ):
         assert filename not in svg, filename
-    assert ":3000/:8000" in svg
-    assert "--profile agents" in svg
+    assert "Grafana and API ports from your IP" in svg
     assert "Lab (Docker Compose)" in svg
     assert "Docker Compose on this host" not in svg
     assert "k3s sandbox (optional)" in svg
@@ -239,7 +243,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "output -raw instance_id" in readme
     assert "docker compose up --build -d" in readme
     assert "FaultCatalog.reset_environment" in readme or "finally" in readme
-    assert "SG :3000/:8000 from allowed_cidr" in svg
+    assert "Grafana and API ports from your IP" in svg
     assert "CloudWatch log groups" in readme
     assert "app_workloads 10.0.10.0/24" in readme
     assert "data_persistence 10.0.20.0/24" in readme
@@ -294,6 +298,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 1600×1400; render_architecture.sh writes 2×.
-    assert width in {1600, 3200}, width
-    assert height in {1224, 1400, 2448, 2800}, height
+    # Native SVG is 1480×1180; render_architecture.sh writes 2×.
+    assert width in {1480, 2960}, width
+    assert height in {1180, 2360}, height
