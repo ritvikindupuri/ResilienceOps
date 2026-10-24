@@ -57,9 +57,9 @@ Compose + k3s, local vs AWS, optional fault injection, bot outbound HTTPS only.
 
 | Element | What the figure says | Evidence |
 |---|---|---|
-| Canvas | 1480×1280 with a 32px margin; title “How ResilienceOps works”; node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. Reading order: Figure 1 in [How it works](../README.md#how-it-works-step-by-step), Figure 2 in [Agent sandbox](../README.md#agent-sandbox), Figure 3 on the AWS map. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2560. README caption is one short line; rebuild notes live under Figure source |
+| Canvas | 1480×1280 with a 32px margin; title “How ResilienceOps works”; node names 28px, captions 24px, title 36px (effective ≥15px at 950px). Legend only: orange 1–6 diagnosis path, blue 7–10 remediator path, grey supporting. No arrow labels. Reading order: Figure 1 in [How it works](../README.md#how-it-works-step-by-step) (immediately after the intro), Figure 2 in [Agent sandbox](../README.md#agent-sandbox), Figure 3 on the AWS map. | `scripts/build_architecture.py` `build_scene()`; 2× PNG is 2960×2560. README caption is one short line; rebuild notes live under Reference → Figure source |
 | Operator + AWS | One top band “Deploy (optional AWS)”. Two icons only: Terraform and EC2, plus a drop onto the host. S3 / SSM / Parameter Store / helper-script names stay in the README so the figure is not crowded | Laptop Terraform, not required for Compose. `terraform/main.tf`; `scripts/put_lab_secrets.py`; `deploy_remote.py`. Official AWS Architecture Icons + Terraform mark. IAM / CW / IGW / unused subnets are README prose |
-| EC2 host | Purple dashed, “EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16” + “Grafana and API ports from your IP” | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to the operator CIDR |
+| EC2 host | Purple dashed, “EC2 host · 10.0.1.0/24 · 10.0.0.0/16” + “Grafana and API ports from your IP”. Grey EC2→Stack drop is one straight vertical inside the host border. | `aws_instance` in `public_ingress`; VPC `sre-enterprise-vpc` `10.0.0.0/16`; `ingress_sg` 3000+8000 to the operator CIDR |
 | k3s / Agents | Not on Figure 1. They live on Figure 2 (`docs/sandbox_architecture.svg`) and the README [Agent sandbox](../README.md#agent-sandbox) section | Only `red-team-sandbox` runs `orchestrator.py`. `deploy_k8s_sandbox.py`; namespace `sre-agent-sandbox`. Compose service `agent-sandbox` `profiles: [agents]` |
 | Target services | Column group `api-gw` / `order-service` / `payment-service`. Orange ① is the scrape out of the services group | Compose services `api-gw`, `order-service`, `payment-service`; Prometheus scrape configs |
 | Compose group | “Stack (Docker Compose)” wrapping Target services and observability | `docker-compose.yml`; deploy zip includes compose (`deploy_remote.py` `INCLUDE_PATHS`) |
@@ -125,7 +125,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | ④ | Alert forwarder → Diagnosis | badge ④ | `app.py` outbound `{status, alerts, evidence, source: "resilienceops"}`; HTTPS to `GROK_WEBHOOK_URL` |
 | ⑤ | Diagnosis → GitHub (straight, same row) | badge ⑤ | Imported diagnosis bot opens or comments on an `incident` issue |
 | ⑥ | Diagnosis → owner ping | badge ⑥ | Firing critical alerts chat-ping the owner. That bot has no control path into the stack |
-| ⑦ | Diagnosis → Incident Remediation (handoff) | badge ⑦ (blue) | After filing or commenting on a firing `incident` issue, the Diagnosis bot asks its teammate to propose a fix. The Remediation bot has no webhook and does not watch the repo |
+| ⑦ | Diagnosis hex bottom → Incident Remediation (straight vertical) | badge ⑦ (blue, on this shaft) | After filing or commenting on a firing `incident` issue, the Diagnosis bot asks its teammate to propose a fix. The Remediation bot has no webhook and does not watch the repo |
 | ⑧ | Incident Remediation → GitHub issue | badge ⑧ (blue) | Remediator comments a proposal on the `incident` issue (`remediation/actions.py` `parse_proposal`) |
 | ⑨ | Owner `/approve` → Actions | badge ⑨ (blue) | Workflow `remediation-approve.yml` records `/approve`; it does not run the fix |
 | ⑩ | host poller → services group | badge ⑩ (blue) | Host poller `remediation/poll_and_apply.py` or `remediate.py --via-ssm` runs the allowlisted action. Arrow lands on the **services group** |
@@ -199,7 +199,7 @@ IAM has no chain arrow (Terraform creates the role + instance profile). SG is a 
 | Host `.env` from Parameter Store SecureString, not SendCommand | `scripts/put_lab_secrets.py`; `deploy_remote.py` `build_host_env_script` (`get-parameter --with-decryption`) |
 | No NAT Gateway / no EKS in this Terraform | No `aws_nat_gateway` / `aws_eks_cluster` resources in `terraform/main.tf` |
 | CloudWatch **log groups** + audit **stream** are Terraform; **dashboards** are not | Groups + `aws_cloudwatch_log_stream.audit` name `audit-stream` in `terraform/main.tf`. Logger `structured_logger.py` `CreateLogStream` if missing then `PutLogEvents`. Compose `agent-sandbox` gets `AWS_REGION`. Host inline `logs:CreateLogStream`/`PutLogEvents`. Helpers `create_cw_dashboard.py` name `SRE-Autonomous-Agent-Security-Audit`; `test_grafana_proxy.py` name `SRE-fault-Vectors-Live-Telemetry` |
-| Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`. Console “Subnets (5)” ≠ Terraform’s 3 subnets — prefer `main.tf` |
+| Figure 3 is a dated console map | PNG `docs/images/aws_vpc_resource_map.png`, cropped to the resource-map cards (VPC / subnets / route tables / IGW) so labels stay readable at README width. Console “Subnets (5)” ≠ Terraform’s 3 subnets — prefer `main.tf` |
 
 ---
 

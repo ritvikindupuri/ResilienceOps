@@ -6,11 +6,11 @@ Two importable Grok bots do the work: [one diagnoses alerts](https://x.ai/bot/fe
 
 ## Table of contents
 
+- [How it works, step by step](#how-it-works-step-by-step)
 - [Prerequisites](#prerequisites)
 - [Quick start (local)](#quick-start-local)
 - [Set up both bots](#set-up-both-bots)
 - [How to use](#how-to-use)
-- [How it works, step by step](#how-it-works-step-by-step)
 - [Agent sandbox](#agent-sandbox)
 - [AWS (optional)](#aws-optional)
 - [Troubleshooting](#troubleshooting)
@@ -20,6 +20,26 @@ Two importable Grok bots do the work: [one diagnoses alerts](https://x.ai/bot/fe
   - [Full environment table](#full-environment-table)
   - [Sample output: a real test run](#sample-output-a-real-test-run)
   - [Glossary](#glossary)
+
+## How it works, step by step
+
+<p align="center">
+  <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps works" width="100%" />
+</p>
+<p align="center"><b>Figure 1.</b> Orange = diagnosis, blue = remediation. Numbers match the steps below.</p>
+
+1. **Scrape.** Prometheus pulls `/metrics` from **all 3** services every 1s (`dashboards/prometheus.yml`).
+2. **Alert.** Firing rules go to Alertmanager (`dashboards/alertmanager.yml`, compose `alertmanager:9093`, host `127.0.0.1:9093`).
+3. **Evidence.** Alertmanager POSTs to the Alert forwarder (`send_resolved: true`). The forwarder adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host orchestrator is writing it). No Kubernetes client in the Compose image.
+4. **Diagnosis.** The diagnosis bot reads the webhook. [No control path](#read-these-once).
+5. **Issue.** Opens or comments on a GitHub issue labeled `incident` (same fingerprint → comment).
+6. **Owner ping.** Firing **critical** alerts also ping the owner.
+7. **Handoff.** Diagnosis asks the remediator (same account) to propose a fix.
+8. **Proposal.** The remediator comments one allowlisted action on that GitHub issue.
+9. **Approve.** `/approve`. Actions records; it does not run the fix.
+10. **Fix.** `python3 remediation/poll_and_apply.py` on the host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
+
+Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TARGET` (compose default **20**; `traffic-generator/load_generator.py` defaults to **25** only if you run it on the host with no env). `api-gw` reverse-proxies `/api/orders*` to `order-service:8001` and `/api/payments*` to `payment-service:8002`. Grafana (`:3000`) is PromQL only — not on the alert path.
 
 ## Prerequisites
 
@@ -188,6 +208,8 @@ target: order-service
 <!-- /resilienceops-proposal -->
 ```
 
+**You should see** a remediator comment on the `incident` issue with that block (one `action` and one `target`) after Diagnosis files the issue.
+
 ## How to use
 
 **Before you start: finish setup.** Both bots imported, Compose up (or AWS deploy done), `curl -sS http://127.0.0.1:8088/healthz` shows `"webhook_configured":true`, and `record-last-good` has been run on the machine that owns the stack.
@@ -249,58 +271,6 @@ target: order-service
 Stop the local stack: `docker compose down -v`.
 
 Synthetic check (no `/fault`): `python3 scripts/send_test_alert.py --target alertmanager` — Alertmanager prints `200`. Confirm the Alert forwarder with `docker compose logs --tail 20 incident-bridge`. `--target bridge` hits `127.0.0.1:8088` (`200 {"accepted":true}`).
-
-## How it works, step by step
-
-<p align="center">
-  <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps works" width="100%" />
-</p>
-<p align="center"><b>Figure 1.</b> Orange = diagnosis, blue = remediation. Numbers match the steps below.</p>
-
-<details>
-<summary>Figure source (contributors)</summary>
-
-Grey edges are supporting (optional AWS deploy, Grafana). The Alert forwarder queries Prometheus. Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
-
-Rebuild Figure 1 from [`docs/architecture.svg`](docs/architecture.svg) and Figure 2 from [`docs/sandbox_architecture.svg`](docs/sandbox_architecture.svg) with `scripts/render_architecture.sh` / `scripts/build_architecture.py`. Companion mermaid (same flow, no logos): [`docs/architecture.mmd`](docs/architecture.mmd) and [`docs/sandbox_architecture.mmd`](docs/sandbox_architecture.mmd). See also [docs/README.md](docs/README.md).
-
-</details>
-
-Figure 1 badges are Path B then Path C.
-
-| Path | Who | What |
-|---|---|---|
-| **B — Diagnosis** | Prom → AM → Alert forwarder → [diagnosis template](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Webhook in, `incident` issue out. [No control path](#read-these-once). |
-| **C — Remediation** | Diagnosis hands off → [remediator template](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) → `/approve` → poller | Actions **records**. Host (or [`--via-ssm`](#read-these-once)) executes. |
-
-1. **Scrape.** Prometheus pulls `/metrics` from **all 3** services every 1s (`dashboards/prometheus.yml`).
-2. **Alert.** Firing rules go to Alertmanager (`dashboards/alertmanager.yml`, compose `alertmanager:9093`, host `127.0.0.1:9093`).
-3. **Evidence.** Alertmanager POSTs to the Alert forwarder (`send_resolved: true`). The forwarder adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host orchestrator is writing it). No Kubernetes client in the Compose image.
-4. **Diagnosis.** The diagnosis bot reads the webhook. [No control path](#read-these-once).
-5. **Issue.** Opens or comments on a GitHub issue labeled `incident` (same fingerprint → comment).
-6. **Owner ping.** Firing **critical** alerts also ping the owner.
-7. **Handoff.** Diagnosis asks the remediator (same account) to propose a fix.
-8. **Proposal.** The remediator comments one allowlisted action on that GitHub issue.
-9. **Approve.** `/approve`. Actions records; it does not run the fix.
-10. **Fix.** `python3 remediation/poll_and_apply.py` on the host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
-
-```mermaid
-flowchart LR
-  services[Microservices] --> prom[Prometheus]
-  prom --> rules[Alert rules]
-  rules --> am[Alertmanager]
-  am --> bridge[Alert forwarder]
-  bridge --> diag[Diagnosis webhook]
-  diag --> gh[GitHub incident issue]
-  diag --> chat[Owner chat ping]
-  diag --> rem[Remediator]
-  rem --> gh
-  gh --> approve["Owner /approve"]
-  approve --> host[Host poller or SSM]
-  host --> services
-```
-
-Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TARGET` (compose default **20**; `traffic-generator/load_generator.py` defaults to **25** only if you run it on the host with no env). `api-gw` reverse-proxies `/api/orders*` to `order-service:8001` and `/api/payments*` to `payment-service:8002`. Grafana (`:3000`) is PromQL only — not on the alert path.
 
 ## Agent sandbox
 
@@ -551,7 +521,16 @@ Compose v2 message. The stack still builds with the default docker driver.
 
 ## Reference
 
-This README is the source of truth. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md). Historical brief: [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf). Internals — hold time, EC2 `.env`, SSM, and what the stack actually faults — are in the sections below.
+This README is the source of truth. Dated telemetry: [RESULTS.md](RESULTS.md). Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md). Historical brief: [technical documentation PDF](docs/ResilienceOps_Technical_Documentation.pdf).
+
+<details>
+<summary>Figure source (contributors)</summary>
+
+Grey edges are supporting (optional AWS deploy, Grafana). The Alert forwarder queries Prometheus. Claim-to-evidence: [`docs/ACCURACY.md`](docs/ACCURACY.md).
+
+Rebuild Figure 1 from [`docs/architecture.svg`](docs/architecture.svg) and Figure 2 from [`docs/sandbox_architecture.svg`](docs/sandbox_architecture.svg) with `scripts/render_architecture.sh` / `scripts/build_architecture.py`. Companion mermaid (same flow, no logos): [`docs/architecture.mmd`](docs/architecture.mmd) and [`docs/sandbox_architecture.mmd`](docs/sandbox_architecture.mmd). See also [docs/README.md](docs/README.md).
+
+</details>
 
 ### Read these once
 

@@ -4,7 +4,7 @@ flowchart LR
   subgraph aws ["Deploy (optional AWS)"]
     TF
   end
-  subgraph host ["EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16 · Grafana and API ports from your IP"]
+  subgraph host ["EC2 host · 10.0.1.0/24 · 10.0.0.0/16 · Grafana and API ports from your IP"]
     subgraph compose ["Stack (Docker Compose)"]
       GW[api-gw]
       OS[order-service]

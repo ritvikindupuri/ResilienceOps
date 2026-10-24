@@ -438,8 +438,8 @@ def grok_avatar(x: float, y: float, name: str, cap: str) -> str:
       <rect x="-11" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
       <rect x="5" y="-10" width="6" height="13.2" rx="3" fill="#FFFFFF"/>
     </g>
-    <text class="name" y="40" text-anchor="middle">AI Incident</text>
-    <text class="name" y="68" text-anchor="middle">Diagnosis</text>
+    <text class="name" x="-58" y="40" text-anchor="end">AI Incident</text>
+    <text class="name" x="-58" y="68" text-anchor="end">Diagnosis</text>
   </g>"""
 
 
@@ -972,11 +972,11 @@ class Scene:
         self.add(grok_avatar(x, y, name, ""))
         self.box(x - 48, y - 80, 96, 96, "icon:grok", "icon", container=container)
         self.text(
-            x, y + 40, "AI Incident", NAME_PX, bold=True, anchor="middle",
+            x - 58, y + 40, "AI Incident", NAME_PX, bold=True, anchor="end",
             name="name:grok1", container=container,
         )
         self.text(
-            x, y + 68, "Diagnosis", NAME_PX, bold=True, anchor="middle",
+            x - 58, y + 68, "Diagnosis", NAME_PX, bold=True, anchor="end",
             name="name:grok2", container=container,
         )
 
@@ -1157,8 +1157,8 @@ def build_scene() -> tuple[str, list[str]]:
     scene = Scene(W, H)
 
     dep_x0, dep_y, dep_w, dep_h = 32, 88, 1416, 176
-    tf_x, ec2_x, dep_node_y = 500, 880, 206
-    drop_x = 880
+    tf_x, ec2_x, dep_node_y = 500, 760, 206
+    drop_x = 760
 
     host_x, host_y, host_w, host_h = 32, 284, 852, 820
     bot_x, bot_y, bot_w, bot_h = 908, 284, 540, 820
@@ -1235,7 +1235,7 @@ def build_scene() -> tuple[str, list[str]]:
     scene.node_at(tf_x, dep_node_y, "terraform", "Terraform", "", container="deploy")
     scene.node_at(ec2_x, dep_node_y, "aws-ec2", "EC2", "", container="deploy")
 
-    host_title = "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16"
+    host_title = "EC2 host · 10.0.1.0/24 · 10.0.0.0/16"
     host_sg = "Grafana and API ports from your IP"
     scene.add(group(host_x, host_y, host_w, host_h, host_title, icon="aws-ec2", style="host"))
     scene.container("host", host_x, host_y, host_w, host_h)
@@ -1294,8 +1294,7 @@ def build_scene() -> tuple[str, list[str]]:
     grok_left = grok_x - 48
     grok_right = grok_x + 48
     grok_top = grok_y - 80
-    # Labels sit under the hex (y+40 / y+68). Start the handoff below that halo.
-    grok_bot = grok_y + 90
+    grok_bot = grok_y + 16
     ping_bot = ping_y - 10
     gh_bot = _icon_top(gh_y) + ICON
     gh_left = gh_x - ICON / 2 - 4
@@ -1320,18 +1319,13 @@ def build_scene() -> tuple[str, list[str]]:
         src="icon:Terraform",
         dst="icon:EC2",
     )
-    # Hook in from the host/bot gutter, then land inside the host below the
-    # title row — never along the dashed right border, never through the title.
-    drop_inside = host_x + 700
-    gutter_x = host_x + host_w + 12
-    below_title = host_y + 108
-    scene.poly(
-        [
-            (drop_x, dep_y + dep_h + 4),
-            (gutter_x, dep_y + dep_h + 4),
-            (gutter_x, below_title),
-            (drop_inside, below_title),
-        ],
+    # One straight vertical, well inside the purple host border (not on the
+    # dashed right edge, no left/right crossing). EC2 sits on the same x.
+    scene.arrow(
+        drop_x,
+        dep_y + dep_h + 4,
+        drop_x,
+        host_y + 108,
         name="aws-host",
         src="icon:EC2",
     )
@@ -1371,22 +1365,13 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(grok_x - 36, (grok_top + ping_bot) / 2, 6, container="bot")
 
-    # ⑦ Diagnosis → Remediation. Names sit under the hex, so the shaft
-    # jogs right of those labels, then lands on the capsule.
-    handoff_x = 1310
-    scene.poly(
-        [
-            (grok_right, grok_bot),
-            (handoff_x, grok_bot),
-            (handoff_x, rem_top),
-            (grok_x, rem_top),
-        ],
-        rem=True,
-        name="diag-rem",
-        src="icon:grok",
-        dst="icon:remediator",
+    # ⑦ Diagnosis hex bottom → Remediation icon, one straight vertical.
+    # Labels sit to the left of the hex so the shaft does not clip them.
+    scene.arrow(
+        grok_x, grok_bot, grok_x, rem_top, rem=True, name="diag-rem",
+        src="icon:grok", dst="icon:remediator",
     )
-    scene.badge(handoff_x + 28, (grok_bot + rem_top) / 2, 7, rem=True, container="bot")
+    scene.badge(grok_x + 36, (grok_bot + rem_top) / 2, 7, rem=True, container="bot")
     scene.poly(
         [
             (rem_right, rem_ic),
@@ -1398,7 +1383,7 @@ def build_scene() -> tuple[str, list[str]]:
         src="icon:remediator",
         dst="icon:GitHub",
     )
-    scene.badge((rem_right + gh_x) / 2, rem_ic - 28, 8, rem=True, container="bot")
+    scene.badge((rem_right + gh_x) / 2 + 24, rem_ic - 28, 8, rem=True, container="bot")
 
     # ⑨ Owner /approve → Actions. ⑩ poller → services group.
     act_ic = _ic(act_y)
@@ -1530,7 +1515,12 @@ def build_sandbox_scene() -> tuple[str, list[str]]:
         k3s_x, start_node_y, "k3s", "k3s (optional)", "",
         container="start", name_size=22,
     )
-    scene.badge(70, 220, 1, container="start")
+    scene.badge(
+        start_x + 18 + _tw("How to start", GROUP_PX, True) + 22,
+        start_y + 32,
+        1,
+        container="start",
+    )
 
     scene.add(group(box_x, box_y, box_w, box_h, "Agents", style=None))
     scene.container("agents", box_x, box_y, box_w, box_h)

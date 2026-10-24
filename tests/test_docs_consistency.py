@@ -194,10 +194,19 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "## Key features" not in readme
     assert "### Fix allowlist" in readme
     how_at = readme.index("## How it works, step by step")
+    prereq_at = readme.index("## Prerequisites")
+    quick_at = readme.index("## Quick start (local)")
+    bots_at = readme.index("## Set up both bots")
+    use_at = readme.index("## How to use")
     sandbox_at = readme.index("## Agent sandbox")
     aws_at = readme.index("## AWS (optional)")
-    assert how_at < sandbox_at < aws_at
+    assert how_at < prereq_at < quick_at < bots_at < use_at < sandbox_at < aws_at
     assert readme.index("<b>Figure 1.</b>") < readme.index("<b>Figure 2.</b>") < readme.index("<b>Figure 3:")
+    assert "```mermaid" not in readme
+    assert "| **B — Diagnosis** |" not in readme
+    assert "Internals — hold time" not in readme
+    assert "Figure source (contributors)" in readme
+    assert readme.index("## Reference") < readme.index("Figure source (contributors)")
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     sandbox = (ROOT / "docs" / "sandbox_architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
@@ -228,7 +237,7 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "holds secrets" not in svg
     assert "agents in one sandbox pod" not in svg
     assert "optional: agents in a sandbox pod" not in svg
-    assert "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16" in svg
+    assert "EC2 host · 10.0.1.0/24 · 10.0.0.0/16" in svg
     assert "1–6 diagnosis path" in svg
     assert "Grey edges are supporting" in readme
     assert "Alert forwarder queries Prometheus" in readme

@@ -152,7 +152,7 @@
     <use href="#i-k3s" xlink:href="#i-k3s" x="-28.0" y="-66.0" width="56" height="56"/>
     <text class="name" y="24" text-anchor="middle">k3s (optional)</text>
   </g>
-  <g transform="translate(70,220)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">1</text></g>
+  <g transform="translate(244,132)"><circle r="15" fill="#EA580C" stroke="#FFFFFF" stroke-width="2"/><text text-anchor="middle" dy="7" class="badge">1</text></g>
   <rect x="40" y="310" width="400" height="430" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
   <text x="58" y="348" class="group">Agents</text>
   <rect x="480" y="310" width="380" height="430" rx="18" fill="#F8FAFC" stroke="#E5E7EB" stroke-width="1.5"/>
