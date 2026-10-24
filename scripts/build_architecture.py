@@ -1320,6 +1320,8 @@ def build_scene() -> tuple[str, list[str]]:
     grok_top = grok_y - 80
     ping_bot = ping_y - 10
     gh_top = _icon_top(gh_y)
+    gh_ic = _ic(gh_y)
+    gh_left = gh_x - ICON / 2 - 4
     rem_top = rem_y - 88
     rem_bot = rem_y + 112
     own_top = _icon_top(own_y)
@@ -1419,21 +1421,25 @@ def build_scene() -> tuple[str, list[str]]:
     )
     scene.badge(bot_x + 36, badge_y, 4, container="bot")
 
-    # ⑤ Diagnosis → GitHub, around the labels (badge off the shaft).
+    # ⑤ Diagnosis → GitHub. Leave the hex on its left side (not the
+    # bottom-left corner) and land on the GitHub icon's left, above
+    # arrow ⑧, so the head stays off the Diagnosis name.
+    hex_cy = grok_y - 32
+    issue_left_y = gh_ic - 22
+    issue_col = col_left + 24
     scene.poly(
         [
-            (grok_left, grok_y - 16),
-            (col_left, grok_y - 16),
-            (col_left, gh_top - 8),
-            (gh_x, gh_top - 8),
-            (gh_x, gh_top),
+            (grok_left, hex_cy),
+            (issue_col, hex_cy),
+            (issue_col, issue_left_y),
+            (gh_left, issue_left_y),
         ],
         inc=True,
         name="bot-gh",
         src="icon:grok",
         dst="icon:GitHub issue",
     )
-    scene.badge(1172, 630, 5, container="bot")
+    scene.badge(issue_col - 32, (hex_cy + issue_left_y) / 2, 5, container="bot")
 
     # ⑥ Diagnosis → owner ping. Label is beside the bell, so the shaft
     # hits the icon only.
@@ -1451,8 +1457,6 @@ def build_scene() -> tuple[str, list[str]]:
     rem_ic = rem_y - 38
     rem_right = rem_x + 60
     rem_left = rem_x - 60
-    gh_ic = _ic(gh_y)
-    gh_left = gh_x - ICON / 2 - 4
     scene.poly(
         [
             (grok_right, grok_mid),

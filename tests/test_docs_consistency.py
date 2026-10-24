@@ -326,3 +326,66 @@ def test_architecture_png_is_nontrivial():
     # Native SVG is 1480×1380; render_architecture.sh writes 2×.
     assert width in {1480, 2960}, width
     assert height in {1180, 1340, 1380, 2360, 2680, 2760}, height
+
+
+_ACCURACY_FILE_LINE = re.compile(
+    r"`((?:[\w./-]+/)?[\w.-]+\.(?:py|yml|yaml|tf|json|md|txt|sh|ps1)):(\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)`"
+)
+
+
+def _resolve_accuracy_file(cited: str) -> Path | None:
+    direct = ROOT / cited
+    if direct.is_file():
+        return direct
+    matches = [
+        path
+        for path in ROOT.rglob(Path(cited).name)
+        if path.is_file() and ".git" not in path.parts
+    ]
+    suffixed = [path for path in matches if str(path).replace("\\", "/").endswith(cited)]
+    if len(suffixed) == 1:
+        return suffixed[0]
+    if cited.count("/") == 0:
+        named = [path for path in matches if path.name == cited]
+        if len(named) == 1:
+            return named[0]
+    return None
+
+
+def test_accuracy_file_line_refs_exist():
+    """Every `file:line` citation in ACCURACY.md must still land in that file."""
+    text = (ROOT / "docs" / "ACCURACY.md").read_text(encoding="utf-8")
+    missing: list[str] = []
+    for match in _ACCURACY_FILE_LINE.finditer(text):
+        cited, spec = match.group(1), match.group(2)
+        path = _resolve_accuracy_file(cited)
+        if path is None:
+            missing.append(f"{cited}:{spec} (file not found)")
+            continue
+        line_count = len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        for part in spec.split(","):
+            if "-" in part:
+                start_s, end_s = part.split("-", 1)
+                lines = [int(start_s), int(end_s)]
+            else:
+                lines = [int(part)]
+            for line in lines:
+                if line < 1 or line > line_count:
+                    missing.append(
+                        f"{cited}:{line} ({path.relative_to(ROOT)} has {line_count} lines)"
+                    )
+    assert missing == [], "stale ACCURACY.md file:line refs:\n  " + "\n  ".join(missing)
+
+
+def test_accuracy_readme_section_refs():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    accuracy = (ROOT / "docs" / "ACCURACY.md").read_text(encoding="utf-8")
+    assert "README step 10" not in accuracy
+    for heading in (
+        "## Prerequisites",
+        "### Two AWS identities",
+        "### Optional k3s sandbox",
+        "### No proposal appeared",
+        "## Troubleshooting",
+    ):
+        assert heading in readme, heading

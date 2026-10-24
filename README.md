@@ -173,7 +173,7 @@ On AWS later, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies
 
 ### Incident Remediation
 
-A **second** bot in the **same Grok account**. Only the Diagnosis bot’s webhook goes in `.env`. Do not paste anything from this bot into `GROK_WEBHOOK_*`.
+A **second** bot in the **same Grok account**. It has no webhook and does not watch the repo. Only the Diagnosis bot’s webhook goes in `.env`. Do not paste anything from this bot into `GROK_WEBHOOK_*`.
 
 1. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**.
 2. Connect GitHub when the bot asks in its first chat, and grant it access to **the same fork**.
@@ -199,6 +199,8 @@ action: reset_fault
 target: order-service
 <!-- /resilienceops-proposal -->
 ```
+
+**You should see** that block in a comment on the `incident` issue (one `action` + `target`). After `/approve`, a recorded-approval comment, the `remediation-approved` label, and a green **record remediator approval** run on the Actions tab.
 
 `record-last-good` is not part of this step. It lives only in [Quick start](#quick-start-local) (and on the EC2 host after deploy).
 
@@ -541,7 +543,7 @@ Figure 1 badges are Path B then Path C. Path A is Red/Blue in one `orchestrator.
 4. **Diagnosis.** The diagnosis bot reads the webhook. [No control path](#read-these-once).
 5. **Issue.** Opens or comments on a GitHub issue labeled `incident` (same fingerprint → comment).
 6. **Owner ping.** Firing **critical** alerts also ping the owner.
-7. **Handoff.** Diagnosis asks the Remediation bot (same account) to propose a fix. The Remediation bot does not watch the repo.
+7. **Handoff.** Diagnosis asks the Remediation bot (same account) to propose a fix.
 8. **Proposal.** Remediation comments one allowlisted action on that GitHub issue.
 9. **Approve.** `/approve`. Actions records; it does not run the fix.
 10. **Fix.** `python3 remediation/poll_and_apply.py` on the lab host, or [`--via-ssm`](#read-these-once). Then Prometheus until the alert clears or `--verify-timeout` expires.
@@ -581,7 +583,7 @@ Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TAR
 
 6. **Issue** — `incident` label; same fingerprint comments. Path A writes `reports/incident_*.md` instead.
 
-7. **Handoff** — Path C: Diagnosis asks the Remediation bot (same account) to propose a fix. The Remediation bot has no webhook and does not watch the repo.
+7. **Handoff** — Path C: Diagnosis asks the Remediation bot (same account) to propose a fix.
 
 8. **Proposal** — Remediation comments a `<!-- resilienceops-proposal:v1 -->` block with one allowlisted `action` + `target`. `remediation/actions.py` rejects extras, a second block, and `;|&$\` / `../` / URL injection.
 
