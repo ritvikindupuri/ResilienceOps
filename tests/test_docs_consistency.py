@@ -107,6 +107,9 @@ def test_readme_referenced_scripts_exist():
         "docs/ResilienceOps_Technical_Documentation.pdf",
         "scripts/generate_example_post_mortem.py",
         "reports/example_incident_memory_exhaustion.md",
+        "remediation/remediate.py",
+        "remediation/e2e_local.py",
+        ".github/workflows/remediation-approve.yml",
     ]
     for rel in required:
         assert (ROOT / rel).is_file(), rel
@@ -123,6 +126,9 @@ def test_readme_flow_names_match_code_stages():
         "**Enrichment**",
         "**Diagnosis**",
         "**Issue**",
+        "**Proposal**",
+        "**Approval**",
+        "**Fix**",
         "**Resolution**",
     ):
         assert heading in readme, heading
@@ -154,35 +160,67 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "12.1 s" in readme
     assert "examples/live_run_issue5_timeline.md" in readme
     assert "examples/live_run_issue5_bridge.log" in readme
-    assert "health ×3" in readme
-    assert "reset ×2" in readme
+    assert "Blue checks health on all 3 and resets order-service and payment-service" in readme
     svg = (ROOT / "docs" / "architecture.svg").read_text(encoding="utf-8")
     assert "Your Grok bot" not in svg
     assert "Your Grok bot" not in readme
-    assert "AWS account" in svg
     assert "optional AWS" in svg
-    assert "health ×3" in svg
-    assert "reset ×2" in svg
-    assert "Grok Bot (external)" in svg
-    assert "PromQL · agent jsonl" in svg
-    assert "(Compose agents)" in svg
-    assert "PromQL · jsonl · k8s" not in svg
-    assert "FAULT_HOLD_SECONDS" in svg
-    assert "put_lab_secrets.py" in svg
-    assert "send_command" in svg
-    assert ":3000 / :8000" in svg
-    assert "Agents (--profile agents)" in svg
-    assert "Docker Compose on this host" in svg
-    assert "App + observability (default)" in svg
-    assert "Compose lab on this host" not in svg
+    assert "watches and resets" in svg
+    assert "health on all 3" not in svg
+    assert "reset order + payment" not in svg
+    assert "faults order" in svg
+    assert "→ OS" not in svg
+    assert "faults OS+PS" not in svg
+    assert "/sre/autonomous-agent-audit" not in svg
+    assert "Grok Bot (external)" not in svg
+    assert "AI Incident Diagnosis" in svg
+    assert "queries Prometheus" in svg
+    assert "reads metrics" in svg
+    assert "PromQL · jsonl" not in svg
+    assert "creates the infra" in svg
+    assert "Secrets script" not in svg
+    assert "Deploy script" not in svg
+    assert "stores the app bundle" not in svg
+    assert "runs deploy commands" not in svg
+    assert "holds secrets" not in svg
+    assert "agents in one sandbox pod" in svg
+    assert "optional: agents in a sandbox pod" not in svg
+    assert "EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16" in svg
+    assert "1–6 diagnosis path" in svg
+    assert "Grey edges are supporting" in readme
+    assert "incident-bridge queries Prometheus" in readme
+    assert "allowed_cidr" not in svg
+    assert "/metrics" not in svg
+    assert "reads Prom" not in svg
+    for filename in (
+        "put_lab_secrets.py",
+        "deploy_remote.py",
+        "orchestrator.py",
+        "jsonl",
+        "FAULT_HOLD_SECONDS",
+        "send_command",
+        "CloudWatch log groups",
+        "webhook in",
+        "app_workloads",
+        "data_persistence",
+    ):
+        assert filename not in svg, filename
+    assert "Grafana and API ports from your IP" in svg
+    assert "Lab (Docker Compose)" in svg
+    assert "Docker Compose on this host" not in svg
     assert "k3s sandbox (optional)" in svg
-    assert "Runs the agents in isolated pods" in svg
+    assert "Runs the agents in isolated pods" not in svg
     assert "k3s (optional)" not in svg
-    assert "diagnose" in svg
     assert "read-only" not in svg.lower()
-    assert "Your Grok bot" not in svg
-    assert "app_workloads 10.0.10.0/24" in svg
-    assert "public_ingress  10.0.1.0/24" in svg
+    assert "Owner ping" in svg
+    assert "1–6 diagnosis path" in svg
+    assert "7–10 remediator path" in svg
+    assert "Incident Remediation" in svg
+    assert "AI Incident Diagnosis" in svg
+    assert "Actions" in svg
+    assert "host poller" in svg
+    assert "arrow-rem" in svg
+    assert "How ResilienceOps plus the diagnosis and remediator bots work" in svg
     assert "FAULT_HOLD_SECONDS" in readme
     assert "PROMETHEUS_BIND" in readme
     assert "COMPOSE_FILE" in readme
@@ -209,8 +247,12 @@ def test_readme_sample_post_mortem_is_current_generator():
     assert "output -raw instance_id" in readme
     assert "docker compose up --build -d" in readme
     assert "FaultCatalog.reset_environment" in readme or "finally" in readme
-    assert "SG  ingress + internal" in svg
-    assert "public RT only" in svg
+    assert "Grafana and API ports from your IP" in svg
+    assert "CloudWatch log groups" in readme
+    assert "app_workloads 10.0.10.0/24" in readme
+    assert "data_persistence 10.0.20.0/24" in readme
+    assert "webhook in" in readme
+    assert "send_command" in readme
     assert "logging.getLogger(\"httpx\").setLevel(logging.WARNING)" in (
         ROOT / "services" / "incident-bridge" / "app.py"
     ).read_text(encoding="utf-8")
@@ -240,7 +282,7 @@ def test_live_run_artifacts_redact_webhook_url():
     assert "ConnectTimeout" in log
 
 
-def test_architecture_geometry_has_no_overlaps():
+def _load_arch():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -249,8 +291,28 @@ def test_architecture_geometry_has_no_overlaps():
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(mod)
-    hits = mod.check_geometry()
+    return mod
+
+
+def test_architecture_geometry_has_no_overlaps():
+    hits = _load_arch().check_geometry()
     assert hits == [], "architecture geometry violations:\n  " + "\n  ".join(hits[:20])
+
+
+def test_geometry_flags_line_through_any_text():
+    """A shaft through a caption is a hit even when that caption is owned."""
+    mod = _load_arch()
+    scene = mod.Scene(400, 400)
+    scene.text(200, 200, "resets", 24, bold=False, anchor="middle", name="cap:Blue Team")
+    scene.add_seg(200, 160, 200, 240, "blue-svc:1", frozenset({"cap:Blue Team"}))
+    hits = scene.check()
+    assert any("through text cap:Blue Team" in item for item in hits), hits
+
+
+def test_architecture_icon_pngs_have_transparent_corners():
+    mod = _load_arch()
+    hits = mod.check_icon_png_corners()
+    assert hits == [], "icon PNG corners must be transparent:\n  " + "\n  ".join(hits)
 
 
 def test_architecture_png_is_nontrivial():
@@ -260,6 +322,6 @@ def test_architecture_png_is_nontrivial():
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(data) > 80_000
     width, height = struct.unpack(">II", data[16:24])
-    # Native SVG is 2100×1420; render_architecture.sh writes 2×.
-    assert width in {1920, 2100, 3840, 4200}, width
-    assert height in {1200, 1420, 2400, 2840}, height
+    # Native SVG is 1480×1380; render_architecture.sh writes 2×.
+    assert width in {1480, 2960}, width
+    assert height in {1180, 1340, 1380, 2360, 2680, 2760}, height

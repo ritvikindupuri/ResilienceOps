@@ -1,16 +1,18 @@
 # ResilienceOps — Autonomous Cloud Reliability & Self-Healing Platform
 
-> An SRE lab where Red Team agents inject real infrastructure faults into a live microservices stack, Blue Team agents detect and remediate SLO breaches, and Prometheus alerts are diagnosed by an importable **Grok Bot** template that opens GitHub issues — monitored second-by-second on Grafana.
+> An SRE lab where Red Team agents inject real infrastructure faults into a live microservices stack, Blue Team agents detect and remediate SLO breaches, Prometheus alerts are diagnosed by an importable **AI Incident Diagnosis** Grok Bot that opens GitHub issues, and an importable **Incident Remediation** Grok Bot proposes one allowlisted fix that runs only after the repo owner comments `/approve` — monitored second-by-second on Grafana.
 
 ---
 
 ## Overview
 
-Modern distributed systems require continuous resilience validation, yet conventional **chaos engineering** is either purely manual or disconnected from automated remediation workflows. **ResilienceOps** closes this loop with a containerized microservices lab, in-cluster agents, and an external AI incident-diagnosis bot.
+Modern distributed systems require continuous resilience validation, yet conventional **chaos engineering** is either purely manual or disconnected from automated remediation workflows. **ResilienceOps** closes this loop with a containerized microservices lab, in-cluster agents, an external AI incident-diagnosis bot, and a separate approval-gated remediator bot.
 
 The platform runs an authentic containerized stack under live traffic. A coordinated **3-Agent Red Team** analyzes the topology and executes kernel-level and network-level faults (cgroup memory leaks, CPU CFS quota exhaustion, network delays, TCP drops). A **3-Agent Blue Team** watches Golden Signals, declares SLO breaches, runs RCA, executes recovery runbooks, and writes post-mortems. In-cluster model IDs are set in [`agents/config.py`](agents/config.py) (defaults: `claude-sonnet-4-6` and `claude-haiku-4-5-20251001`; override with env vars).
 
-In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). **The bot has no control path into the lab**: it only receives webhooks and writes GitHub issues (opening an issue is a write). It never restarts, scales, rolls back, or pushes code. Self-healing from the bot is a v2 roadmap item. A real `/fault` run of that path (GitHub [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5)) is in [Sample output: a real test run](#sample-output-a-real-test-run); issue #4 is the synthetic check.
+In parallel, Prometheus alerting rules fire into Alertmanager. The **incident-bridge** enriches each alert and POSTs it to the importable Grok Bot template **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. The diagnosis bot diagnoses likely root cause from the evidence bundle plus recent commits in the watched GitHub repo, then opens an `incident`-labeled GitHub issue (or comments on an existing one). **That diagnosis bot has no control path into the lab**: it only receives webhooks and writes GitHub issues (opening an issue is a write). It never restarts, scales, rolls back, or pushes code.
+
+A second, separate template **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** comments a machine-readable proposal that names **exactly one** allowlisted action. The fix runs only after the repo owner (or a collaborator with write permission) comments `/approve` on that `incident` issue. A GitHub-hosted runner cannot reach a local Compose stack, so GitHub Actions **records** the approval; `python3 remediation/poll_and_apply.py` on the lab host (or `remediate.py --via-ssm` on the existing AWS SSM path) is what executes it. A real `/fault` run of the diagnosis path (GitHub [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5)) is in [Sample output: a real test run](#sample-output-a-real-test-run); issue #4 is the synthetic check.
 
 All telemetry is streamed in **real time (1-second scrape)** to Grafana.
 
@@ -36,8 +38,11 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
     - *Root Cause Investigator* (`claude-sonnet-4-6`): Investigates errors and pinpoints why things broke.
     - *Automated Recovery Fixer & Report Writer* (`claude-sonnet-4-6`): Executes automated recovery runbooks and generates post-incident reports. Path A writes `reports/incident_*.md`; it does not open GitHub issues.
 - **AI Incident Diagnosis (Grok Bot template)**:
-  - Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. Alerts flow services → Prometheus rules → Alertmanager → incident-bridge → Grok Bot webhook → GitHub `incident` issue and (for firing critical alerts) an owner chat ping.
-  - The bot has no control path into the lab (webhooks in, GitHub issues out). Duplicate fingerprints comment on the open issue; resolved alerts comment when the alert clears.
+  - Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**. Alerts flow services → Prometheus rules → Alertmanager → incident-bridge → diagnosis-bot webhook → GitHub `incident` issue and (for firing critical alerts) an owner chat ping.
+  - The diagnosis bot has no control path into the lab (webhooks in, GitHub issues out). Duplicate fingerprints comment on the open issue; resolved alerts comment when the alert clears.
+- **Incident Remediation (separate Grok Bot template)**:
+  - Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**. It proposes exactly one allowlisted action on the `incident` issue (`reset_fault`, `restart_service`, or `rollback_deploy`).
+  - The owner comments `/approve`. `.github/workflows/remediation-approve.yml` checks write permission + the `incident` label + the proposal, then records the approval. The host poller (or SSM) runs the fix and verifies Prometheus recovered. See [Incident Remediation bot](#incident-remediation-bot).
 - **Dual-Pane Observability Separation (Infrastructure vs. Security)**:
   - **Grafana (Pure Infrastructure Monitoring)**: real-time streaming (`refresh: 1s`, `liveNow: true`, default window `now-5m`) displaying Google SRE Golden Signals, Availability SLO % (99.9% dashboard threshold), Latency percentiles (p50, p95, p99), Ingress RPS vs 5XX error area charts, Service traffic shares, and live Microservice Memory Usage plotted against the 256MB cgroup ceiling on order-service and payment-service. Free of audit clutter and emojis.
   - **AWS CloudWatch (Agent Logs & Fault Telemetry)**: Agents best-effort `put_log_events` to `/sre/autonomous-agent-audit` (`agents/common/structured_logger.py`). Helper scripts put dashboards `SRE-Autonomous-Agent-Security-Audit` (`create_cw_dashboard.py`) and `SRE-fault-Vectors-Live-Telemetry` (`test_grafana_proxy.py`). Terraform does **not** create CloudWatch dashboards. Dated screenshots in [RESULTS.md](RESULTS.md) used console names `Agent-Command-Log` and `System-Fault-Metrics`.
@@ -54,25 +59,99 @@ All telemetry is streamed in **real time (1-second scrape)** to Grafana.
 ## System Architecture
 
 <p align="center">
-  <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps + AI Incident Diagnosis works" width="950" />
+  <img src="docs/images/infraattack_platform_architecture.png" alt="How ResilienceOps plus the diagnosis and remediator bots work" width="100%" />
 </p>
-<p align="center"><b>Figure 1: How ResilienceOps + AI Incident Diagnosis works</b></p>
-<p align="center">The bottom cards are Path B (alert → bridge → bot → GitHub). Path A is Red/Blue in <em>one</em> <code>orchestrator.py</code> process, run by default as Compose <code>agent-sandbox</code> under <code>--profile agents</code>. k3s is optional (<code>deploy_k8s_sandbox.py</code>). AWS/EC2 is <em>optional</em>: local <code>docker compose up</code> is the same Compose lab (agents need <code>--profile agents</code>). The Grok bot is external: the bridge needs outbound HTTPS to the webhook; agents also call Anthropic. On AWS, Compose and optional k3s run on the <em>single</em> EC2 host in <code>public_ingress</code> <code>10.0.1.0/24</code> (VPC <code>sre-enterprise-vpc</code> + IGW); <code>app_workloads</code> <code>10.0.10.0/24</code> and <code>data_persistence</code> <code>10.0.20.0/24</code> are created but unused. Grafana only <em>reads</em> Prometheus. order-service owns Redis and <code>orders_db</code>. Outside the VPC: Terraform, IAM, SSM, S3 deploy bucket, Parameter Store secrets, and CloudWatch Logs. The IGW sits on the VPC border; a dashed SG wraps the EC2 host. Red <em>faults</em> hit order-service and payment-service only; Blue ticks <em>health ×3</em> / <em>reset ×2</em> match the code. Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
+<p align="center"><b>Figure 1: How ResilienceOps plus the diagnosis and remediator bots work</b></p>
+<p align="center">Orange ①–⑥ is the diagnosis path. Blue ⑦–⑩ is the remediator path (GitHub issue → remediator → owner → <code>/approve</code> / Actions → host poller / SSM → services). Grey edges are supporting (optional AWS deploy, Grafana, Red/Blue, PromQL query). incident-bridge queries Prometheus. Claim-to-evidence: <a href="docs/ACCURACY.md"><code>docs/ACCURACY.md</code></a>.</p>
 <p align="center">Source: <a href="docs/architecture.svg"><code>docs/architecture.svg</code></a> (rebuild + render with <code>scripts/render_architecture.sh</code> / <code>scripts/build_architecture.py</code>). Companion mermaid: <a href="docs/architecture.mmd"><code>docs/architecture.mmd</code></a>.</p>
+
+### How it works (plain English)
+
+You run a small shop on your machine (or one EC2 host): **api-gw**, **order-service**, **payment-service**, plus Prometheus, Alertmanager, the incident-bridge, and Grafana. Traffic hits the gateway. Order-service talks to Redis and Postgres; Prometheus scrapes all three apps every **1 second**.
+
+Three independent paths can run after something breaks:
+
+| Path | Who | What happens |
+|---|---|---|
+| **A — Blue Team** | `orchestrator.py` (`docker compose --profile agents`, host CLI, or optional k3s) | Red injects a real fault. Blue watches health + PromQL, holds `FAULT_HOLD_SECONDS` (default **120**), resets both apps, writes `reports/incident_*.md`. Does **not** open GitHub issues. |
+| **B — Diagnosis bot** | Prometheus → Alertmanager → incident-bridge → **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** | The bridge POSTs evidence to the diagnosis **webhook**. The bot opens or comments on a GitHub issue labeled `incident`. It has **no control path** into the lab (webhook in, GitHub issues out). Firing **critical** alerts also chat-ping the owner. |
+| **C — Remediation bot** | **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** → owner `/approve` → host poller | The remediator comments one allowlisted action. You comment `/approve`. GitHub Actions **records** that; it does **not** run the fix (a GitHub-hosted runner cannot see `127.0.0.1`). `python3 remediation/poll_and_apply.py` on the lab host (or `remediate.py --via-ssm` on AWS) is what executes it. |
+
+The numbered path in Figure 1 is Path B then Path C. Path A is Red/Blue in one `orchestrator.py` process.
+
+### How to use
+
+Do [Installation and quick start](#installation-and-quick-start) first (both bots imported, Compose up, `webhook_configured: true`). Then:
+
+1. **Confirm the shop is healthy.**
+   ```bash
+   curl -sS http://127.0.0.1:8001/ready
+   curl -sS http://127.0.0.1:8088/healthz
+   ```
+   You should see order-service `"status":"healthy"` and `"webhook_configured":true`.
+2. **Inject a real fault** (optional demo — production incidents use the same alerts without `/fault`):
+   ```bash
+   curl -sS -X POST 'http://127.0.0.1:8001/fault/redis-starvation'
+   ```
+   Expect ~49 Redis clients. Watch `http://127.0.0.1:9090/alerts` until **RedisConnectionSaturation** is firing (`for: 5s`, threshold `>= 48`).
+3. **Watch the diagnosis issue get filed.** Within about a minute the diagnosis bot opens an `incident` issue (or comments on the open fingerprint). Sample: GitHub [issue #5](https://github.com/ritvikindupuri/ResilienceOps/issues/5) (**12.1 s** fault→webhook, **~61 s** to the issue).
+4. **Read the diagnosis.** The issue has a likely root cause, PromQL evidence, and suggest-only advice. The diagnosis bot does **not** reset anything.
+5. **Wait for the remediator proposal.** The Remediation bot watches the repo you name for new `incident` issues and comments one proposal block. Timing depends on the bot; if no proposal appears, open the bot's chat and ask it to check issue #N. The poller and Actions require exactly:
+   ```
+   <!-- resilienceops-proposal:v1 -->
+   action: reset_fault
+   target: order-service
+   <!-- /resilienceops-proposal -->
+   ```
+6. **Approve the fix.** On that issue, comment exactly:
+   ```
+   /approve
+   ```
+   You should see a recorded-approval comment and the `remediation-approved` label. GitHub Actions does **not** touch the stack.
+7. **Run the fix on the machine that can see Compose:**
+   ```bash
+   export GITHUB_REPOSITORY=<you>/ResilienceOps
+   export GITHUB_TOKEN=...    # issues:read + issues:write; never commit
+   python3 remediation/poll_and_apply.py --once
+   ```
+   On the EC2 host, `/opt/sre-colosseum/.env` is written as root — run the poller with `sudo` (or as root) so that file is readable. If the process cannot read it, the loader skips it quietly and does not print secrets. On AWS you may add `--via-ssm` (reuses `deploy_remote.send_and_wait`). That path needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded to the host. If the SSM command fails, the poller posts a failure result comment on the issue. Expect a result comment and, on success, `remediation-applied`.
+8. **Check recovery.** Prometheus `RedisConnectionSaturation` goes inactive; `curl -sS http://127.0.0.1:8001/health` is healthy; `redis_active_connections_count` is back under 40.
+
+To stop: `docker compose down -v`.
+
+### How it works, step by step
+
+The numbered badges in Figure 1 are Path B then Path C. Path A is Red/Blue in one `orchestrator.py` process (`docker compose --profile agents`, or optional k3s). Red Team faults (grey, unnumbered) hit **order-service and payment-service only** (not api-gw). `orchestrator.py` holds the fault for `FAULT_HOLD_SECONDS` (default **120**) so Prometheus `for:` windows can fire. `FaultCatalog.reset_environment()` still runs in `finally`. Blue Team (grey, unnumbered) checks health on all three app services and resets order-service and payment-service.
+
+1. **Scrape.** Prometheus pulls `/metrics` from **all 3** services (`api-gw`, `order-service`, `payment-service`) every 1s (`dashboards/prometheus.yml`).
+2. **Alert.** Firing rules go to Alertmanager (`alertmanager:9093`).
+3. **Evidence.** Alertmanager POSTs to `incident-bridge:8080/webhook`. The bridge adds PromQL range summaries plus tailed `logs/agent_activity.jsonl` (jsonl only when `--profile agents` or a host `orchestrator.py` is writing it). incident-bridge queries Prometheus (dashed edge). No Kubernetes client in the Compose bridge image.
+4. **Diagnosis.** The imported Grok template **AI Incident Diagnosis** reads the webhook. That diagnosis bot has **no control path** into the lab: webhook in, GitHub issue + owner ping out.
+5. **Issue.** The diagnosis bot opens or updates a GitHub issue labeled `incident`.
+6. **Owner ping.** Firing **critical** alerts also ping the owner.
+7. **Proposal.** The separate **Incident Remediation** bot comments exactly one allowlisted action on that issue.
+8. **Owner.** The proposal sits on the issue for the repo owner (or a write collaborator) to read.
+9. **Approve.** The owner comments `/approve`. GitHub Actions records the approval; it does not run the fix.
+10. **Fix.** `python3 remediation/poll_and_apply.py` on the lab host (or `remediate.py --via-ssm`, which needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop `ssm:SendCommand` credentials) runs that one action and checks Prometheus.
+
+**Deploy flow (optional AWS).** Laptop Terraform (`terraform/main.tf`) creates the infra, including `aws_s3_bucket.deploy`. `scripts/put_lab_secrets.py` writes SecureString parameters. `deploy_remote.py` uploads the zip to that bucket, mints a **presigned GET**, and `ssm.send_command` has the instance curl the zip, unzip, and `docker compose up`. The instance role reads Parameter Store into `/opt/sre-colosseum/.env`. One drop onto the EC2 host (VPC `10.0.0.0/16`, public subnet, SG :3000/:8000 from `allowed_cidr`). IAM role + instance profile, CloudWatch log groups, IGW, and unused subnets `app_workloads 10.0.10.0/24` / `data_persistence 10.0.20.0/24` are Terraform resources, not drawn as icons. Grafana only *reads* Prometheus. order-service owns Redis and `orders_db`. Blue checks health on all 3 and resets order-service and payment-service. Optional k3s runs `orchestrator.py` in one sandbox pod (`deploy_k8s_sandbox.py`). The remediator can reuse that same `ssm.send_command` path (`--via-ssm`); a GitHub-hosted runner still cannot see the host.
 
 ### Step-by-step flow (matches the code)
 
 Traffic always runs: compose `traffic-generator` POSTs `api-gw:8000` at `RPS_TARGET` (compose default **20**; `traffic-generator/load_generator.py` defaults to **25** only if you run it on the host with no env). `api-gw` reverse-proxies `/api/orders*` to `order-service:8001` and `/api/payments*` to `payment-service:8002`. Order-service writes Redis + PostgreSQL and POSTs `/payments`. Prometheus (`dashboards/prometheus.yml`) scrapes `/metrics` every **1s** from those three jobs and evaluates `dashboards/alerts.yml`. Grafana (`:3000`) is a PromQL dashboard only — it is **not** on the alert path. Prometheus is published as `127.0.0.1:9090` (laptop + SSM). On AWS, `deploy_remote.py` also binds the instance **private IP**:9090 so k3s pods can query it (local delivery; **no** `ingress_sg` rule for 9090 — that SG only opens 3000/8000 to `allowed_cidr`). Never `0.0.0.0`.
 
-After a fault, **two code paths** run. Path A is `orchestrator.py`. Path B is Prometheus → Alertmanager → incident-bridge → Grok Bot. Stages below are what the code actually does.
+After a fault, **three code paths** can run. Path A is `orchestrator.py`. Path B is Prometheus → Alertmanager → incident-bridge → diagnosis bot → GitHub issue. Path C is the remediator proposal on that issue → `/approve` → host poller / SSM. Stages below are what the code actually does.
 
 1. **Fault injection** (`orchestrator.py` phases 2–3) — `faultStrategistAgent.plan_campaign` then either `InfraDisruptorAgent.execute_fault` (order-service `POST /fault/leak-memory`, `/fault/redis-starvation`, `/fault/cpu-burn`, `/fault/crash`) or `NetworkAdversaryAgent.execute_fault` (payment-service `tc netem` via `/fault/latency` or `/fault/drop-rate`). `--scenario` strings the CLI documents: `MEMORY_EXHAUSTION`, `REDIS_CONNECTION_STARVATION`, `CPU_SATURATION`, `NETWORK_LATENCY`, `PACKET_LOSS`. Dispatch is substring-based: `NETWORK` / `PACKET` / `LATENCY` → network agent; `REDIS` / `CPU` / `CRASH` → infra agent; anything else → memory leak. The catalog records network faults as `KERNEL_TC_NETEM_LATENCY` / `KERNEL_TC_NETEM_PACKET_LOSS` (those names also work as `--scenario` because they contain `LATENCY` / `PACKET`).
 2. **Detection** (phase 4, in parallel with Prometheus) — `IncidentMonitor.inspect_telemetry` `GET`s `/health` on api-gw (4s timeout), order-service, and payment-service. If `PROMETHEUS_URL` answers, it also queries p99 of `http_request_duration_seconds` and the 5xx share of `http_requests_total`. `evaluate_slos` declares an incident when p99/probe latency > `SLO_MAX_P99_LATENCY_MS` (1200), error rate > `SLO_MAX_ERROR_RATE_PERCENT` (2), or a service returns HTTP >= 500. The loop is at most **9 ticks of 1s** (`for tick in range(1, 10)`). After detection (and RCA when an incident was declared) the orchestrator **holds** `FAULT_HOLD_SECONDS` (default **120**) so rules with `for:` windows (up to 20s in `dashboards/alerts.yml`) can fire and Alertmanager → incident-bridge can forward. Blue remediation runs after the hold. Every cycle still `FaultCatalog.reset_environment()` in a `finally` block so leaks / `tc netem` / Redis starvation cannot pile up across `--cycles`. Set `FAULT_HOLD_SECONDS=0` to skip the hold. Prometheus evaluates the same SLO/infra/payment rules in `dashboards/alerts.yml` every 1s independently of the orchestrator.
 3. **Alert** — when a rule stays true for its `for:` window, Prometheus sends it to Alertmanager at compose DNS `alertmanager:9093` (`dashboards/prometheus.yml`). Alertmanager is published on the host as `127.0.0.1:9093`. Alertmanager groups (`group_wait: 5s`, `group_interval: 15s`, `repeat_interval: 1h`) and POSTs to `http://incident-bridge:8080/webhook` with `send_resolved: true`.
 4. **Enrichment** — `incident-bridge` (`services/incident-bridge/app.py`) builds an evidence bundle of **PromQL** range summaries (`EVIDENCE_WINDOW_SECONDS` default 600) plus tailed **`AGENT_ACTIVITY_LOG` jsonl** (only when the `agents` profile or a host `orchestrator.py` is writing that file). The Compose bridge image has no `kubernetes` client and no kubeconfig, so it does **not** collect k8s events. The payload is capped at `PAYLOAD_MAX_BYTES` (~100KB) and POSTed as `{status, alerts, evidence, source: "resilienceops"}` using `GROK_WEBHOOK_*`. Same `fingerprint`+`status` is forwarded at most once per `DEDUPE_TTL_SECONDS` (300). If `GROK_WEBHOOK_URL` is empty, the bridge logs `GROK_WEBHOOK_URL is unset; dropping alert payload` and returns `"dropped_unconfigured"` — the rest of the lab keeps running. If the outbound POST fails after `WEBHOOK_MAX_RETRIES`, the bridge logs `forward FAILED after N attempts alertname=… fingerprint=…`, writes `logs/bridge_deadletter.jsonl` (no key), queues a bounded in-memory retry, and does **not** crash the ASGI app. The webhook key is never logged. **`agent_activity` is empty unless something is writing `logs/agent_activity.jsonl`** — that is the opt-in `agents` Compose profile or a host `orchestrator.py` run, not the default `docker compose up`.
-5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` uses telemetry plus optional k8s events (agent sandbox toolkit, not the incident-bridge) and `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) to pick a root cause and runbook (e.g. `MEMORY_EXHAUSTION_OOM` → `EVICT_CONTAINER_AND_PURGE_LEAK`). Path B: the imported Grok Bot template **AI Incident Diagnosis** diagnoses from the evidence bundle (PromQL + agent jsonl) **plus recent commits** in the watched GitHub repo. The bot has no control path into the lab (no restart/scale/rollback/push).
-6. **Issue** — the Grok Bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate (a repeat Redis-starvation run against an open `RedisConnectionSaturation` issue comments instead of opening a new issue). Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
-7. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service). k8s restart/scale runs only if `K8sToolKit.k8s_available` **and** the target pods exist in `sre-target-apps`. On the documented AWS path those apps stay in **Compose** (`sre-target-apps` is empty; `red-agent-sa` is `get`/`list`/`watch` only), so restart/scale is a no-op unless you passed `--apply-microservices`. Compose `restart: unless-stopped` is what brings a crashed `order-service` back. `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch (`/sre/autonomous-agent-audit` stream `audit-stream`). Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The bot comments on the GitHub issue. The bot does not reset the fault.
+5. **Diagnosis** — Path A: `DiagnosticAgent.analyze` uses telemetry plus optional k8s events (agent sandbox toolkit, not the incident-bridge) and `EnterpriseLLMEngine` (`MODEL_DIAGNOSTIC_RCA`, default `claude-sonnet-4-6`) to pick a root cause and runbook (e.g. `MEMORY_EXHAUSTION_OOM` → `EVICT_CONTAINER_AND_PURGE_LEAK`). Path B: the imported Grok Bot template **AI Incident Diagnosis** diagnoses from the evidence bundle (PromQL + agent jsonl) **plus recent commits** in the watched GitHub repo. The diagnosis bot has no control path into the lab (no restart/scale/rollback/push).
+6. **Issue** — the diagnosis bot opens a GitHub issue labeled `incident`. If an issue for that fingerprint is already open, it **comments** there instead of opening a duplicate (a repeat Redis-starvation run against an open `RedisConnectionSaturation` issue comments instead of opening a new issue). Firing **critical** alerts also chat-ping the owner (per the ping preference set at import). Path A does not open GitHub issues; it writes `reports/incident_*.md` after remediation.
+7. **Proposal** — Path C: the imported **Incident Remediation** template comments a `<!-- resilienceops-proposal:v1 -->` block that names exactly one allowlisted action (`reset_fault`, `restart_service`, or `rollback_deploy`) and one allowlisted target. Anything else is rejected by `remediation/actions.py`.
+8. **Approval** — the repo owner (or a collaborator whose GitHub permission is `write` / `maintain` / `admin`) comments `/approve` and nothing else. `.github/workflows/remediation-approve.yml` runs `remediation/record_approval.py`: it checks the `incident` label, rejects bots and pull-request comments, parses the latest valid proposal, comments a recorded approval block, and adds the `remediation-approved` label. **The workflow does not execute the fix.**
+9. **Fix** — `python3 remediation/poll_and_apply.py` on the machine that can reach Compose (laptop lab, or the EC2 host) reads the recorded approval and runs `remediation/remediate.py`. On AWS the same CLI accepts `--via-ssm` and reuses `deploy_remote.send_and_wait` (`AWS-RunShellScript` on `/opt/sre-colosseum`). That needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded to the host; an SSM failure posts a result comment with `ok: false`. After the action it queries Prometheus until the alert condition clears or `--verify-timeout` expires.
+10. **Resolution** — Path A: `RemediatorAgent.execute_runbook` always calls `FaultCatalog.reset_environment()` (`POST /fault/reset` on order-service and payment-service). k8s restart/scale runs only if `K8sToolKit.k8s_available` **and** the target pods exist in `sre-target-apps`. On the documented AWS path those apps stay in **Compose** (`sre-target-apps` is empty; `red-agent-sa` is `get`/`list`/`watch` only), so restart/scale is a no-op unless you passed `--apply-microservices`. Compose `restart: unless-stopped` is what brings a crashed `order-service` back. Path A `verify_recovery` GETs api-gw `/health` up to **5** times; success is HTTP 200 and probe latency **< 800ms**. `PostMortemGenerator.generate` writes `reports/incident_*.md`. StructuredLogger appends `logs/agent_activity.jsonl` and best-effort CloudWatch (`/sre/autonomous-agent-audit` stream `audit-stream`). Path B: when the PromQL rule clears, Alertmanager sends `status: resolved`. The bridge forwards it (resolved is a different status, so the 5-minute dedupe does not drop it). The diagnosis bot comments on the GitHub issue; it still does not reset the fault. Path C: the host remediator is what actually POSTs `/fault/reset`, restarts one named Compose service, or rolls back to the last recorded image IDs.
 
 ```mermaid
 flowchart LR
@@ -80,9 +159,13 @@ flowchart LR
   prom --> rules[Alert rules]
   rules --> am[Alertmanager]
   am --> bridge[incident-bridge]
-  bridge --> grok[Grok Bot webhook]
-  grok --> gh[GitHub incident issue]
-  grok --> chat[Owner chat ping]
+  bridge --> diag[Diagnosis bot webhook]
+  diag --> gh[GitHub incident issue]
+  diag --> chat[Owner chat ping]
+  gh --> rem[Remediation bot proposal]
+  rem --> approve["Owner /approve"]
+  approve --> host[Host poller or SSM]
+  host --> services
 ```
 
 ---
@@ -125,12 +208,14 @@ The **Kubernetes Agent Sandbox** provides a zero-blast-radius containment bounda
 | **AI Frontier Models** | Anthropic Claude Sonnet 4.6 | `claude-sonnet-4-6` (from `agents/config.py`) | Attack planning, RCA, auto-remediation, post-mortems |
 | | Anthropic Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Incident monitoring and network-adversary actions |
 | | Grok Bot template | [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) | Alert diagnosis (no lab control path); GitHub `incident` issues; critical chat pings |
+| | Grok Bot template | [Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) | Proposes one allowlisted fix; runs only after owner `/approve` on the host/SSM |
 | **Backend / Services** | Python / FastAPI / Uvicorn | `3.11` / `0.111.0` | High-throughput asynchronous target microservices & API Gateway |
 | | HTTPX | `0.27.0` | Asynchronous inter-service HTTP client and proxy router |
 | | Pydantic | `2.8.2` | Data validation and JSON schema enforcement |
 | **Observability** | Prometheus | `v2.52.0` | 1-second high-resolution metric collection, PromQL engine, and alerting rules |
 | | Alertmanager | `v0.27.0` | Groups SLO/infra alerts and posts them to the incident bridge (localhost only) |
 | | Incident Bridge | FastAPI | Enriches alerts with PromQL + agent jsonl evidence and forwards them to an AI diagnosis webhook |
+| | Incident remediator | `remediation/remediate.py` | Allowlisted reset / restart / rollback after GitHub `/approve` |
 | | Grafana | `10.4.2` | Pure infrastructure monitoring dashboard (:3000) |
 | | AWS CloudWatch | Native AWS | Dedicated security audit dashboard tracking exact agent commands and outputs |
 | **Load Testing** | Python async worker (`traffic-generator`) | Compose `RPS_TARGET` default 20 | Concurrent multi-step consumer workflow against `api-gw` |
@@ -155,12 +240,12 @@ Before running commands, here is the complete end-to-end lifecycle of the platfo
    ┌─────┴────────────────────────────────────────────────┐
    │                                                      │
    ▼                                                      ▼
-[Path A: In-Cluster Autonomous Healing]    [Path B: External AI Incident Diagnosis]
-Blue Team monitors Golden Signals          Prometheus fires SLO breach (1-second tick)
-Detects breach & calls Claude Sonnet RCA   Alertmanager routes alert to incident-bridge
-Executes automated runbook remediation     Bridge bundles live PromQL metrics & logs
-Verifies service recovery (<800ms)         Bridge POSTs enriched evidence to Grok Bot
-Archives local post-mortem (reports/)      Grok opens / updates GitHub incident issue
+[Path A: In-Cluster Autonomous Healing]    [Path B: Diagnosis]              [Path C: Approval-gated remediator]
+Blue Team monitors Golden Signals          Prometheus fires SLO            Remediation bot proposes one action
+Detects breach & calls Claude Sonnet RCA   Alertmanager → incident-bridge  Owner comments /approve on the issue
+Executes automated runbook remediation     Bridge POSTs evidence           Actions records the approval
+Verifies service recovery (<800ms)         Diagnosis bot opens GitHub      Host poller or SSM runs the allowlist
+Archives local post-mortem (reports/)      issue (no lab control path)     Prometheus confirms the alert cleared
 ```
 
 ### Choose Your Setup Path: Local vs. AWS
@@ -192,14 +277,14 @@ Once your infrastructure is up (Local or AWS), you have 3 distinct ways to run t
 
 ### Local or AWS?
 
-AWS/EC2 is **optional**. `docker compose up` on a laptop is the same Compose lab (api-gw, order/payment, Prometheus, Alertmanager, incident-bridge, Grafana). Red/Blue agents need `docker compose --profile agents` (or a host `orchestrator.py`). The Grok bot is **external**: the incident-bridge needs **outbound HTTPS** to the webhook (`GROK_WEBHOOK_URL`); agents also call Anthropic. Steps 8–10 add VPC `sre-enterprise-vpc` and a **single** EC2 host in `public_ingress` `10.0.1.0/24`; Compose and optional k3s run on that instance. Terraform also creates `app_workloads` `10.0.10.0/24` and `data_persistence` `10.0.20.0/24`, but nothing is deployed there today.
+AWS/EC2 is **optional**. `docker compose up` on a laptop is the same Compose lab (api-gw, order/payment, Prometheus, Alertmanager, incident-bridge, Grafana). Red/Blue agents need `docker compose --profile agents` (or a host `orchestrator.py`). The diagnosis bot is **external**: the incident-bridge needs **outbound HTTPS** to the webhook (`GROK_WEBHOOK_URL`); agents also call Anthropic. The remediator bot is also external: it only comments proposals on GitHub; the host poller (or `--via-ssm`) is what can touch the stack. Steps 8–10 add VPC `sre-enterprise-vpc` and a **single** EC2 host in `public_ingress` `10.0.1.0/24`; Compose and optional k3s run on that instance. Terraform also creates `app_workloads` `10.0.10.0/24` and `data_persistence` `10.0.20.0/24`, but nothing is deployed there today.
 
 ### 1. Prerequisites
 
 - **Git**, **Python 3.10+**, and **Docker** with Docker Compose v2 (`docker compose version`).
 - Commands below use **`python3`**. Ubuntu/Debian typically have no `python` alias; if `python3` is missing, install it (`sudo apt-get install python3 python3-pip`).
 - **Anthropic API key** for the in-cluster Red/Blue agents (models listed in `agents/config.py`).
-- **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template (GitHub must be connected to the bot).
+- **Grok Bot** access to import the [AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY) template and, separately, the [Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5) template (GitHub must be connected to both bots).
 - For AWS: **AWS CLI v2**, **Terraform 1.5+**, the **Session Manager plugin** (`session-manager-plugin` — required for `aws ssm start-session`), and an identity that can **create** the lab (read-only principals 403 on `ec2:CreateVpc` / `iam:CreateRole`). Attach the checked-in operator policy **from an admin login** after substituting your account id — a read-only identity cannot change its own permissions. Use a **customer managed policy** (inline user policies are capped at 2,048 characters; this document is larger):
   ```bash
   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text --region "${AWS_REGION:-us-east-1}")
@@ -267,6 +352,12 @@ Every `os.getenv` / `_env_int` / `_env_float` name in the Python tree is listed 
 | `GROK_WEBHOOK_KEY` | incident-bridge | Never logged; copy from the routine in the bot info pane |
 | `GROK_WEBHOOK_AUTH_HEADER` | incident-bridge | Default `Authorization`; must match the panel |
 | `GROK_WEBHOOK_AUTH_SCHEME` | incident-bridge | Default `Bearer`. Compose uses `${GROK_WEBHOOK_AUTH_SCHEME-Bearer}` so a present-but-empty value sends the raw key. On AWS, `put_lab_secrets.py` stores that empty string as `__EMPTY__` (SSM `PutParameter` rejects `Value=""`); `deploy_remote.py` writes `GROK_WEBHOOK_AUTH_SCHEME=` on the host. **Unset** keys are skipped, which leaves Compose’s `Bearer` default |
+| `GITHUB_TOKEN` | `remediation/github_api.py`, Actions, `put_lab_secrets.py` | Fine-grained or classic token with `issues:read` + `issues:write` for the host poller. `scripts/put_lab_secrets.py` copies it to Parameter Store; `deploy_remote.py` writes it onto the host `.env`. Actions provides `secrets.GITHUB_TOKEN`. Never commit or log it |
+| `GH_TOKEN` | `remediation/github_api.py` | Alias used only when `GITHUB_TOKEN` is unset |
+| `GITHUB_REPOSITORY` | remediator poller / Actions | `owner/name`. Actions sets this; the host poller loads it from `.env` or `/opt/sre-colosseum/.env` |
+| `GITHUB_EVENT_PATH` | `remediation/record_approval.py` | Actions-only path to the `issue_comment` event JSON. Leave empty on a laptop |
+| `REMEDIATION_STATE_DIR` | `remediation/actions.py` | Directory for `last_good_deploy.json` and `rollback-*.yml` / `remediation.jsonl`. Default `logs/` |
+| `COMPOSE_PROJECT_NAME` | `remediation/actions.py` | Optional. Used to name `<project>-<service>:last-good` on rollback. Default is the repo directory name with Compose’s `[a-z0-9_-]` alphabet (hyphens stay: `sre-colosseum`, not `srecolosseum`) |
 | `API_GATEWAY_URL` | `agents/config.py` | Host default `http://localhost:8000`. Compose sandbox sets `http://api-gw:8000` |
 | `ORDER_SERVICE_URL` | `agents/config.py`, order/payment clients | Host default `http://localhost:8001` |
 | `PAYMENT_SERVICE_URL` | `agents/config.py`, api-gw, order-service | Host default `http://localhost:8002` |
@@ -323,17 +414,48 @@ python3 -m pip install -r services/incident-bridge/requirements.txt
 
 `requirements.txt` covers host-side agents, pytest, and `scripts/send_test_alert.py` (`httpx`). The bridge file adds FastAPI/Uvicorn if you run the bridge **without** Compose.
 
-### 5. Import the Grok Bot template and copy webhook credentials
+### 5. Import the AI Incident Diagnosis bot (webhook)
 
-1. Import **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)**.
-2. The bot's first conversation asks for the **GitHub repo** to file incidents in (GitHub must already be connected), the **alert source**, and the **ping preference**.
-3. Open the bot's chat. Click the bot's name in the chat header (or press **Cmd+Shift+I**) to open its info pane.
-4. Under **Routines**, open **ResilienceOps incident diagnosis** (or whatever routine the template created).
-5. Copy **Webhook URL** into `GROK_WEBHOOK_URL` and **Webhook key** into `GROK_WEBHOOK_KEY`. Check the **Authorization** header setting — that maps to `GROK_WEBHOOK_AUTH_HEADER` / `GROK_WEBHOOK_AUTH_SCHEME` (scheme may be empty).
+This bot receives alerts. It is **not** the remediator.
+
+1. In a browser, open **[AI Incident Diagnosis](https://x.ai/bot/feQpDSeSki7HVgkDCBUaY)** and import the template (creates your own copy).
+2. Connect **GitHub** to that bot (Grok Bot settings → GitHub). Grant access to the repo that should receive `incident` issues (this repo or your fork).
+3. Start a chat with the new bot. The first conversation asks for:
+   - the **GitHub repo** (`owner/name`)
+   - the **alert source** (say Prometheus / ResilienceOps)
+   - the **ping preference** (chat-ping on firing **critical** alerts)
+4. Open the bot's info pane (click the bot name in the chat header).
+5. Under **Routines**, open **ResilienceOps incident diagnosis** (or the routine the template created).
+6. Copy three things into `.env` (no trailing spaces, never commit `.env`):
+   - **Webhook URL** → `GROK_WEBHOOK_URL`
+   - **Webhook key** → `GROK_WEBHOOK_KEY`
+   - **Authorization** setting → `GROK_WEBHOOK_AUTH_HEADER` (usually `Authorization`) and `GROK_WEBHOOK_AUTH_SCHEME` (usually `Bearer`; set empty if the panel sends the raw key)
+7. Save `.env`. You should see those four `GROK_WEBHOOK_*` lines filled. The URL looks like an `https://` webhook; the key is a secret.
 
 <!-- screenshot: bot chat header → info pane → Routines → ResilienceOps incident diagnosis (Webhook URL, Webhook key, Authorization) -->
 
+On AWS later, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies these into Parameter Store (prints **names + lengths only**). `deploy_remote.py` writes them onto the host as `/opt/sre-colosseum/.env`. Empty `GROK_WEBHOOK_AUTH_SCHEME` is stored as `__EMPTY__` (SSM rejects `""`).
+
 Details: [AI incident diagnosis](#ai-incident-diagnosis).
+
+### 5b. Import the Incident Remediation bot (`/approve` — no webhook)
+
+This is a **second**, separate bot. Do not paste anything from it into `GROK_WEBHOOK_*`.
+
+1. Import **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)**.
+2. Connect **GitHub** to this bot too.
+3. Start a chat with it. The first conversation asks for the **GitHub repo** (`owner/name`) — the **same** repo the diagnosis bot files `incident` issues in. It does not ask for a webhook.
+4. Copy **no** webhook URL or key. The Remediation bot watches the repo you name for new `incident` issues and comments one proposal block. Timing depends on the bot; if no proposal appears, open the bot's chat and ask it to check issue #N. It never POSTs into the lab. The poller and Actions require this exact block (two fields, one block):
+   ```
+   <!-- resilienceops-proposal:v1 -->
+   action: reset_fault
+   target: order-service
+   <!-- /resilienceops-proposal -->
+   ```
+5. Confirm `.github/workflows/remediation-approve.yml` is on the **default branch** of that GitHub repo (`issue_comment` workflows run from the default branch). That workflow **records** `/approve`; it does not execute the fix.
+6. Put poller secrets in `.env` (`GITHUB_REPOSITORY` and `GITHUB_TOKEN` with `issues:read` + `issues:write`; `GH_TOKEN` is accepted if `GITHUB_TOKEN` is unset). Never commit them. `poll_and_apply.py` and `remediate.py` load the repo `.env` (and `/opt/sre-colosseum/.env` on EC2) without overriding variables already in the process. On the EC2 host that file is root-owned — run the poller with `sudo` (or as root). If the process cannot read it, the loader skips it quietly and does not print secrets. On AWS, `scripts/put_lab_secrets.py` copies both into Parameter Store and `deploy_remote.py` writes them onto the host `.env`. You can also `set -a; . /opt/sre-colosseum/.env; set +a`. GitHub Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself when someone comments `/approve`.
+
+The `/approve` trigger is: owner (or write/maintain/admin) comments a line that is only `/approve` on an `incident` issue that already has a valid proposal. Snapshot last-good images after the stack is healthy ([step 6](#6-start-the-local-docker-compose-lab)). See [Incident Remediation bot](#incident-remediation-bot).
 
 ### 6. Start the local Docker Compose lab
 
@@ -378,6 +500,35 @@ Expected JSON when `GROK_WEBHOOK_URL` is still empty:
 ```
 
 After you set `GROK_WEBHOOK_URL`, recreate the bridge (`docker compose up -d incident-bridge`) and expect `"webhook_configured":true`.
+
+When the three app services are healthy, snapshot last-good image IDs once (needed before `rollback_deploy`):
+
+```bash
+python3 remediation/remediate.py record-last-good
+```
+
+Expected (indent=2):
+
+```json
+{
+  "ok": true,
+  "services": [
+    "api-gw",
+    "order-service",
+    "payment-service"
+  ]
+}
+```
+
+and `logs/last_good_deploy.json` (or `$REMEDIATION_STATE_DIR/last_good_deploy.json`). On AWS, run the same command **on the EC2 host**, or from the laptop:
+
+```bash
+export EC2_INSTANCE_ID=$(terraform -chdir=terraform output -raw instance_id)
+export AWS_REGION=$(terraform -chdir=terraform output -raw region)
+python3 remediation/remediate.py record-last-good --via-ssm
+```
+
+`--via-ssm` needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand` (the existing deployer identity). No new IAM is added.
 
 Optional local agent cycle on the host (needs `ANTHROPIC_API_KEY` in `.env`; `llm_engine.py` calls `load_dotenv()`), instead of the compose profile:
 
@@ -489,19 +640,20 @@ Default instance is **`t3.medium`** (2 vCPU / 4 GiB, on-demand us-east-1 Linux a
 | Logs | `aws_cloudwatch_log_group.audit` / `.incidents` | `/sre/autonomous-agent-audit`, `/sre/autonomous-agent-incidents` | Groups only. Dashboards still come from helper scripts |
 | Host | `aws_instance.sre_host` | `sre-enterprise-platform-host` | Compose v2 + k3s via `user_data`; default `t3.medium`; both SGs; IMDS hop 2 |
 
-Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened on `ingress_sg`. SSM port-forwards Prometheus at `127.0.0.1:9090`; `deploy_remote.py` also binds the instance private IP so same-host k3s can query `:9090` (local delivery, never `0.0.0.0`). The architecture figure shows the VPC group, IGW marker, `public_ingress` `10.0.1.0/24` around the single EC2 host (Compose + optional k3s), SG + IAM / SSM / S3 / Parameter Store / CloudWatch markers, and unused `app_workloads` / `data_persistence` CIDRs on the VPC.
+Grafana (`3000`) and the API gateway (`8000`) are limited to `allowed_cidr`. Prometheus (`9090`) and SSH (`22`) are **not** opened on `ingress_sg`. SSM port-forwards Prometheus at `127.0.0.1:9090`; `deploy_remote.py` also binds the instance private IP so same-host k3s can query `:9090` (local delivery, never `0.0.0.0`). Figure 1 draws the optional AWS deploy strip (Terraform → EC2) and the host as “EC2 host · public subnet 10.0.1.0/24 · VPC 10.0.0.0/16” with “Grafana and API ports from your IP”. IGW, IAM, SSM, S3, Parameter Store, CloudWatch, and the unused `app_workloads` / `data_persistence` CIDRs stay in this README, not as icons.
 
 Typical outputs:
 
 ```text
-api_gateway_url = "http://54.xxx.xxx.xxx:8000"
-deploy_bucket   = "sre-resilienceops-deploy-123456789012-us-east-1"
-grafana_url     = "http://54.xxx.xxx.xxx:3000"
-instance_id     = "i-xxxxxxxxxxxxxxxxx"
-private_ip      = "10.0.1.x"
-prometheus_url  = "http://127.0.0.1:9090 (SSM); k3s uses http://<private_ip>:9090 (no SG 9090)"
-public_ip       = "54.xxx.xxx.xxx"
-region          = "us-east-1"
+api_gateway_url          = "http://54.xxx.xxx.xxx:8000"
+deploy_bucket            = "sre-resilienceops-deploy-123456789012-us-east-1"
+deployment_instructions  = "export AWS_REGION=$(terraform output -raw region); python3 scripts/put_lab_secrets.py --region $AWS_REGION; python3 deploy_remote.py --region $AWS_REGION | To destroy: terraform destroy"
+grafana_url              = "http://54.xxx.xxx.xxx:3000"
+instance_id              = "i-xxxxxxxxxxxxxxxxx"
+private_ip               = "10.0.1.x"
+prometheus_url           = "http://127.0.0.1:9090 (SSM); k3s uses http://<private_ip>:9090 (no SG 9090)"
+public_ip                = "54.xxx.xxx.xxx"
+region                   = "us-east-1"
 ```
 
 ```bash
@@ -871,7 +1023,7 @@ Incident diagnosis for Prometheus alerts is delivered by the importable Grok Bot
 - Messages the owner in chat for **firing critical** alerts (per the ping preference set at import).
 - Has **no control path into the lab**: it only receives webhooks and writes GitHub issues. It never restarts, scales, rolls back, or pushes code.
 
-**Roadmap (v2):** bot-driven self-healing. Not in this template.
+Approval-gated fixes are a **separate** template: [Incident Remediation bot](#incident-remediation-bot).
 
 ### Alert flow
 
@@ -881,9 +1033,9 @@ flowchart LR
   prom --> rules[Alert rules]
   rules --> am[Alertmanager]
   am --> bridge[incident-bridge]
-  bridge --> grok[Grok Bot webhook]
-  grok --> gh[GitHub incident issue]
-  grok --> chat[Owner chat ping]
+  bridge --> diag[Diagnosis bot webhook]
+  diag --> gh[GitHub incident issue]
+  diag --> chat[Owner chat ping]
 ```
 
 1. **Prometheus** (`dashboards/prometheus.yml`) scrapes api-gw, order-service, and payment-service every 1s and evaluates `dashboards/alerts.yml`.
@@ -908,7 +1060,7 @@ The webhook key is never logged. Evidence is secret-stripped. Payloads are cappe
 
 1. Import the template: https://x.ai/bot/feQpDSeSki7HVgkDCBUaY
 2. Complete the first conversation: GitHub repo (GitHub connected), alert source, ping preference.
-3. Copy webhook credentials from the routine as in [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials) (info pane → **Routines** → **ResilienceOps incident diagnosis**).
+3. Copy webhook credentials from the routine as in [install step 5](#5-import-the-ai-incident-diagnosis-bot-webhook) (info pane → **Routines** → **ResilienceOps incident diagnosis**).
 4. Put them in `.env`:
 
 | Variable | Default | Purpose |
@@ -935,13 +1087,104 @@ docker compose up -d --build incident-bridge alertmanager prometheus
 
 ---
 
+## Incident Remediation bot
+
+Approval-gated fixes are a **second**, separate Grok Bot template: **[Incident Remediation](https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5)** (orange capsule avatar). It does not share a webhook with the diagnosis bot and it does not execute anything on the lab by itself.
+
+### Where the fix actually runs
+
+A GitHub-hosted `ubuntu-latest` runner cannot reach `127.0.0.1` Compose or the EC2 host. This repo therefore splits the path:
+
+1. The remediator bot comments a proposal on the `incident` issue.
+2. The owner comments `/approve`.
+3. `.github/workflows/remediation-approve.yml` checks that the commenter is the repo owner or has `write` / `maintain` / `admin`, that the issue is labeled `incident`, and that the latest proposal names **exactly one** allowlisted action. It then comments a recorded approval block and adds `remediation-approved`. **It does not run the fix.**
+4. On the machine that can see the stack, run:
+
+```bash
+export GITHUB_REPOSITORY=ritvikindupuri/ResilienceOps
+export GITHUB_TOKEN=...          # issues:read + issues:write; never commit
+python3 remediation/poll_and_apply.py --once
+```
+
+That host process calls `python3 remediation/remediate.py`. On AWS, the same CLI accepts `--via-ssm` and reuses `deploy_remote.send_and_wait` (`AWS-RunShellScript` in `/opt/sre-colosseum`). `--via-ssm` requires `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop AWS credentials that can `ssm:SendCommand`. `--verify-timeout` is forwarded to the host. If the SSM command fails, the poller posts a failure result comment on the issue. No new IAM is added. A self-hosted runner pointed at that host would also work; this repo does not assume you have one.
+
+`--dry-run` prints the allowlisted steps and exits without POSTing `/fault/reset`, restarting a container, or writing a compose override.
+
+### Setup
+
+1. Import https://x.ai/bot/8rxdqPVj5W-mksKhNfcw5
+2. Connect GitHub and name the same repo the diagnosis bot files issues in.
+3. Leave the diagnosis webhook vars (`GROK_WEBHOOK_*`) pointed at the **diagnosis** routine. The remediator bot does not replace them.
+4. Put `GITHUB_REPOSITORY` and `GITHUB_TOKEN` (or `GH_TOKEN`) in `.env`. The remediator CLIs load that file (and `/opt/sre-colosseum/.env` on EC2) without overriding the process environment. On the EC2 host, run the poller with `sudo` (or as root) so `/opt/sre-colosseum/.env` is readable; an unreadable file is skipped quietly with no secret output. On AWS, `python3 scripts/put_lab_secrets.py --region "$AWS_REGION"` copies them to Parameter Store (they are in `KEYS` with the other host secrets). You can also `set -a; . /opt/sre-colosseum/.env; set +a`. Actions sets `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, and `GITHUB_EVENT_PATH` itself.
+5. After a healthy `docker compose up`, snapshot last-good image IDs once (on the host, or `python3 remediation/remediate.py record-last-good --via-ssm` from the laptop — that needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and `ssm:SendCommand` credentials):
+
+```bash
+python3 remediation/remediate.py record-last-good
+```
+
+### How the proposal is posted
+
+The Remediation bot watches the repo you name for new `incident` issues and comments one proposal block. Timing depends on the bot; if no proposal appears, open the bot's chat and ask it to check issue #N. Nothing in this repo posts that comment.
+
+First chat: the bot asks for the **GitHub repo** (`owner/name`) — the same repo the diagnosis bot files issues in. It does not ask for a webhook.
+
+The poller and Actions require this exact proposal block (one block, two fields):
+
+```
+<!-- resilienceops-proposal:v1 -->
+action: reset_fault
+target: order-service
+<!-- /resilienceops-proposal -->
+```
+
+`remediation/actions.py` rejects unknown actions, unknown services, extra fields, a second block, and any `;|&$\` / `../` / URL injection. After `/approve`, Actions records a matching block that the poller reads:
+
+```
+<!-- resilienceops-approval:v1 -->
+approved_by: <login>
+action: reset_fault
+target: order-service
+<!-- /resilienceops-approval -->
+```
+
+### Fix allowlist (the only three actions)
+
+| Action | Target | What it does | What it is not |
+|---|---|---|---|
+| `reset_fault` | `order-service`, `payment-service`, or `both` | `POST /fault/reset` on each named target (`both` = order-service and payment-service, one POST each) | Not `FaultCatalog.reset_environment` (that is Path A Blue’s finally-block). Not a host reboot, not `tc` on other containers |
+| `restart_service` | `api-gw`, `order-service`, or `payment-service` | `docker compose restart <name>` (argv list, no shell) | Not redis, postgres, Prometheus, Grafana, or Alertmanager |
+| `rollback_deploy` | `api-gw`, `order-service`, `payment-service`, or `both` (`both` = all three, including api-gw) | Tags the recorded last-good ID as the Compose image name `:last-good`, writes a state-dir override with `image:` + `pull_policy: never`, then `docker compose -f docker-compose.yml -f <override> up --no-build --force-recreate`. Fails unless the recreated container's image ID equals the recorded last-good ID. The override lives only in `$REMEDIATION_STATE_DIR`, so a later plain `docker compose up` or `deploy_remote.py` uses the current build again | Not `git revert`, not AWS CodeDeploy, not a live-verified run |
+
+### Safety limits
+
+- No secrets are printed (`remediation/logutil.py` redacts token/key/password/secret/webhook fields). Structured lines go to `$REMEDIATION_STATE_DIR/remediation.jsonl` (default `logs/`).
+- No IAM changes. `--via-ssm` uses the existing instance role + `AmazonSSMManagedInstanceCore` on the host, and the laptop caller needs `ssm:SendCommand`.
+- Nothing destructive beyond the allowlist (no volume deletes, no `docker compose down`, no Terraform).
+- Post-fix verification queries Prometheus (`up`, `redis_active_connections_count`, firing `RedisConnectionSaturation` / `ServiceDown`) and `GET /health` on the targeted services.
+- Bot accounts cannot `/approve`. Pull-request comments are ignored.
+
+Manual run without GitHub (local proof):
+
+```bash
+python3 remediation/remediate.py --dry-run --action reset_fault --target both
+python3 remediation/remediate.py --action reset_fault --target order-service
+```
+
+Local Compose end-to-end script (not run in CI; needs Docker and a healthy stack). It injects Redis starvation, parses a proposal, simulates owner `/approve`, runs `reset_fault`, and checks Prometheus.
+
+```bash
+python3 remediation/e2e_local.py
+```
+
+---
+
 ## Troubleshooting
 
 ### No GitHub issue after an alert
 
 1. `curl -sS http://127.0.0.1:8088/healthz` — `webhook_configured` should be `true`.
 2. Bridge logs: `docker compose logs incident-bridge`. If URL is unset you will see a drop message. The key is never printed.
-3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine (no trailing whitespace). See [install step 5](#5-import-the-grok-bot-template-and-copy-webhook-credentials).
+3. Confirm `GROK_WEBHOOK_URL` and `GROK_WEBHOOK_KEY` match the routine (no trailing whitespace). See [install step 5](#5-import-the-ai-incident-diagnosis-bot-webhook).
 4. Confirm `GROK_WEBHOOK_AUTH_HEADER` and `GROK_WEBHOOK_AUTH_SCHEME` match the routine's Authorization setting. See [Webhook 401 / 403](#webhook-401--403).
 5. Confirm **GitHub is connected** in the Grok Bot and the first-run conversation named the repo that should receive issues.
 6. Confirm Alertmanager is up (`curl -sS http://127.0.0.1:9093/-/healthy`) and the synthetic alert returned HTTP 200.
@@ -1004,6 +1247,14 @@ docker exec "$(docker compose ps -q incident-bridge)" python -c "import urllib.r
 If those time out while `curl 127.0.0.1:8088/healthz` on the host works, the Docker bridge cannot forward between containers. Check the host firewall / Docker iptables **FORWARD** policy (some locked-down Linux boxes drop forwarded packets), then restart Docker. Keep the fix generic: do not copy another machine's iptables dump. Nested VMs and custom FORWARD DROP policies are common causes. The lab still answers on localhost ports until the engine can route on the compose network.
 
 When the bridge cannot reach the Grok webhook after `WEBHOOK_MAX_RETRIES`, look for `forward FAILED after N attempts alertname=… fingerprint=…` and `logs/bridge_deadletter.jsonl` (no key). The ASGI app stays up (`{"accepted":true}`).
+
+### `/approve` did nothing
+
+The workflow only records a **lone** `/approve` on an **issue** (not a PR) labeled `incident`, from the repo owner or someone with `write` / `maintain` / `admin`. Bot accounts are rejected. A valid `<!-- resilienceops-proposal:v1 -->` block with exactly one allowlisted `action` + `target` must already be on the issue. Check the Actions tab for `record remediator approval`.
+
+### Poller says skip / does not fix
+
+`python3 remediation/poll_and_apply.py --once` must run **on the host that can reach Compose** (or with `--via-ssm`, which needs `EC2_INSTANCE_ID`, `AWS_REGION`, `boto3`, and laptop `ssm:SendCommand` credentials). It looks for issues labeled `incident` **and** `remediation-approved`, without `remediation-applied`. It loads repo `.env` and `/opt/sre-colosseum/.env` (existing env wins). On EC2 that host file is root-owned — run the poller with `sudo` (or as root); if it cannot be read, the loader skips it quietly and does not print secrets. You can also `set -a; . /opt/sre-colosseum/.env; set +a`. If you see `no recorded approval block`, the Actions job has not commented yet.
 
 ### Bake / buildx warning
 

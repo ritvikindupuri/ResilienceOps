@@ -40,6 +40,7 @@ INCLUDE_PATHS = [
     "docker-compose.prom-lan.yml",
     "agents",
     "orchestrator.py",
+    "remediation",
     "requirements.txt",
     ".env.example",
     "k8s",
@@ -63,6 +64,8 @@ SSM_ENV_KEYS = [
     "GROK_WEBHOOK_AUTH_HEADER",
     "GROK_WEBHOOK_AUTH_SCHEME",
     "POSTGRES_PASSWORD",
+    "GITHUB_TOKEN",
+    "GITHUB_REPOSITORY",
 ]
 REQUIRED_HOST_ENV = ("GRAFANA_ADMIN_USER", "GRAFANA_ADMIN_PASSWORD")
 DEFAULT_SSM_PREFIX = "/resilienceops"

@@ -36,3 +36,4 @@ def test_default_include_paths_cover_sandbox_dockerfile_copies():
     assert "orchestrator.py" in dr.INCLUDE_PATHS
     assert "Dockerfile.agent-sandbox" in dr.INCLUDE_PATHS
     assert "docker-compose.prom-lan.yml" in dr.INCLUDE_PATHS
+    assert "remediation" in dr.INCLUDE_PATHS

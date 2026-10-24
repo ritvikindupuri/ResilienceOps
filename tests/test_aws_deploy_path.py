@@ -150,6 +150,8 @@ def test_deploy_remote_uses_s3_and_compose_v2_all_services():
 def test_ssm_env_keys_match_put_lab_secrets():
     put = _load_script("scripts/put_lab_secrets.py", "put_lab_secrets")
     assert put.KEYS == dr.SSM_ENV_KEYS
+    assert "GITHUB_TOKEN" in put.KEYS
+    assert "GITHUB_REPOSITORY" in put.KEYS
     assert "GRAFANA_ADMIN_USER" in put.REQUIRED
     assert "GRAFANA_ADMIN_PASSWORD" in put.REQUIRED
 
