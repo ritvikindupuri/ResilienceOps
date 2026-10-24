@@ -266,7 +266,7 @@ Optional Red/Blue agents inject and clear faults so you can watch the same Prome
 
 1. **Start** with the Compose `agents` profile, `python3 orchestrator.py` on the host, or the optional k3s sandbox on AWS.
 2. **Red** injects a fault into **order-service or payment-service only** (`MEMORY_EXHAUSTION`, `REDIS_CONNECTION_STARVATION`, `CPU_SATURATION`, `NETWORK_LATENCY`, `PACKET_LOSS`).
-3. **Blue** checks health on all 3 and resets order-service and payment-service. [`FAULT_HOLD_SECONDS`](#read-these-once) applies (default 120), then `FaultCatalog.reset_environment()` always runs in `finally`.
+3. Blue checks health on all 3 and resets order-service and payment-service. [`FAULT_HOLD_SECONDS`](#read-these-once) applies (default 120), then `FaultCatalog.reset_environment()` always runs in `finally`.
 4. Prometheus still fires; the two bots continue as in [How to use](#how-to-use).
 
 ### Local Compose profile
